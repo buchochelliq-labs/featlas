@@ -4,7 +4,7 @@
     "core": "0.1.0",
     "api": "0.1.0",
     "cli": "0.1.0",
-    "executable_sha256": "9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b"
+    "executable_sha256": "6f7adad66019e3aa797d064116a31c187f089d7c4dc62c8582b9b139ac1221be"
   },
   "project_file_sha256": "a09bc543bee57bba411f6e2a30676d0eefe223a7b747e4c2156db3a137ae7400",
   "deployment": {
@@ -22,7 +22,7 @@
   "files": [
     {
       "path": "capability-report.json",
-      "sha256": "a6f33fe028a95dce0027a267121ad925714f222b300391b24604904f08b8e936",
+      "sha256": "8c5cbadc38bac0a7531c99886b3ec798744d74be55b572333547d1c1e2182e52",
       "bytes": 5061
     },
     {

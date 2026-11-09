@@ -15,7 +15,7 @@
       "id": "local_reference",
       "implementation": "dev.featlas:local_reference",
       "version": "0.1.0",
-      "implementation_sha256": "9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b",
+      "implementation_sha256": "6f7adad66019e3aa797d064116a31c187f089d7c4dc62c8582b9b139ac1221be",
       "runtime_versions": {
         "featlas-core": "0.1.0",
         "target": "x86_64-linux"
@@ -32,7 +32,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -49,7 +49,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -66,7 +66,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -83,7 +83,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -100,7 +100,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -117,7 +117,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -134,7 +134,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],
@@ -151,7 +151,7 @@
       "evidence": [
         {
           "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
-          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "sha256": "a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48",
           "description": "Local reference acceptance run: 13 passed, 0 not executed"
         }
       ],

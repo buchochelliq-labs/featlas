@@ -375,7 +375,7 @@
         "actual_diagnostic": {
           "code": "PUBLICATION_TIE",
           "rule": "SEM-REPLAY-002",
-          "message": "Two eligible publications share (as_of, published_at, sequence); no arbitrary choice is made"
+          "message": "Two eligible publications share their ordering key ((as_of, published_at, sequence) for replay; (as_of, sequence) for source-as-known reads); no arbitrary choice is made"
         }
       }
     ]

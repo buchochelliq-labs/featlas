@@ -5,9 +5,10 @@
 Ignoring databricks-sdk: markers 'extra == "databricks"' don't match your environment
 Ignoring databricks-connect: markers 'extra == "databricks"' don't match your environment
 Ignoring pyspark: markers 'extra == "local"' don't match your environment
+Ignoring delta-spark: markers 'extra == "local"' don't match your environment
 Ignoring pytest: markers 'extra == "test"' don't match your environment
 Ignoring pyyaml: markers 'extra == "test"' don't match your environment
     Finished `release` profile [optimized] target(s) in 0.06s
-📦 Built wheel for abi3 Python ≥ 3.12 to /tmp/.tmpwLUfva/featlas-0.1.0-cp312-abi3-linux_x86_64.whl
+📦 Built wheel for abi3 Python ≥ 3.12 to /tmp/.tmpE4OfcO/featlas-0.1.0-cp312-abi3-linux_x86_64.whl
 ✏️ Setting installed package as editable
 🛠 Installed featlas-0.1.0
