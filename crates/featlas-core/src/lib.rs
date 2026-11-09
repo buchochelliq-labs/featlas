@@ -21,3 +21,7 @@ pub mod canon;
 pub mod consumer;
 pub mod eval;
 pub mod fixtures;
+pub mod capability;
+pub mod plan;
+pub mod label;
+pub mod migration;

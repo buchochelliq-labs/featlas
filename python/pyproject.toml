@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "featlas-databricks"
+version = "0.1.0"
+description = "Thin Azure Databricks host for featlas: executes core-generated Spark SQL; no semantics of its own."
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+# Pinned only after a successful live target run; see docs/DATABRICKS_RUNBOOK.md.
+databricks = ["databricks-sdk", "databricks-connect"]
+local = ["pyspark==4.0.1"]
+test = ["pytest"]
+
+[project.scripts]
+featlas-databricks = "featlas_databricks.cli:main"
+
+[tool.setuptools]
+packages = ["featlas_databricks"]

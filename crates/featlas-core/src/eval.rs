@@ -298,45 +298,8 @@ impl<'a> Evaluator<'a> {
         Ok(keys)
     }
 
-    /// Coverage/outage state for a feature over all transitive sources (SEM-MISS-002/003).
     fn coverage(&self, f: &Feature) -> Result<Option<&'static str>, EvalError> {
-        let t = self.req.as_of;
-        let sources = feature_sources(self.p, &f.id);
-        let mut unavailable = false;
-        let mut insufficient = false;
-        let earliest = Instant::parse(&f.history.earliest_as_of).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
-        if t < earliest {
-            insufficient = true;
-        }
-        let start = t.checked_sub_seconds(f.history.required_seconds).ok_or_else(|| err("NUMERIC_OVERFLOW", "SEM-TIME-001", "History interval underflows"))?;
-        for sid in &sources {
-            let s = self.source(sid)?;
-            match self.status(sid)? {
-                SourceStatus::Unavailable { .. } => unavailable = true,
-                SourceStatus::Available { coverage_start, coverage_end, .. } => {
-                    let cs = Instant::parse(coverage_start).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
-                    let ce = Instant::parse(coverage_end).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
-                    let end_ok = match f.time.window.upper {
-                        Boundary::Inclusive => ce > t,
-                        Boundary::Exclusive => ce >= t,
-                    };
-                    if cs > start || !end_ok {
-                        insufficient = true;
-                    }
-                }
-            }
-            let reproducible = Instant::parse(&s.retention.earliest_reproducible_at).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
-            if t < reproducible {
-                insufficient = true;
-            }
-        }
-        Ok(if unavailable {
-            Some("source_unavailable")
-        } else if insufficient {
-            Some("insufficient_history")
-        } else {
-            None
-        })
+        coverage_state(self.p, f, self.req.as_of, self.req.source_status)
     }
 
     fn feature_by_id(&self, id: &str) -> Result<&'a Feature, EvalError> {
@@ -655,6 +618,48 @@ impl RelationshipTemporal {
     }
 }
 
+/// Coverage/outage state for a feature over all transitive sources (SEM-MISS-002/003).
+pub fn coverage_state(p: &Project, f: &Feature, as_of: Instant, statuses: &[SourceStatus]) -> Result<Option<&'static str>, EvalError> {
+    let t = as_of;
+    let sources = feature_sources(p, &f.id);
+    let mut unavailable = false;
+    let mut insufficient = false;
+    let earliest = Instant::parse(&f.history.earliest_as_of).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+    if t < earliest {
+        insufficient = true;
+    }
+    let start = t.checked_sub_seconds(f.history.required_seconds).ok_or_else(|| err("NUMERIC_OVERFLOW", "SEM-TIME-001", "History interval underflows"))?;
+    for sid in &sources {
+        let s = p.source(sid).ok_or_else(|| err("UNKNOWN_SOURCE", "SEM-ID-002", sid.clone()))?;
+        match statuses.iter().find(|x| x.source() == sid).ok_or_else(|| err("MISSING_SOURCE_STATUS", "SEM-MISS-003", format!("No source status evidence for {sid}")))? {
+            SourceStatus::Unavailable { .. } => unavailable = true,
+            SourceStatus::Available { coverage_start, coverage_end, .. } => {
+                let cs = Instant::parse(coverage_start).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+                let ce = Instant::parse(coverage_end).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+                let end_ok = match f.time.window.upper {
+                    Boundary::Inclusive => ce > t,
+                    Boundary::Exclusive => ce >= t,
+                };
+                if cs > start || !end_ok {
+                    insufficient = true;
+                }
+            }
+        }
+        let reproducible = Instant::parse(&s.retention.earliest_reproducible_at).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+        if t < reproducible {
+            insufficient = true;
+        }
+    }
+    Ok(if unavailable {
+        Some("source_unavailable")
+    } else if insufficient {
+        Some("insufficient_history")
+    } else {
+        None
+    })
+}
+
+
 fn rows_identical(a: &TRow, b: &TRow) -> bool {
     a.len() == b.len() && a.iter().all(|(k, v)| b.get(k).is_some_and(|w| identical(v, w)))
 }
@@ -935,4 +940,12 @@ mod tests {
         assert_eq!(fsum(&[1e100, 1.0, -1e100]), 1.0);
         assert_eq!(fsum(&[]), 0.0);
     }
+}
+
+/// Reconstruct one source as known at `cutoff` (stages 1–5), for reuse by
+/// label construction and other bounded local paths.
+pub fn reconstruct_rows(p: &Project, source_id: &str, source_rows: &Map<String, Json>, cutoff: Instant, upper: Boundary, limits: &Limits) -> Result<Vec<TRow>, EvalError> {
+    let req = Request { as_of: cutoff, source_rows, source_status: &[], expected_population: None, mode: SelectionMode::SourceAsKnown, requested_at: None, published_values: None, consumer: None, capabilities: &[] };
+    let mut ev = Evaluator { p, req: &req, limits, trace: Vec::new(), validated: BTreeMap::new(), work: 0 };
+    ev.reconstruct("", source_id, upper)
 }

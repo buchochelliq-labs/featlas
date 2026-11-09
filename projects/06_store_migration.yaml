@@ -1,0 +1,1537 @@
+# Derived from spec/feature-engineering-spec-v0.2.0/examples/06_store_migration.yaml by projects/derive.py.
+# Only deployment adapter pins/local output formats differ (05 also gains lookup_prod); logical contracts are unchanged.
+# Store-switch example: logical features and consumers are unchanged; only deployment bindings change.
+# Synthetic contracts only; no adapters are installed or resources provisioned.
+spec_version: 0.2.0
+kind: FeatureEngineeringProject
+metadata:
+  id: fault_count_example
+  name: Fault count and publication semantics
+  version: 1.0.0
+  description: Complete synthetic baseline for time bounds, exact deduplication, tenant keys, completeness
+    and observed publication replay.
+  owners:
+  - example.feature-engineering
+  status: draft
+  tags:
+  - synthetic
+  - specification-example
+entities:
+- id: device
+  version: 1.0.0
+  name: Device
+  description: A registered device identified by the full tenant-scoped composite key.
+  owner: example.analytics
+  keys:
+  - name: tenant_id
+    type: string
+    description: Tenant isolation boundary.
+    source_column: tenant_id
+    is_tenant: true
+  - name: device_id
+    type: string
+    description: Tenant-local device identifier.
+    source_column: device_id
+    is_tenant: false
+  population:
+    source: device_registry
+    mode: as_of_keys
+    event_time_upper: inclusive
+    availability_upper: inclusive
+    deletion_policy: exclude_deleted
+sources:
+- id: device_registry
+  version: 1.0.0
+  name: Device registry
+  description: One immutable registration row per tenant and device; registration defines population membership
+    after it is observed. Decommissioning would require a versioned population source in a new source
+    version.
+  owner: example.data-platform
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant boundary; the same local entity ID may exist in different tenants.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Device identifier unique only within one tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: registered_at
+    type: timestamp
+    description: Business instant when this entity joined the population.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Instant this registration became visible to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - tenant_id
+  - device_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - tenant_id
+    - device_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: registered_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: tenant_id
+      origin: synthetic.device_registry.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant boundary; the same local entity ID may
+        exist in different tenants.'
+    - column: device_id
+      origin: synthetic.device_registry.device_id
+      description: 'Created as a synthetic fixture field: Device identifier unique only within one tenant.'
+    - column: registered_at
+      origin: synthetic.device_registry.registered_at
+      description: 'Created as a synthetic fixture field: Business instant when this entity joined the
+        population.'
+    - column: available_at
+      origin: synthetic.device_registry.available_at
+      description: 'Created as a synthetic fixture field: Instant this registration became visible to
+        the feature system.'
+    code: null
+- id: fault_events
+  version: 1.0.0
+  name: Device fault events
+  description: One immutable device observation per event_id; nullable is_fault means the sensor did not
+    classify the observation.
+  owner: example.data-platform
+  columns:
+  - name: event_id
+    type: string
+    description: Globally unique immutable observation identity, used to collapse exact retransmissions.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: tenant_id
+    type: string
+    description: Tenant owning the observed device.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Tenant-local observed device identifier.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: occurred_at
+    type: timestamp
+    description: Business timestamp of the sensor observation.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Earliest instant this exact observation was readable by feature computation.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: is_fault
+    type: boolean
+    description: True denotes a fault, false a healthy observation, null an unknown classification.
+    nullable: true
+    unit: null
+    classification: internal
+  primary_key:
+  - event_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - event_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: occurred_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: event_id
+      origin: synthetic.fault_events.event_id
+      description: 'Created as a synthetic fixture field: Globally unique immutable observation identity,
+        used to collapse exact retransmissions.'
+    - column: tenant_id
+      origin: synthetic.fault_events.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant owning the observed device.'
+    - column: device_id
+      origin: synthetic.fault_events.device_id
+      description: 'Created as a synthetic fixture field: Tenant-local observed device identifier.'
+    - column: occurred_at
+      origin: synthetic.fault_events.occurred_at
+      description: 'Created as a synthetic fixture field: Business timestamp of the sensor observation.'
+    - column: available_at
+      origin: synthetic.fault_events.available_at
+      description: 'Created as a synthetic fixture field: Earliest instant this exact observation was
+        readable by feature computation.'
+    - column: is_fault
+      origin: synthetic.fault_events.is_fault
+      description: 'Created as a synthetic fixture field: True denotes a fault, false a healthy observation,
+        null an unknown classification.'
+    code: null
+relationships: []
+features:
+- id: device.fault_count_7d
+  version: 1.0.0
+  name: Fault count in seven days
+  description: Number of classified fault observations for a registered device in [as_of - 7 days, as_of),
+    using only observations available at as_of.
+  owner: example.feature-engineering
+  entity: device
+  output:
+    type: integer
+    nullable: true
+    unit: count
+    description: Number of classified fault observations for a registered device in [as_of - 7 days, as_of),
+      using only observations available at as_of.
+    constraints:
+      minimum: 0
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  inputs:
+  - alias: faults
+    source: fault_events
+    columns:
+    - event_id
+    - tenant_id
+    - device_id
+    - occurred_at
+    - available_at
+    - is_fault
+  dependencies: []
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 604800
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: aggregate
+    input: faults
+    joins: []
+    group_by:
+    - entity_key: tenant_id
+      input: faults
+      column: tenant_id
+    - entity_key: device_id
+      input: faults
+      column: device_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: faults
+        column: is_fault
+      - kind: literal
+        type: boolean
+        value: true
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  lineage:
+    sources:
+    - source: fault_events
+      column: event_id
+      roles:
+      - ordering
+      description: Globally unique immutable observation identity, used to collapse exact retransmissions.
+        Used for ordering.
+    - source: fault_events
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Tenant owning the observed device. Used for entity_key.
+    - source: fault_events
+      column: device_id
+      roles:
+      - entity_key
+      description: Tenant-local observed device identifier. Used for entity_key.
+    - source: fault_events
+      column: occurred_at
+      roles:
+      - event_time
+      description: Business timestamp of the sensor observation. Used for event_time.
+    - source: fault_events
+      column: available_at
+      roles:
+      - availability_time
+      description: Earliest instant this exact observation was readable by feature computation. Used for
+        availability_time.
+    - source: fault_events
+      column: is_fault
+      roles:
+      - filter
+      description: True denotes a fault, false a healthy observation, null an unknown classification.
+        Used for filter.
+    - source: device_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: device_registry
+      column: device_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Device identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: device_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: device_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 604800
+    coverage: contiguous
+    earliest_as_of: '2026-02-01T00:00:00Z'
+  acceptance:
+    suites:
+    - fault_count_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+feature_sets:
+- id: device_reliability
+  version: 1.0.0
+  name: Device Reliability
+  description: Atomic, exactly pinned synthetic example feature set.
+  owner: example.feature-engineering
+  entity: device
+  features:
+  - id: device.fault_count_7d
+    version: 1.0.0
+  publication: atomic
+consumers:
+- id: reliability_batch
+  version: 1.0.0
+  name: Reliability Batch
+  description: Synthetic request contract. Request as_of anchors feature windows; requested_at determines
+    what published values were visible.
+  owner: example.modeling
+  feature_set:
+    feature_set: device_reliability
+    version: 1.0.0
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: device_id
+    input_field: device_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+  selection:
+    mode: source_as_known
+    tie_breaker: sequence
+  max_staleness_seconds: 3600
+  missing_value_policy: preserve_null
+  label: null
+- id: reliability_replay
+  version: 1.0.0
+  name: Reliability Replay
+  description: Synthetic request contract. Request as_of anchors feature windows; requested_at determines
+    what published values were visible.
+  owner: example.modeling
+  feature_set:
+    feature_set: device_reliability
+    version: 1.0.0
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: device_id
+    input_field: device_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+  selection:
+    mode: historical_serving_replay
+    tie_breaker: sequence
+  max_staleness_seconds: 3600
+  missing_value_policy: preserve_null
+  label: null
+deployments:
+- id: fault_prod
+  version: 1.0.0
+  name: Fault Prod
+  description: Declarative synthetic binding example only. These identities and tables are not provisioned,
+    and no execution or cloud deployment is authorized by this document.
+  owner: example.platform
+  environment: production
+  source_bindings:
+  - source: device_registry
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - example_catalog
+      - synthetic_raw
+      name: device_registry
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: fault_events
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - example_catalog
+      - synthetic_raw
+      name: fault_events
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      event_id: event_id
+      tenant_id: tenant_id
+      device_id: device_id
+      occurred_at: occurred_at
+      available_at: available_at
+      is_fault: is_fault
+  output_targets:
+  - feature_set: device_reliability
+    version: 1.0.0
+    location:
+      kind: table
+      namespace:
+      - example_catalog
+      - synthetic_features
+      name: device_reliability
+      format: delta
+    write_mode: merge
+    adapter: databricks_platform
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+    feature_mapping:
+    - feature: device.fault_count_7d
+      version: 1.0.0
+      column: device_fault_count_7d
+      state_column: device_fault_count_7d_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: interval
+    every_seconds: 3600
+    offset_seconds: 0
+  refresh:
+    mode: incremental
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: true
+    start: '2026-02-01T00:00:00Z'
+    end: '2026-06-08T00:00:00Z'
+    mode: source_as_known
+    publish: separate_namespace
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: databricks_platform
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 25
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: device_registry
+      privilege: read
+    - resource: fault_events
+      privilege: read
+    - resource: device_reliability
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: databricks_platform
+    implementation: dev.featlas:databricks
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    - orchestrator
+    configuration:
+      connection_profile: example_databricks
+      feature_api: uc_feature_tables
+  execution:
+    compute: databricks_platform
+    catalog: databricks_platform
+    orchestrator: databricks_platform
+  consumer_bindings:
+  - consumer: reliability_batch
+    version: 1.0.0
+    adapter: databricks_platform
+    role: offline_store
+  - consumer: reliability_replay
+    version: 1.0.0
+    adapter: databricks_platform
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+- id: fault_alternative_store
+  version: 1.0.0
+  name: Alternative store binding demonstration
+  description: Contract-only alternative storage binding. Databricks computation and catalog remain selected.
+    This synthetic adapter is not installed; local mapping checks do not certify a real store migration.
+  owner: example.platform
+  environment: development
+  source_bindings:
+  - source: device_registry
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - example_catalog
+      - synthetic_raw
+      name: device_registry
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: fault_events
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - example_catalog
+      - synthetic_raw
+      name: fault_events
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      event_id: event_id
+      tenant_id: tenant_id
+      device_id: device_id
+      occurred_at: occurred_at
+      available_at: available_at
+      is_fault: is_fault
+  output_targets:
+  - feature_set: device_reliability
+    version: 1.0.0
+    location:
+      kind: resource
+      uri: example-store://migration-demo/device-reliability
+      format: example_record
+    write_mode: merge
+    adapter: alternative_store
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_key
+      device_id: asset_key
+    feature_mapping:
+    - feature: device.fault_count_7d
+      version: 1.0.0
+      column: fault_total
+      state_column: fault_status
+    metadata_columns:
+      as_of: evaluated_at
+      published_at: original_visible_at
+      publication_sequence: original_sequence
+      publication_id: original_publication_id
+      materialization_id: target_import_id
+  schedule:
+    mode: interval
+    every_seconds: 3600
+    offset_seconds: 0
+  refresh:
+    mode: incremental
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: true
+    start: '2026-02-01T00:00:00Z'
+    end: '2026-06-08T00:00:00Z'
+    mode: source_as_known
+    publish: separate_namespace
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: databricks_platform
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: alternative_store
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: alternative_store
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 25
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: device_registry
+      privilege: read
+    - resource: fault_events
+      privilege: read
+    - resource: device_reliability
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: databricks_platform
+    implementation: dev.featlas:databricks
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    - orchestrator
+    configuration:
+      connection_profile: example_databricks
+      feature_api: uc_feature_tables
+  - id: alternative_store
+    implementation: dev.featlas:memory_store
+    version: 0.1.0
+    roles:
+    - offline_store
+    configuration: {}
+  execution:
+    compute: databricks_platform
+    catalog: databricks_platform
+    orchestrator: databricks_platform
+  consumer_bindings:
+  - consumer: reliability_batch
+    version: 1.0.0
+    adapter: alternative_store
+    role: offline_store
+  - consumer: reliability_replay
+    version: 1.0.0
+    adapter: alternative_store
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+acceptance_suites:
+- id: fault_count_conformance
+  version: 1.0.0
+  name: Fault Count Conformance
+  description: All values are synthetic. Expected values are derived from small enumerated cases and intentional
+    boundary conditions; structural validity alone does not verify a production implementation.
+  runner: reference
+  cases:
+  - id: event_window_edges
+    name: Event Window Edges
+    description: Lower-bound equality is included; upper-bound equality is excluded. Exactly two of four
+      observations are eligible.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: before_lower
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-05-31T23:59:59Z'
+        available_at: '2026-05-31T23:59:59Z'
+        is_fault: true
+      - event_id: at_lower
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-01T00:00:00Z'
+        available_at: '2026-06-01T00:00:00Z'
+        is_fault: true
+      - event_id: before_upper
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T23:59:59Z'
+        available_at: '2026-06-07T23:59:59Z'
+        is_fault: true
+      - event_id: at_upper
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-08T00:00:00Z'
+        available_at: '2026-06-08T00:00:00Z'
+        is_fault: true
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 2
+        state: ok
+  - id: availability_edges
+    name: Availability Edges
+    description: Availability at as_of is included; the same business day arriving one second later is
+      excluded.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: known
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-08T00:00:00Z'
+        is_fault: true
+      - event_id: late
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:01Z'
+        available_at: '2026-06-08T00:00:01Z'
+        is_fault: true
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 1
+        state: ok
+  - id: identical_duplicates
+    name: Identical Duplicates
+    description: An identical physical retransmission collapses to one logical observation.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: retransmitted
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: true
+      - event_id: retransmitted
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: true
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 1
+        state: ok
+  - id: conflicting_duplicates
+    name: Conflicting Duplicates
+    description: Two rows sharing an immutable event key disagree on their fault value and must fail.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: retransmitted
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: true
+      - event_id: retransmitted
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: false
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      diagnostic:
+        code: DUPLICATE_CONFLICT
+  - id: known_empty
+    name: Known Empty
+    description: The device exists and complete source coverage is proven; no eligible fault observations
+      means integer zero.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: null_predicate
+    name: Null Predicate
+    description: Unknown and false classifications do not satisfy the true-only predicate; they do not
+      count as faults.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: unknown
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: null
+      - event_id: healthy
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T13:00:00Z'
+        available_at: '2026-06-07T13:00:00Z'
+        is_fault: false
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: insufficient_history
+    name: Insufficient History
+    description: Only four days of coverage are proven for a seven-day requirement; emit a typed null
+      with an incomplete-history state.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-06-04T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: null
+        state: insufficient_history
+  - id: source_outage
+    name: Source Outage
+    description: An unavailable source is distinct from a healthy empty event table.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: unavailable
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: null
+        state: source_unavailable
+  - id: tenant_isolation
+    name: Tenant Isolation
+    description: Two tenants reuse device_1; all grouping and identity logic must retain the tenant key.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    - tenant_id: tenant_b
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      - tenant_id: tenant_b
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events:
+      - event_id: a1
+        tenant_id: tenant_a
+        device_id: device_1
+        occurred_at: '2026-06-07T10:00:00Z'
+        available_at: '2026-06-07T10:00:00Z'
+        is_fault: true
+      - event_id: b1
+        tenant_id: tenant_b
+        device_id: device_1
+        occurred_at: '2026-06-07T11:00:00Z'
+        available_at: '2026-06-07T11:00:00Z'
+        is_fault: true
+      - event_id: b2
+        tenant_id: tenant_b
+        device_id: device_1
+        occurred_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_fault: true
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 1
+        state: ok
+      - entity_keys:
+          tenant_id: tenant_b
+          device_id: device_1
+        value: 2
+        state: ok
+  - id: publication_visibility
+    name: Publication Visibility
+    description: A newer feature value is not visible until its observed publication instant. The older
+      fresh value is selected.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: historical_serving_replay
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+      consumer: reliability_replay
+      requested_at: '2026-06-08T00:01:00Z'
+      published_values:
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-07T23:55:00Z'
+        published_at: '2026-06-08T00:00:30Z'
+        run_id: synthetic_run_1
+        sequence: 1
+        value: 2
+        state: ok
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-08T00:00:00Z'
+        published_at: '2026-06-08T00:01:30Z'
+        run_id: synthetic_run_2
+        sequence: 2
+        value: 3
+        state: ok
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 2
+        state: ok
+  - id: new_null_supersedes
+    name: New Null Supersedes
+    description: A newer visible null publication supersedes an older numeric value; preserve its reason
+      instead of falling back.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: historical_serving_replay
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+      consumer: reliability_replay
+      requested_at: '2026-06-08T00:01:00Z'
+      published_values:
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-07T23:55:00Z'
+        published_at: '2026-06-08T00:00:10Z'
+        run_id: synthetic_run_1
+        sequence: 1
+        value: 2
+        state: ok
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-08T00:00:00Z'
+        published_at: '2026-06-08T00:00:20Z'
+        run_id: synthetic_run_2
+        sequence: 2
+        value: null
+        state: insufficient_history
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: null
+        state: insufficient_history
+  - id: stale_publication
+    name: Stale Publication
+    description: The latest visible value is two hours old, exceeding the one-hour consumer freshness
+      contract.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: historical_serving_replay
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+      consumer: reliability_replay
+      requested_at: '2026-06-08T00:01:00Z'
+      published_values:
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-07T22:00:00Z'
+        published_at: '2026-06-07T22:00:20Z'
+        run_id: synthetic_run_1
+        sequence: 1
+        value: 4
+        state: ok
+    expected:
+      diagnostic:
+        code: STALE_FEATURE
+  - id: ambiguous_publication
+    name: Ambiguous Publication
+    description: Two candidate publications share all selection ordering keys but disagree; never choose
+      arbitrarily.
+    feature:
+      id: device.fault_count_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: historical_serving_replay
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+      consumer: reliability_replay
+      requested_at: '2026-06-08T00:01:00Z'
+      published_values:
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-08T00:00:00Z'
+        published_at: '2026-06-08T00:00:20Z'
+        run_id: synthetic_run_1
+        sequence: 1
+        value: 2
+        state: ok
+      - feature: device.fault_count_7d
+        version: 1.0.0
+        entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        as_of: '2026-06-08T00:00:00Z'
+        published_at: '2026-06-08T00:00:20Z'
+        run_id: synthetic_run_1
+        sequence: 1
+        value: 3
+        state: ok
+    expected:
+      diagnostic:
+        code: PUBLICATION_TIE

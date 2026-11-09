@@ -283,6 +283,7 @@ dependencies = [
  "featlas-adapters",
  "featlas-core",
  "hex",
+ "jsonschema",
  "serde",
  "serde_json",
  "sha2",
