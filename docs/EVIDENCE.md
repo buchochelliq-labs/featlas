@@ -42,7 +42,7 @@ spec. Findings and resolutions:
 | C4 | Label key types not checked | Fixed: `ENTITY_KEY_TYPE`; null request keys rejected |
 | C5 | Label `available_time_column` ignored | Fixed: mismatch is now an error (`LABEL_AVAILABILITY_COLUMN`) |
 | C6 | Join errors masked insufficient history differently from the kit | Fixed: transform stages skipped when coverage is not established; sources still reconstructed; regression test |
-| C7 | Tenant-join check relies on identical column names | **Open** (narrowed claim; documented in findings) |
+| C7 | Tenant-join check relies on identical column names | **Fixed** (follow-up): tenant columns derived from the tenant key's `group_by` mapping and join key pairs; metamorphic test renames the dimension tenant column to `org_id`. Residual limit: pairing the tenant with a non-tenant dimension column of the same type is undetectable without column-level tenant metadata |
 | C8 | Recency could use a non-window column | Fixed: `RECENCY_EVENT_TIME` |
 | C9 | Range checks via lossy i64→f64 | Fixed: exact comparison |
 | C10 | `%YAML` directive accepted; `1e-400` underflow | Fixed: `PARSE_DIRECTIVE`, `PARSE_NUMBER_RANGE` |
@@ -58,7 +58,7 @@ spec. Findings and resolutions:
 | D10 | Commit timestamp string timezone | Fixed: `unix_micros` round trip |
 | D11 | Unavailable population / stale views in reused sessions | Fixed: fail fast `SOURCE_UNAVAILABLE`; drop `fl_*` temp views at prepare |
 | D12 | View-name collisions after sanitizing ids | Fixed: generation error |
-| D13 | First-reported code may differ from the core when several violations co-occur | **Open**; differential harness accepts the expected code among reported codes |
+| D13 | First-reported code may differ from the core when several violations co-occur | **Fixed** (follow-up): one canonical precedence in both engines (see `DECISIONS.md` D8); harness requires Spark's first code to equal the expected code; two multi-violation differential tests |
 
 D3, D7, D8, D10 and D11 changes are exercised only partially locally (fixture runs use relation
 overrides, not live Delta tables); they remain part of the open live gate. A follow-up review

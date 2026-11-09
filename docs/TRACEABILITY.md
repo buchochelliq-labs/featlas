@@ -18,7 +18,7 @@ evidence; not satisfiable locally). Test names refer to `crates/*/tests/*.rs` an
 | SEM-SRC-003 | impl (local) / open (live) | assertions generated as zero-row SQL checks; no reliance on UC constraints | LSD duplicate/overlap cases; live: runbook |
 | SEM-SRC-004 | partial | lineage upstream checks; Delta `VERSION AS OF` pinning in host | live: open |
 | SEM-ENT-001 | impl+test | population reconstruction + fixture comparison | `temporal_boundary_metamorphic_checks` (population mismatch/late registration) |
-| SEM-ENT-002 | impl+test | tenant keys required in grouping, joins, consumers, labels, publications | `tenant_isolation`, `join_tenant_isolation`, `derived_tenant_isolation`, `tenant_isolation_in_labels`; known gap: tenant columns with different names (see findings) |
+| SEM-ENT-002 | impl+test | tenant keys required in grouping, joins, consumers, labels, publications | `tenant_isolation`, `join_tenant_isolation`, `derived_tenant_isolation`, `tenant_isolation_in_labels`, `review_tenant_join_detected_without_shared_column_names`; residual limit in findings #7 |
 | SEM-REL-001..003 | impl+test | validation + evaluator + Spark checks | `relationship_contracts`, 02 goldens, LSD |
 | SEM-REL-004 | impl+test | availability-aware valid-time join | `historical_join_and_late_revision`, `dimension_boundary_correction` (core + LSD) |
 | SEM-TIME-001/002 | impl+test | windows, availability cutoff, µs boundaries | `event_window_edges`, `availability_edges`, metamorphic µs tests |
