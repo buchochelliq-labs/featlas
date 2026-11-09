@@ -881,3 +881,76 @@ fn review_tenant_join_detected_without_shared_column_names() {
     // Limitation: pairing the left tenant column with a *non-tenant* dimension column of the same
     // type cannot be detected, because the language has no column-level tenant marker.
 }
+
+// ---- Regressions for the follow-up re-review ----
+
+#[test]
+fn rereview_integer_mean_is_exact() {
+    // mean over [2^53 + 1, 1] = 2^52 + 1 exactly; widening each input to f64 first would give 2^52.
+    let v = mutate("03_commerce_ratio.yaml", |v| {
+        v["features"][1]["transform"]["operation"] = json!("mean");
+        v["features"][1]["output"]["type"] = json!("number");
+        v["features"][1]["missingness"]["empty"] = json!({"action": "null"});
+        let case = &mut v["acceptance_suites"][0]["cases"][1];
+        let rows = case["source_rows"]["purchase_events"].as_array_mut().unwrap();
+        let mut a = rows[0].clone();
+        a["transaction_id"] = json!("big");
+        a["amount_usd_cents"] = json!(9007199254740993i64);
+        a["status"] = json!("settled");
+        let mut b = a.clone();
+        b["transaction_id"] = json!("one");
+        b["amount_usd_cents"] = json!(1);
+        *rows = vec![a, b];
+    });
+    let rows = eval_any(&v, 0, 1).unwrap();
+    assert_eq!(rows[0].1, json!(4503599627370497.0));
+}
+
+#[test]
+fn rereview_unavailable_dimension_does_not_hide_fact_conflicts() {
+    // Thresholds unavailable, readings contain a conflicting duplicate: the conflict in the
+    // available source is reported (same as the generated Spark assertions), not masked.
+    let v = mutate("02_historical_temperature.yaml", |v| {
+        let case = &mut v["acceptance_suites"][0]["cases"][0];
+        case["context"]["source_status"][2] = json!({"source": "device_threshold_history", "state": "unavailable"});
+        let rows = case["source_rows"]["temperature_readings"].as_array_mut().unwrap();
+        let mut twin = rows[0].clone();
+        twin["temperature_c"] = json!(-99.0);
+        rows.push(twin);
+    });
+    assert_eq!(eval_any(&v, 0, 0).unwrap_err(), "DUPLICATE_CONFLICT");
+}
+
+#[test]
+fn rereview_pending_publication_never_outranks_a_later_sequence() {
+    use featlas_core::consumer::{select, PublicationRecord};
+    use featlas_core::value::V;
+    let t = Instant::parse("2026-06-08T00:00:00Z").unwrap();
+    let rec = |id: &str, seq: i64, published: Option<&str>, value: i64| PublicationRecord {
+        feature: "f".into(),
+        version: "1.0.0".into(),
+        entity_key: vec![V::Str("a".into())],
+        entity_keys: Default::default(),
+        as_of: t,
+        published_at: published.map(|p| Instant::parse(p).unwrap()),
+        sequence: seq,
+        publication_id: id.into(),
+        materialization_id: None,
+        value: V::Int(value),
+        value_json: json!(value),
+        state: "ok".into(),
+    };
+    let key = [V::Str("a".into())];
+    // A stuck pending publication (seq 1) and a recorded correction (seq 2) for the same as_of.
+    let records = vec![rec("stuck", 1, None, 5), rec("correction", 2, Some("2026-06-08T00:30:00Z"), 7)];
+    assert_eq!(select(&records, &key, t, None, 3600).unwrap().unwrap().publication_id, "correction");
+    // A newer pending publication (seq 3) is served by live reads but never by replay.
+    let mut records = records;
+    records.push(rec("new", 3, None, 9));
+    assert_eq!(select(&records, &key, t, None, 3600).unwrap().unwrap().publication_id, "new");
+    let replay = select(&records, &key, t, Some(Instant::parse("2026-06-09T00:00:00Z").unwrap()), 3600).unwrap().unwrap();
+    assert_eq!(replay.publication_id, "correction");
+    // Equal (as_of, sequence) for live reads is an explicit tie.
+    let tie = vec![rec("x", 4, None, 1), rec("y", 4, Some("2026-06-08T00:10:00Z"), 2)];
+    assert_eq!(select(&tie, &key, t, None, 3600).unwrap_err().code, "PUBLICATION_TIE");
+}

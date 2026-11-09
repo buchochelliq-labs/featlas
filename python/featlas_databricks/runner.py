@@ -94,10 +94,17 @@ class SnapshotRun:
         return not (set(item.get("reads", [])) & self.unavailable_sources)
 
     def _drop_stale_views(self) -> None:
-        """A reused session must never publish a view left over from another as_of."""
-        for t in self.spark.catalog.listTables():
-            if t.isTemporary and t.name.startswith("fl_"):
-                self.spark.catalog.dropTempView(t.name)
+        """A reused session must never publish a view left over from another as_of.
+
+        Only this artifact's own views are dropped; other feature sets' views and caller views
+        (for example ``fl_request_keys``) are left alone.
+        """
+        a = self.artifacts
+        own = {st["view"] for st in a["bind_sources"] + a["stages"] + [a["snapshot"]] if st.get("view")}
+        own |= {f[v]["view"] for f in a["features"] for v in ("computed", "degraded") if f[v].get("view")}
+        temporary = {t.name for t in self.spark.catalog.listTables() if t.isTemporary}
+        for name in sorted(own & temporary):
+            self.spark.catalog.dropTempView(name)
 
     def prepare(self) -> None:
         a = self.artifacts
@@ -182,22 +189,37 @@ class SnapshotRun:
             raise FeatlasError("PUBLICATION_NOT_AUTHORIZED", "Explicit environment, approver and publication identities are required")
         a = self.artifacts
         pub = {"publication_id": auth.publication_id, "publication_sequence": auth.publication_sequence, "materialization_id": auth.materialization_id}
-        self.run_to_snapshot(pub)
         if auth.allow_create_table:
             self._sql("create_feature_table", a["create_table"]["sql"])
         props = {r["key"]: r["value"] for r in self._sql("table_properties", a["table_properties"]["sql"]).collect()}
         for k, v in a["expected_table_properties"].items():
             if props.get(k) != v:
                 raise FeatlasError("TARGET_TABLE_MISMATCH", f"{a['output_table']} property {k}={props.get(k)!r}, expected {v!r}; refusing to publish into another feature-set version")
-        # An earlier attempt of this publication may already have committed (idempotent retry).
-        mc_rows = self._sql("existing_publication", f"SELECT DISTINCT * FROM (SELECT {self._meta('materialization_id')} AS m, {self._meta('published_at')} AS p FROM {a['output_table']} WHERE {self._meta('publication_id')} = :publication_id)", {"publication_id": auth.publication_id}).collect()
-        commit_mid = mc_rows[0]["m"] if mc_rows else auth.materialization_id
-        if not mc_rows:
+        # Look up an earlier attempt of this publication *before* recomputing, so a retry can
+        # always finish recording evidence for rows that are already committed.
+        existing = self._sql(
+            "existing_publication",
+            f"SELECT {self._meta('materialization_id')} AS m, {self._meta('publication_sequence')} AS s, "
+            f"unix_micros({self._meta('as_of')}) = unix_micros(:as_of) AS same_as_of, count(*) AS n "
+            f"FROM {a['output_table']} WHERE {self._meta('publication_id')} = :publication_id GROUP BY 1, 2, 3",
+            dict(self._params(), publication_id=auth.publication_id),
+        ).collect()
+        retry = bool(existing)
+        if retry:
+            if len(existing) != 1:
+                raise FeatlasError("PUBLICATION_IDENTITY_CONFLICT", f"publication_id {auth.publication_id} already has {len(existing)} distinct (materialization, sequence, as_of) groups; refusing to guess")
+            row = existing[0]
+            if not row["same_as_of"] or row["s"] != auth.publication_sequence:
+                raise FeatlasError("PUBLICATION_IDENTITY_CONFLICT", f"publication_id {auth.publication_id} is already committed with a different as_of or sequence ({row['s']}); use a new publication_id")
+            commit_mid, stored_sequence, stored_rows = row["m"], row["s"], row["n"]
+        else:
+            rows = self.run_to_snapshot(pub)
             self.spark.conf.set("spark.databricks.delta.commitInfo.userMetadata", auth.materialization_id)
             try:
                 self._sql("publish_snapshot", a["publish"]["sql"], dict(self._params(), **pub))
             finally:
                 self.spark.conf.unset("spark.databricks.delta.commitInfo.userMetadata")
+            commit_mid, stored_sequence, stored_rows = auth.materialization_id, auth.publication_sequence, len(rows)
         history = self._sql("commit_history", a["evidence"][0]["sql"]).collect()
         commits = [h.asDict() for h in history if h.asDict().get("userMetadata") == commit_mid and h.asDict().get("operation") == "MERGE"]
         if len(commits) != 1:
@@ -210,13 +232,17 @@ class SnapshotRun:
             "table": a["output_table"],
             "table_version": commit.get("version"),
             "commit_timestamp": format_instant(datetime.fromtimestamp(micros / 1_000_000, tz=timezone.utc).replace(microsecond=micros % 1_000_000)),
-            "source_versions": self.source_versions,
-            "retry_of_materialization": commit_mid if commit_mid != auth.materialization_id else None,
+            # Identities stored on the committed rows (on a retry these are the original write's).
+            "publication_id": auth.publication_id,
+            "publication_sequence": stored_sequence,
+            "materialization_id": commit_mid,
+            "rows": stored_rows,
+            "retry": retry,
+            "retry_materialization_id": auth.materialization_id if retry else None,
+            # Source pins are only known for the run that computed the rows.
+            "source_versions": None if retry else self.source_versions,
             "operation": commit.get("operation"),
             "operation_metrics": commit.get("operationMetrics"),
-            "publication_id": auth.publication_id,
-            "publication_sequence": auth.publication_sequence,
-            "materialization_id": auth.materialization_id,
             "approved_by": auth.approved_by,
             "environment": auth.environment,
             "statement_log": self.log,

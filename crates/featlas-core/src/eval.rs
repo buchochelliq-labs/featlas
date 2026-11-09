@@ -94,6 +94,7 @@ struct Evaluator<'a> {
     validated: BTreeMap<String, Vec<TRow>>,
     work: usize,
     reconstructed: HashMap<(String, Boundary), Vec<TRow>>,
+    types: std::rc::Rc<TypeCache>,
 }
 
 #[derive(Clone)]
@@ -535,6 +536,7 @@ impl<'a> Evaluator<'a> {
                         &Typed {
                             inner: &env,
                             p: self.p,
+                            types: self.types.clone(),
                             f,
                         },
                     )?;
@@ -813,6 +815,7 @@ impl<'a> Evaluator<'a> {
                     &Typed {
                         inner: &e,
                         p: self.p,
+                            types: self.types.clone(),
                         f,
                     },
                 )?) {
@@ -884,6 +887,7 @@ impl<'a> Evaluator<'a> {
                         let env = Typed {
                             inner: e,
                             p: self.p,
+                            types: self.types.clone(),
                             f,
                         };
                         let exprs: Vec<&Expr> = value.iter().chain(distinct_by.iter()).collect();
@@ -982,14 +986,12 @@ impl<'a> Evaluator<'a> {
                                         &Typed {
                                             inner: e,
                                             p: self.p,
+                            types: self.types.clone(),
                                             f,
                                         },
                                     )
                                     .map(|v| {
-                                        expr::conform(
-                                            v,
-                                            crate::validate::expr_static_type(self.p, f, d),
-                                        )
+                                        expr::conform(v, self.types.get(self.p, f, d))
                                     })
                                 })
                                 .collect::<Result<_, _>>()?;
@@ -1026,10 +1028,13 @@ impl<'a> Evaluator<'a> {
                                     &Typed {
                                         inner: e,
                                         p: self.p,
+                            types: self.types.clone(),
                                         f,
                                     },
                                 )?,
-                                static_ty,
+                                // Widen to the value expression's own type (not the transform's
+                                // output type), so an integer mean keeps its exact i128 path.
+                                self.types.get(self.p, f, expr),
                             );
                             if v.is_null() {
                                 match nulls {
@@ -1150,6 +1155,7 @@ impl<'a> Evaluator<'a> {
                     &Typed {
                         inner: keyed[0].1,
                         p: self.p,
+                            types: self.types.clone(),
                         f,
                     },
                 )?;
@@ -1286,6 +1292,25 @@ struct Typed<'a, E: ValueEnv> {
     inner: &'a E,
     p: &'a Project,
     f: &'a Feature,
+    types: std::rc::Rc<TypeCache>,
+}
+
+/// Memoized static types per (feature, expression node) for one evaluation: the type checker
+/// runs once per node instead of once per row. Keys are addresses of nodes owned by the project,
+/// which outlives the evaluation.
+#[derive(Default)]
+struct TypeCache(std::cell::RefCell<HashMap<(usize, usize), Option<LogicalType>>>);
+
+impl TypeCache {
+    fn get(&self, p: &Project, f: &Feature, e: &Expr) -> Option<LogicalType> {
+        let key = (f as *const Feature as usize, e as *const Expr as usize);
+        if let Some(t) = self.0.borrow().get(&key) {
+            return *t;
+        }
+        let t = crate::validate::expr_static_type(p, f, e);
+        self.0.borrow_mut().insert(key, t);
+        t
+    }
 }
 
 impl<E: ValueEnv> ValueEnv for Typed<'_, E> {
@@ -1296,7 +1321,7 @@ impl<E: ValueEnv> ValueEnv for Typed<'_, E> {
         self.inner.feature(feature, version)
     }
     fn static_type(&self, e: &Expr) -> Option<LogicalType> {
-        crate::validate::expr_static_type(self.p, self.f, e)
+        self.types.get(self.p, self.f, e)
     }
 }
 
@@ -1592,6 +1617,7 @@ pub fn evaluate(
         trace: Vec::new(),
         validated: BTreeMap::new(),
         reconstructed: HashMap::new(),
+        types: Default::default(),
         work: 0,
     };
     let target = ev.feature_by_id(feature_id)?;
@@ -1807,6 +1833,7 @@ pub fn reconstruct_rows(
         trace: Vec::new(),
         validated: BTreeMap::new(),
         reconstructed: HashMap::new(),
+        types: Default::default(),
         work: 0,
     };
     ev.reconstruct("", source_id, upper)

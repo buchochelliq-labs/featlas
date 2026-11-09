@@ -31,6 +31,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1
+      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1 delta-spark==4.0.0
       - run: cd python && maturin build --release --out dist && pip install dist/*.whl
-      - run: cd python && PYSPARK_PYTHON=$(which python) python -m pytest -q tests/test_local_spark_differential.py
+      - run: cd python && PYSPARK_PYTHON=$(which python) python -m pytest -q tests/test_local_spark_differential.py tests/test_local_delta_publication.py

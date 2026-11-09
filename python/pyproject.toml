@@ -13,7 +13,7 @@ classifiers = ["Programming Language :: Rust", "Programming Language :: Python :
 [project.optional-dependencies]
 # Pinned only after a successful live target run; see docs/DATABRICKS_RUNBOOK.md.
 databricks = ["databricks-sdk", "databricks-connect"]
-local = ["pyspark==4.0.1"]
+local = ["pyspark==4.0.1", "delta-spark==4.0.0"]
 test = ["pytest", "PyYAML==6.0.3"]
 
 [project.scripts]

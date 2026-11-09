@@ -35,18 +35,9 @@ RESULTS: list[dict] = []
 
 @pytest.fixture(scope="session")
 def spark():
-    utc_process()
-    from pyspark.sql import SparkSession
+    from spark_session import get_spark
 
-    s = (
-        SparkSession.builder.master("local[1]")
-        .appName("featlas-differential")
-        .config("spark.sql.session.timeZone", "UTC")
-        .config("spark.sql.ansi.enabled", "true")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .getOrCreate()
-    )
+    s = get_spark()
     yield s
     out = os.environ.get("FEATLAS_DIFFERENTIAL_REPORT")
     if out:

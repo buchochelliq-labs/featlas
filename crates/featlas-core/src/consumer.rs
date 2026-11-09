@@ -147,14 +147,16 @@ pub fn select<'r>(
         .collect();
     let mut keys = BTreeMap::new();
     for r in &eligible {
-        // A pending publication is newer than every recorded one.
-        let ord = (
-            r.as_of,
-            r.published_at.unwrap_or(Instant { micros: i64::MAX }),
-            r.sequence,
-        );
+        // Replay orders by (as_of, observed published_at, sequence) as specified. Source-as-known
+        // reads may include evidence-pending publications, whose visibility instant is unknown;
+        // they order by (as_of, sequence) — the declared tie_breaker — never by missing evidence.
+        let ord = if requested_at.is_some() {
+            (r.as_of, r.published_at.map(|t| t.micros).unwrap_or(i64::MIN), r.sequence)
+        } else {
+            (r.as_of, r.sequence, 0i64)
+        };
         if keys.insert(ord, *r).is_some() {
-            return Err(err("PUBLICATION_TIE", "SEM-REPLAY-002", "Two eligible publications share (as_of, published_at, sequence); no arbitrary choice is made"));
+            return Err(err("PUBLICATION_TIE", "SEM-REPLAY-002", "Two eligible publications share their ordering key ((as_of, published_at, sequence) for replay; (as_of, sequence) for source-as-known reads); no arbitrary choice is made"));
         }
     }
     let Some((_, chosen)) = keys.into_iter().next_back() else {
