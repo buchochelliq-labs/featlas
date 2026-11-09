@@ -1,0 +1,16 @@
+{
+  "consistent": false,
+  "diagnostics": [
+    {
+      "code": "REPORT_REQUIRED_CAPABILITY_MISSING",
+      "severity": "error",
+      "stage": "planning",
+      "rule": "SEM-PORT-006",
+      "path": "/checks",
+      "message": "Missing assessment for databricks_platform/orchestrator/core.scheduling (planner-derived)"
+    }
+  ],
+  "scope": "Record consistency only; evidence is not fetched or authenticated and readiness is not certified.",
+  "schema": "featlas.api/v1",
+  "operation": "check_report"
+}

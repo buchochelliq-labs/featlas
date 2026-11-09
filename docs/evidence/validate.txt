@@ -1,0 +1,14 @@
+PASS: spec/feature-engineering-spec-v0.2.0/examples/00_minimal_template.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/01_fault_count.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/02_historical_temperature.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/03_commerce_ratio.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/04_fitted_and_custom_contracts.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/05_lookup_and_recency.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: spec/feature-engineering-spec-v0.2.0/examples/06_store_migration.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/00_minimal_template.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/01_fault_count.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/02_historical_temperature.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/03_commerce_ratio.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/04_fitted_and_custom_contracts.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/05_lookup_and_recency.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate
+PASS: projects/06_store_migration.yaml (parse=passed, schema=passed, references=passed); planning, data and runtime levels not evaluated by validate

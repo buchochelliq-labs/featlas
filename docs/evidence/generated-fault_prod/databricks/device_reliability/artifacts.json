@@ -1,0 +1,352 @@
+{
+  "generator": "dev.featlas:databricks@0.1.0",
+  "plan_digest": "e50222aab866aec8276e6d9285432e32f0451f0dc5e3d693ceb48738a5773a85",
+  "logical_plan_digest": "667733be32666af0c9a3a6e08ce0e1bf8a9ce01bcedf074ba4e1b998f44f1575",
+  "feature_set": "device_reliability",
+  "feature_set_version": "1.0.0",
+  "session": [
+    {
+      "name": "time_zone",
+      "purpose": "Interpret and render timestamps as UTC instants",
+      "sql": "SET TIME ZONE 'UTC'",
+      "reads": []
+    },
+    {
+      "name": "ansi",
+      "purpose": "Checked BIGINT overflow and strict casts",
+      "sql": "SET spark.sql.ansi.enabled = true",
+      "reads": []
+    }
+  ],
+  "bind_sources": [
+    {
+      "name": "fl_raw_device_registry",
+      "purpose": "Bind logical source device_registry@1.0.0 read-only through its complete column mapping",
+      "sql": "SELECT\n  `tenant_id` AS `tenant_id`,\n  `device_id` AS `device_id`,\n  `registered_at` AS `registered_at`,\n  `available_at` AS `available_at`\nFROM `example_catalog`.`synthetic_raw`.`device_registry`",
+      "view": "fl_raw_device_registry",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_raw_fault_events",
+      "purpose": "Bind logical source fault_events@1.0.0 read-only through its complete column mapping",
+      "sql": "SELECT\n  `event_id` AS `event_id`,\n  `tenant_id` AS `tenant_id`,\n  `device_id` AS `device_id`,\n  `occurred_at` AS `occurred_at`,\n  `available_at` AS `available_at`,\n  `is_fault` AS `is_fault`\nFROM `example_catalog`.`synthetic_raw`.`fault_events`",
+      "view": "fl_raw_fault_events",
+      "reads": [
+        "fault_events"
+      ]
+    }
+  ],
+  "stages": [
+    {
+      "name": "fl_device_registry_ai_available",
+      "purpose": "device_registry: availability cutoff <= as_of (stage 2)",
+      "sql": "SELECT * FROM fl_raw_device_registry WHERE `available_at` <= :as_of",
+      "view": "fl_device_registry_ai_available",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_device_registry_ai_deduped",
+      "purpose": "device_registry: collapse identical physical duplicates (stage 3)",
+      "sql": "SELECT DISTINCT `tenant_id`, `device_id`, `registered_at`, `available_at` FROM fl_device_registry_ai_available",
+      "view": "fl_device_registry_ai_deduped",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_device_registry_ai_selected",
+      "purpose": "device_registry: immutable logical events (stage 4)",
+      "sql": "SELECT * FROM fl_device_registry_ai_deduped",
+      "view": "fl_device_registry_ai_selected",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_population_device_reliability",
+      "purpose": "Eligible population at as_of (stage 6); zero-event entities are retained by later left joins",
+      "sql": "SELECT `tenant_id` AS `tenant_id`, `device_id` AS `device_id` FROM fl_device_registry_ai_selected WHERE `registered_at` <= :as_of",
+      "view": "fl_population_device_reliability",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_fault_events_ai_available",
+      "purpose": "fault_events: availability cutoff <= as_of (stage 2)",
+      "sql": "SELECT * FROM fl_raw_fault_events WHERE `available_at` <= :as_of",
+      "view": "fl_fault_events_ai_available",
+      "reads": [
+        "fault_events"
+      ]
+    },
+    {
+      "name": "fl_fault_events_ai_deduped",
+      "purpose": "fault_events: collapse identical physical duplicates (stage 3)",
+      "sql": "SELECT DISTINCT `event_id`, `tenant_id`, `device_id`, `occurred_at`, `available_at`, `is_fault` FROM fl_fault_events_ai_available",
+      "view": "fl_fault_events_ai_deduped",
+      "reads": [
+        "fault_events"
+      ]
+    },
+    {
+      "name": "fl_fault_events_ai_selected",
+      "purpose": "fault_events: immutable logical events (stage 4)",
+      "sql": "SELECT * FROM fl_fault_events_ai_deduped",
+      "view": "fl_fault_events_ai_selected",
+      "reads": [
+        "fault_events"
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "fl_raw_device_registry_invalid_rows",
+      "code": "INVALID_SOURCE_ROW",
+      "rule": "SEM-SRC-001",
+      "sql": "SELECT * FROM fl_raw_device_registry WHERE `tenant_id` IS NULL OR `device_id` IS NULL OR `registered_at` IS NULL OR `available_at` IS NULL LIMIT 1",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_raw_fault_events_invalid_rows",
+      "code": "INVALID_SOURCE_ROW",
+      "rule": "SEM-SRC-001",
+      "sql": "SELECT * FROM fl_raw_fault_events WHERE `event_id` IS NULL OR `tenant_id` IS NULL OR `device_id` IS NULL OR `occurred_at` IS NULL OR `available_at` IS NULL LIMIT 1",
+      "reads": [
+        "fault_events"
+      ]
+    },
+    {
+      "name": "fl_device_registry_ai_primary_key_duplicates",
+      "code": "DUPLICATE_CONFLICT",
+      "rule": "SEM-REV-002",
+      "sql": "SELECT `tenant_id`, `device_id`, count(*) AS n FROM (SELECT DISTINCT `tenant_id`, `device_id`, `registered_at`, `available_at` FROM fl_device_registry_ai_available) GROUP BY `tenant_id`, `device_id` HAVING count(*) > 1",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_device_registry_ai_logical_conflicts",
+      "code": "DUPLICATE_CONFLICT",
+      "rule": "SEM-REV-002",
+      "sql": "SELECT `tenant_id`, `device_id`, count(*) AS n FROM fl_device_registry_ai_deduped GROUP BY `tenant_id`, `device_id` HAVING count(*) > 1",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_population_device_reliability_duplicates",
+      "code": "DUPLICATE_POPULATION",
+      "rule": "SEM-ENT-001",
+      "sql": "SELECT `tenant_id`, `device_id`, count(*) AS n FROM fl_population_device_reliability GROUP BY `tenant_id`, `device_id` HAVING count(*) > 1",
+      "reads": [
+        "device_registry"
+      ]
+    },
+    {
+      "name": "fl_fault_events_ai_primary_key_duplicates",
+      "code": "DUPLICATE_CONFLICT",
+      "rule": "SEM-REV-002",
+      "sql": "SELECT `event_id`, count(*) AS n FROM (SELECT DISTINCT `event_id`, `tenant_id`, `device_id`, `occurred_at`, `available_at`, `is_fault` FROM fl_fault_events_ai_available) GROUP BY `event_id` HAVING count(*) > 1",
+      "reads": [
+        "fault_events"
+      ]
+    },
+    {
+      "name": "fl_fault_events_ai_logical_conflicts",
+      "code": "DUPLICATE_CONFLICT",
+      "rule": "SEM-REV-002",
+      "sql": "SELECT `event_id`, count(*) AS n FROM fl_fault_events_ai_deduped GROUP BY `event_id` HAVING count(*) > 1",
+      "reads": [
+        "fault_events"
+      ]
+    }
+  ],
+  "features": [
+    {
+      "feature": "device.fault_count_7d",
+      "version": "1.0.0",
+      "view": "fl_feature_device_fault_count_7d",
+      "computed": {
+        "name": "fl_feature_device_fault_count_7d",
+        "purpose": "device.fault_count_7d: exact Count per complete entity key; population left join keeps zero-event entities",
+        "sql": "WITH fl_agg_rows AS (\n  SELECT `faults`.`tenant_id` AS `tenant_id`, `faults`.`device_id` AS `device_id`, count(*) AS fl_agg\n  FROM fl_fault_events_ai_selected `faults`\nWHERE unix_micros(`faults`.`occurred_at`) >= (unix_micros(:as_of) - 604800000000) AND unix_micros(`faults`.`occurred_at`) < unix_micros(:as_of)\n  AND coalesce((`faults`.`is_fault` = true), false)\n  AND `faults`.`tenant_id` IS NOT NULL AND `faults`.`device_id` IS NOT NULL\n  GROUP BY `faults`.`tenant_id`, `faults`.`device_id`\n)\nSELECT p.`tenant_id`, p.`device_id`,\n  CASE WHEN a.fl_present IS NULL THEN CAST(0 AS BIGINT) ELSE CAST(a.fl_agg AS BIGINT) END AS fl_value,\n  CASE WHEN a.fl_present IS NULL THEN 'empty' ELSE 'ok' END AS fl_state\nFROM fl_population_device_reliability p\nLEFT JOIN (SELECT *, 1 AS fl_present FROM fl_agg_rows) a ON p.`tenant_id` <=> a.`tenant_id` AND p.`device_id` <=> a.`device_id`",
+        "view": "fl_feature_device_fault_count_7d",
+        "reads": [
+          "device_registry",
+          "fault_events"
+        ]
+      },
+      "degraded": {
+        "name": "fl_feature_device_fault_count_7d",
+        "purpose": "device.fault_count_7d: coverage not established; typed null with the core-computed state and no source reads",
+        "sql": "SELECT `tenant_id`, `device_id`, CAST(NULL AS BIGINT) AS fl_value, CAST(:coverage_state AS STRING) AS fl_state FROM fl_population_device_reliability",
+        "view": "fl_feature_device_fault_count_7d",
+        "reads": [
+          "device_registry"
+        ]
+      },
+      "missingness": {
+        "empty": {
+          "action": "value",
+          "value": 0
+        },
+        "null_input": "ignore",
+        "insufficient_history": "null",
+        "source_unavailable": "null",
+        "execution_failure": "error"
+      }
+    }
+  ],
+  "snapshot": {
+    "name": "fl_snapshot_device_reliability",
+    "purpose": "Complete feature-set snapshot: every population key exactly once with every member value and state; published_at stays NULL until commit evidence is recorded",
+    "sql": "SELECT\n  CAST(p.`tenant_id` AS STRING) AS `tenant_id`,\n  CAST(p.`device_id` AS STRING) AS `device_id`,\n  CAST(m0.fl_value AS BIGINT) AS `device_fault_count_7d`,\n  m0.fl_state AS `device_fault_count_7d_state`,\n  CAST(:as_of AS TIMESTAMP) AS `feature_as_of`,\n  CAST(NULL AS TIMESTAMP) AS `published_at`,\n  CAST(:publication_sequence AS BIGINT) AS `publication_sequence`,\n  CAST(:publication_id AS STRING) AS `publication_id`,\n  CAST(:materialization_id AS STRING) AS `materialization_id`\nFROM fl_population_device_reliability p\nJOIN fl_feature_device_fault_count_7d m0 ON p.`tenant_id` <=> m0.`tenant_id` AND p.`device_id` <=> m0.`device_id`",
+    "view": "fl_snapshot_device_reliability",
+    "reads": []
+  },
+  "create_table": {
+    "name": "create_feature_table",
+    "purpose": "Create the Unity Catalog feature table (resource creation; run only with explicit authorization)",
+    "sql": "CREATE TABLE IF NOT EXISTS `example_catalog`.`synthetic_features`.`device_reliability` (\n  `tenant_id` STRING NOT NULL,\n  `device_id` STRING NOT NULL,\n  `device_fault_count_7d` BIGINT,\n  `device_fault_count_7d_state` STRING NOT NULL,\n  `feature_as_of` TIMESTAMP NOT NULL,\n  `published_at` TIMESTAMP,\n  `publication_sequence` BIGINT NOT NULL,\n  `publication_id` STRING NOT NULL,\n  `materialization_id` STRING NOT NULL,\n  CONSTRAINT `device_reliability_pk` PRIMARY KEY (`tenant_id`, `device_id`, `feature_as_of` TIMESERIES, `publication_sequence`)\n) USING DELTA\nTBLPROPERTIES ('delta.enableChangeDataFeed' = 'true', 'featlas.feature_set' = 'device_reliability@1.0.0', 'featlas.feature_set_fingerprint' = 'bdaf782a814e94a8341b2400e6069bb859ee91a734443d95c29e62ddc4133680')",
+    "reads": []
+  },
+  "publish": {
+    "name": "publish_snapshot",
+    "purpose": "Single Delta MERGE commit making the complete snapshot visible atomically; idempotent on (keys, as_of, publication_id) for retries",
+    "sql": "MERGE INTO `example_catalog`.`synthetic_features`.`device_reliability` t\nUSING fl_snapshot_device_reliability s\nON t.`tenant_id` = s.`tenant_id` AND t.`device_id` = s.`device_id` AND t.`feature_as_of` = s.`feature_as_of` AND t.`publication_id` = s.`publication_id`\nWHEN NOT MATCHED THEN INSERT *",
+    "reads": []
+  },
+  "table_properties": {
+    "name": "table_properties",
+    "purpose": "Before publishing, the existing table must carry this feature set's identity and fingerprint",
+    "sql": "SHOW TBLPROPERTIES `example_catalog`.`synthetic_features`.`device_reliability`",
+    "reads": []
+  },
+  "expected_table_properties": {
+    "featlas.feature_set": "device_reliability@1.0.0",
+    "featlas.feature_set_fingerprint": "bdaf782a814e94a8341b2400e6069bb859ee91a734443d95c29e62ddc4133680"
+  },
+  "evidence": [
+    {
+      "name": "commit_history",
+      "purpose": "Read the Delta commit whose userMetadata is this materialization_id; its timestamp is the observed visibility instant",
+      "sql": "DESCRIBE HISTORY `example_catalog`.`synthetic_features`.`device_reliability`",
+      "reads": []
+    },
+    {
+      "name": "record_published_at",
+      "purpose": "Record observed visibility evidence on the rows of this publication only (never fabricated from schedules or job time)",
+      "sql": "UPDATE `example_catalog`.`synthetic_features`.`device_reliability` SET `published_at` = CAST(:observed_commit_timestamp AS TIMESTAMP) WHERE `publication_id` = :publication_id AND `published_at` IS NULL",
+      "reads": []
+    }
+  ],
+  "consumer_read": {
+    "name": "consumer_read",
+    "purpose": "Physical read for the target-neutral consumer API; the core selects values, applies freshness, null and replay rules",
+    "sql": "SELECT * FROM `example_catalog`.`synthetic_features`.`device_reliability` WHERE `feature_as_of` <= CAST(:max_as_of AS TIMESTAMP) AND (`tenant_id`, `device_id`) IN (SELECT `tenant_id`, `device_id` FROM fl_request_keys)",
+    "reads": []
+  },
+  "parameters": {
+    "as_of": "TIMESTAMP (UTC instant, microsecond precision): the requested feature as_of T",
+    "coverage_state": "STRING per degraded feature: core-computed 'insufficient_history' or 'source_unavailable'",
+    "materialization_id": "STRING: identity of this write; also the Delta commit userMetadata",
+    "max_as_of": "TIMESTAMP: largest as_of among consumer request rows",
+    "observed_commit_timestamp": "TIMESTAMP: timestamp of the Delta commit read from DESCRIBE HISTORY",
+    "publication_id": "STRING: stable original publication identity",
+    "publication_sequence": "BIGINT: deterministic original publication order"
+  },
+  "expected_source_schemas": {
+    "device_registry": {
+      "table": "`example_catalog`.`synthetic_raw`.`device_registry`",
+      "columns": [
+        {
+          "logical": "tenant_id",
+          "physical": "tenant_id",
+          "type": "STRING",
+          "nullable": false
+        },
+        {
+          "logical": "device_id",
+          "physical": "device_id",
+          "type": "STRING",
+          "nullable": false
+        },
+        {
+          "logical": "registered_at",
+          "physical": "registered_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "logical": "available_at",
+          "physical": "available_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        }
+      ]
+    },
+    "fault_events": {
+      "table": "`example_catalog`.`synthetic_raw`.`fault_events`",
+      "columns": [
+        {
+          "logical": "event_id",
+          "physical": "event_id",
+          "type": "STRING",
+          "nullable": false
+        },
+        {
+          "logical": "tenant_id",
+          "physical": "tenant_id",
+          "type": "STRING",
+          "nullable": false
+        },
+        {
+          "logical": "device_id",
+          "physical": "device_id",
+          "type": "STRING",
+          "nullable": false
+        },
+        {
+          "logical": "occurred_at",
+          "physical": "occurred_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "logical": "available_at",
+          "physical": "available_at",
+          "type": "TIMESTAMP",
+          "nullable": false
+        },
+        {
+          "logical": "is_fault",
+          "physical": "is_fault",
+          "type": "BOOLEAN",
+          "nullable": true
+        }
+      ]
+    }
+  },
+  "output_table": "`example_catalog`.`synthetic_features`.`device_reliability`",
+  "metadata_columns": {
+    "as_of": "feature_as_of",
+    "published_at": "published_at",
+    "publication_sequence": "publication_sequence",
+    "publication_id": "publication_id",
+    "materialization_id": "materialization_id"
+  },
+  "notes": [
+    "Number sums/means use Spark binary64 accumulation; the local evaluator is correctly rounded. Declared numeric tolerances govern comparison; integer results are exact (BIGINT, ANSI overflow).",
+    "Integer/number comparisons follow Spark's widening to DOUBLE, which is inexact above 2^53.",
+    "String ordering assumes UTF8_BINARY collation (code-point order); preflight must confirm the table/session collation.",
+    "Declared primary keys, foreign keys and cardinalities are verified by the generated assertion queries; Unity Catalog constraints are informational.",
+    "Coverage/outage states are computed by the core from source-status evidence; this SQL never infers completeness from row counts."
+  ]
+}

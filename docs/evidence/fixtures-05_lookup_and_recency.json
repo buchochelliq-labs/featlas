@@ -1,0 +1,151 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "6ce382fd2a58d4fa0af8b0f3c39880ccb60e00c62d5cc8804a73338c63139b27",
+  "summary": {
+    "executed": 5,
+    "passed": 5,
+    "failed": 0,
+    "not_executed": 0,
+    "cases": [
+      {
+        "suite": "lookup_recency_conformance",
+        "case": "subsecond_recency_floor",
+        "feature": "device.last_fault_age_seconds",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 59,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 59,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "lookup_recency_conformance",
+        "case": "known_empty_recency",
+        "feature": "device.last_fault_age_seconds",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": null,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": null,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "lookup_recency_conformance",
+        "case": "latest_lookup",
+        "feature": "device.latest_fault_classification",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": false,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": false,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "lookup_recency_conformance",
+        "case": "lookup_order_tie",
+        "feature": "device.latest_fault_classification",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "LOOKUP_TIE"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "LOOKUP_TIE",
+          "rule": "SEM-TRANS-005",
+          "message": "Lookup ordering is tied for the first row; ties are diagnosed even when values are equal"
+        }
+      },
+      {
+        "suite": "lookup_recency_conformance",
+        "case": "lookup_preserves_null",
+        "feature": "device.latest_fault_classification",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": null,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": null,
+            "state": "ok"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "featlas-py"
+description = "Python bindings (PyO3) for the featlas core: module featlas._native."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+featlas-api = { path = "../featlas-api" }
+featlas-core = { path = "../featlas-core" }
+serde_json.workspace = true
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py312"] }

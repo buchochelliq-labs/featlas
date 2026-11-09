@@ -1,0 +1,4614 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/feature-engineering-spec/0.2.0/project.schema.json",
+  "title": "Feature Engineering Project Specification 0.2.0",
+  "type": "object",
+  "description": "Self-contained portable feature engineering specification. JSON Schema checks structure; normative semantic checks and adapter conformance remain mandatory.",
+  "properties": {
+    "spec_version": {
+      "const": "0.2.0",
+      "description": "This archive version of the specification."
+    },
+    "kind": {
+      "const": "FeatureEngineeringProject",
+      "description": "Root document discriminator."
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      },
+      "minItems": 1,
+      "description": "Entity definitions and populations."
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "minItems": 1,
+      "description": "Logical read-only sources."
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationship"
+      },
+      "minItems": 0,
+      "description": "First-class source relationships, inactive until explicitly joined."
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/feature"
+      },
+      "minItems": 1,
+      "description": "Versioned feature definitions."
+    },
+    "feature_sets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/featureSet"
+      },
+      "minItems": 1,
+      "description": "Versioned atomic publication sets."
+    },
+    "consumers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/consumer"
+      },
+      "minItems": 0,
+      "description": "Explicit consuming applications or datasets."
+    },
+    "deployments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/deployment"
+      },
+      "minItems": 0,
+      "description": "Declarative physical bindings and operational expectations."
+    },
+    "acceptance_suites": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/acceptanceSuite"
+      },
+      "minItems": 1,
+      "description": "Typed golden fixture suites."
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    }
+  },
+  "required": [
+    "spec_version",
+    "kind",
+    "metadata",
+    "entities",
+    "sources",
+    "relationships",
+    "features",
+    "feature_sets",
+    "consumers",
+    "deployments",
+    "acceptance_suites"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable lower-case identifier. IDs are unique within each top-level collection; one version of an ID may occur in a project.",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "columnName": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical column or entity-key name, independent of physical SQL quoting.",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Exact semantic version. Ranges, wildcards and mutable latest aliases are forbidden.",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "minLength": 1,
+      "description": "RFC 3339 UTC instant with a literal Z suffix and at most microsecond precision (six fractional digits); quoted in YAML. Gregorian validity is also checked by a format-aware validator.",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "date": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO calendar date, quoted in YAML.",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "sha256": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Lower-case SHA-256 digest of immutable artifact bytes.",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "scalar": {
+      "description": "JSON-compatible scalar value. NaN, infinity, timestamps as native YAML objects, and nested structures are excluded.",
+      "type": [
+        "string",
+        "number",
+        "integer",
+        "boolean",
+        "null"
+      ]
+    },
+    "row": {
+      "type": "object",
+      "description": "A synthetic fixture row. Semantic validation checks exact column names, required fields, nullability and logical types against the referenced source or entity.",
+      "propertyNames": {
+        "$ref": "#/$defs/columnName"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/scalar"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Only escape hatch for non-core metadata. Keys use a reverse-domain namespace and colon, for example org.example:ticket. Extensions do not change baseline execution semantics.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+:[a-z][a-z0-9_.-]*$"
+      },
+      "additionalProperties": true
+    },
+    "logicalType": {
+      "type": "string",
+      "enum": [
+        "integer",
+        "number",
+        "boolean",
+        "string",
+        "timestamp",
+        "date"
+      ],
+      "description": "Portable scalar logical type. Integers are signed 64-bit at runtime; floating numbers must be finite binary64 values. Decimal, array and map types require a future version or explicit custom contract."
+    },
+    "boundary": {
+      "type": "string",
+      "enum": [
+        "inclusive",
+        "exclusive"
+      ],
+      "description": "Whether an instant equal to this bound is eligible."
+    },
+    "featureRef": {
+      "type": "object",
+      "description": "Feature reference pinned to an exact declared version.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "feature",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "namedFeatureRef": {
+      "type": "object",
+      "description": "Feature selection pinned to an exact declared version.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "featureSetRef": {
+      "type": "object",
+      "description": "Feature set pinned to an exact declared version.",
+      "properties": {
+        "feature_set": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "feature_set",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "codeProvenance": {
+      "type": "object",
+      "description": "Auditable origin of user-controlled implementation code.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repository or package URI; never embedded source code or credentials."
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Immutable source revision or release digest."
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "uri",
+        "revision",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Project identity and ownership.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable project name."
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project purpose, scope and important assumptions."
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Accountable team or person identifier."
+          },
+          "minItems": 1,
+          "description": "Owners who review changes and incidents.",
+          "uniqueItems": true
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "reviewed",
+            "deprecated"
+          ],
+          "description": "Lifecycle state; reviewed does not grant deployment permission."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Searchable descriptive tag."
+          },
+          "minItems": 0,
+          "description": "Non-semantic project labels.",
+          "uniqueItems": true
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version",
+        "description",
+        "owners",
+        "status",
+        "tags"
+      ],
+      "additionalProperties": false
+    },
+    "column": {
+      "type": "object",
+      "description": "Documented logical source column.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/columnName"
+        },
+        "type": {
+          "$ref": "#/$defs/logicalType"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Meaning, provenance and any special interpretation of this column."
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether a physical null is allowed. Required fixture columns must still be present."
+        },
+        "unit": {
+          "description": "Unambiguous unit, including currency and scale, or null when unitless. Example: USD_cent.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ],
+          "description": "Data sensitivity used by adapters and access policy."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description",
+        "nullable",
+        "unit",
+        "classification"
+      ],
+      "additionalProperties": false
+    },
+    "revisionOrder": {
+      "type": "object",
+      "description": "One component of a lexicographically ordered revision selector.",
+      "properties": {
+        "column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "direction": {
+          "const": "desc",
+          "description": "Larger revision values win after availability filtering."
+        }
+      },
+      "required": [
+        "column",
+        "direction"
+      ],
+      "additionalProperties": false
+    },
+    "revision": {
+      "type": "object",
+      "description": "Versioned-row reconstruction contract. Retractions must be visible in the retained revision log.",
+      "properties": {
+        "order_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/revisionOrder"
+          },
+          "minItems": 1,
+          "description": "Deterministic total ordering within each logical key. A remaining tie is an error."
+        },
+        "selection": {
+          "const": "latest_available",
+          "description": "Filter by source availability, select a revision, then apply retraction, event-time and business filters."
+        },
+        "tombstone_column": {
+          "$ref": "#/$defs/columnName",
+          "description": "Optional boolean deletion marker. A selected tombstone removes the logical row."
+        },
+        "tombstone_value": {
+          "description": "Value marking a retraction. Baseline requires true.",
+          "const": true
+        }
+      },
+      "required": [
+        "order_by",
+        "selection"
+      ],
+      "additionalProperties": false,
+      "dependentRequired": {
+        "tombstone_column": [
+          "tombstone_value"
+        ],
+        "tombstone_value": [
+          "tombstone_column"
+        ]
+      }
+    },
+    "recordSemantics": {
+      "description": "Supported source storage semantics. Snapshot-only reads cannot claim arbitrary historical reproducibility.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Immutable events or immutable entity-registration rows.",
+          "properties": {
+            "kind": {
+              "const": "append_only",
+              "description": "Each logical event is immutable."
+            },
+            "logical_key": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/columnName"
+              },
+              "minItems": 1,
+              "description": "Columns identifying one immutable event.",
+              "uniqueItems": true
+            },
+            "duplicate_policy": {
+              "type": "string",
+              "enum": [
+                "reject",
+                "collapse_identical"
+              ],
+              "description": "Reject duplicate primary keys or collapse only byte-equivalent logical values; conflicting duplicates always fail."
+            }
+          },
+          "required": [
+            "kind",
+            "logical_key",
+            "duplicate_policy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Bitemporal record history with availability and explicit revisions.",
+          "properties": {
+            "kind": {
+              "const": "versioned",
+              "description": "Rows are revisions of logical records."
+            },
+            "logical_key": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/columnName"
+              },
+              "minItems": 1,
+              "description": "Columns identifying a revision family, including interval identity for historical dimensions.",
+              "uniqueItems": true
+            },
+            "duplicate_policy": {
+              "type": "string",
+              "enum": [
+                "reject",
+                "collapse_identical"
+              ],
+              "description": "Applied to physical primary-key duplicates before revision selection."
+            },
+            "revision": {
+              "$ref": "#/$defs/revision"
+            }
+          },
+          "required": [
+            "kind",
+            "logical_key",
+            "duplicate_policy",
+            "revision"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "sourceTime": {
+      "type": "object",
+      "description": "Two independent clocks; event time never substitutes for availability.",
+      "properties": {
+        "event_time": {
+          "$ref": "#/$defs/columnName",
+          "description": "Timestamp of the business event or interval start."
+        },
+        "available_time": {
+          "$ref": "#/$defs/columnName",
+          "description": "Earliest UTC instant this exact revision became readable by the feature system."
+        },
+        "timezone": {
+          "const": "UTC",
+          "description": "Portable baseline timezone."
+        }
+      },
+      "required": [
+        "event_time",
+        "available_time",
+        "timezone"
+      ],
+      "additionalProperties": false
+    },
+    "sourceQuality": {
+      "type": "object",
+      "description": "Input validation and completeness obligations.",
+      "properties": {
+        "null_key_policy": {
+          "const": "reject",
+          "description": "Null primary, logical and mapped entity keys are rejected."
+        },
+        "invalid_row_policy": {
+          "const": "reject",
+          "description": "Malformed source records cannot silently disappear."
+        },
+        "max_lateness_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Operational arrival-lag expectation, not a change to event eligibility."
+        },
+        "completeness": {
+          "type": "object",
+          "description": "A declaration of how completeness evidence is obtained; an empty result is not evidence.",
+          "properties": {
+            "mode": {
+              "const": "external_status",
+              "description": "Completeness must be supplied by a trusted adapter or persisted observation."
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What proves the event-time interval complete and how outages or unknown coverage are represented."
+            }
+          },
+          "required": [
+            "mode",
+            "description"
+          ],
+          "additionalProperties": false
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "null_key_policy",
+        "invalid_row_policy",
+        "max_lateness_seconds",
+        "completeness"
+      ],
+      "additionalProperties": false
+    },
+    "sourceRetention": {
+      "type": "object",
+      "description": "Declared evidence retention. Adapters must verify actual retention before historical execution.",
+      "properties": {
+        "raw_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum retained raw-event history in elapsed seconds."
+        },
+        "revision_history_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum retained revision and retraction history in elapsed seconds."
+        },
+        "earliest_reproducible_at": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Earliest as-of time whose source-as-known reconstruction is supported by retained history."
+        }
+      },
+      "required": [
+        "raw_seconds",
+        "revision_history_seconds",
+        "earliest_reproducible_at"
+      ],
+      "additionalProperties": false
+    },
+    "upstreamColumn": {
+      "type": "object",
+      "description": "Column-level origin of a source field.",
+      "properties": {
+        "column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable table.column origin or synthetic origin statement."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How upstream data produces this source column."
+        }
+      },
+      "required": [
+        "column",
+        "origin",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "sourceLineage": {
+      "type": "object",
+      "description": "Source provenance before feature computation.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Upstream source provenance and transformations before this logical table."
+        },
+        "upstream_columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/upstreamColumn"
+          },
+          "minItems": 1,
+          "description": "Origin for every declared source column; checked semantically."
+        },
+        "code": {
+          "description": "Optional immutable upstream transformation provenance.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/codeProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "description",
+        "upstream_columns",
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "description": "Logical read-only table. Physical coordinates are deployment bindings.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable source table name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Business meaning, row grain and trust assumptions."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable source-owning team."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/column"
+          },
+          "minItems": 1,
+          "description": "Complete logical column schema."
+        },
+        "primary_key": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/columnName"
+          },
+          "minItems": 1,
+          "description": "Physical unique key, including revision discriminator when versioned.",
+          "uniqueItems": true
+        },
+        "record_semantics": {
+          "$ref": "#/$defs/recordSemantics"
+        },
+        "time": {
+          "$ref": "#/$defs/sourceTime"
+        },
+        "quality": {
+          "$ref": "#/$defs/sourceQuality"
+        },
+        "retention": {
+          "$ref": "#/$defs/sourceRetention"
+        },
+        "lineage": {
+          "$ref": "#/$defs/sourceLineage"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "columns",
+        "primary_key",
+        "record_semantics",
+        "time",
+        "quality",
+        "retention",
+        "lineage"
+      ],
+      "additionalProperties": false
+    },
+    "entityKey": {
+      "type": "object",
+      "description": "Canonical entity-key component.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/columnName"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "integer",
+            "string"
+          ],
+          "description": "Portable non-null entity key type."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Meaning and scope of this entity key."
+        },
+        "source_column": {
+          "$ref": "#/$defs/columnName",
+          "description": "Column in the population source that supplies this canonical key."
+        },
+        "is_tenant": {
+          "type": "boolean",
+          "description": "Whether this key separates tenants. Tenant keys participate in every grouping, join, dependency and publication lookup."
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "description",
+        "source_column",
+        "is_tenant"
+      ],
+      "additionalProperties": false
+    },
+    "population": {
+      "type": "object",
+      "description": "Explicit entity universe. Absence of facts does not remove an otherwise eligible entity.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier",
+          "description": "Read-only source defining eligible entity existence."
+        },
+        "mode": {
+          "const": "as_of_keys",
+          "description": "Reconstruct available source rows, enforce source event-time cutoff and tombstones, then project full entity keys. Reject duplicate mapped keys after reconstruction; population-source grain must identify one current row per entity."
+        },
+        "event_time_upper": {
+          "$ref": "#/$defs/boundary"
+        },
+        "availability_upper": {
+          "$ref": "#/$defs/boundary"
+        },
+        "deletion_policy": {
+          "const": "exclude_deleted",
+          "description": "A selected population tombstone excludes that entity."
+        }
+      },
+      "required": [
+        "source",
+        "mode",
+        "event_time_upper",
+        "availability_upper",
+        "deletion_policy"
+      ],
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "description": "Entity identity and time-aware population.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable entity name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Business definition and population scope."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable entity-owning team."
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entityKey"
+          },
+          "minItems": 1,
+          "description": "Ordered composite identity; every component is mandatory."
+        },
+        "population": {
+          "$ref": "#/$defs/population"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "keys",
+        "population"
+      ],
+      "additionalProperties": false
+    },
+    "relationshipEndpoint": {
+      "type": "object",
+      "description": "Source and join columns for one side of a relationship.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/columnName"
+          },
+          "minItems": 1,
+          "description": "Ordered join-key components; pair by position with the opposite endpoint.",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "source",
+        "columns"
+      ],
+      "additionalProperties": false
+    },
+    "relationshipTemporal": {
+      "description": "Temporal relationship semantics, active only when an explicit transform join uses this relationship.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Non-historical relationship.",
+          "properties": {
+            "mode": {
+              "const": "none",
+              "description": "No dimension valid-time interval; source availability still applies."
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Bitemporal target reconstruction, then half-open valid-time interval matching.",
+          "properties": {
+            "mode": {
+              "const": "as_of",
+              "description": "Historical dimension lookup."
+            },
+            "reference": {
+              "const": "left_event_time",
+              "description": "Use the left fact row event time as the dimension valid-time probe."
+            },
+            "valid_from": {
+              "$ref": "#/$defs/columnName",
+              "description": "Target valid-interval start timestamp."
+            },
+            "valid_to": {
+              "$ref": "#/$defs/columnName",
+              "description": "Target exclusive end timestamp; a null end means positive infinity."
+            },
+            "lower": {
+              "const": "inclusive",
+              "description": "Valid interval includes its start."
+            },
+            "upper": {
+              "const": "exclusive",
+              "description": "Valid interval excludes its end."
+            },
+            "available_time_cutoff": {
+              "const": "feature_as_of",
+              "description": "Target revision availability must be eligible at feature as-of, independently of the valid-time probe."
+            }
+          },
+          "required": [
+            "mode",
+            "reference",
+            "valid_from",
+            "valid_to",
+            "lower",
+            "upper",
+            "available_time_cutoff"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "relationship": {
+      "type": "object",
+      "description": "Directed, first-class source relationship. It is metadata until explicitly used by a feature join.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable relationship name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Business meaning, key mapping and intended use."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable relationship-owning team."
+        },
+        "from": {
+          "$ref": "#/$defs/relationshipEndpoint"
+        },
+        "to": {
+          "$ref": "#/$defs/relationshipEndpoint"
+        },
+        "cardinality": {
+          "type": "string",
+          "enum": [
+            "one_to_one",
+            "many_to_one"
+          ],
+          "description": "Portable baseline prohibits fanout. Cardinality is validated over eligible rows."
+        },
+        "join_type": {
+          "type": "string",
+          "enum": [
+            "left",
+            "inner"
+          ],
+          "description": "Left preserves unmatched facts; inner removes them."
+        },
+        "null_keys": {
+          "type": "string",
+          "enum": [
+            "unmatched",
+            "error"
+          ],
+          "description": "Null join keys never compare equal, including two nulls."
+        },
+        "unmatched": {
+          "type": "string",
+          "enum": [
+            "preserve_null",
+            "drop",
+            "error"
+          ],
+          "description": "Required behavior when the target has no eligible match."
+        },
+        "multiple_matches": {
+          "const": "error",
+          "description": "Overlapping intervals and ambiguous target matches fail; arbitrary first-row selection is forbidden."
+        },
+        "temporal": {
+          "$ref": "#/$defs/relationshipTemporal"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "from",
+        "to",
+        "cardinality",
+        "join_type",
+        "null_keys",
+        "unmatched",
+        "multiple_matches",
+        "temporal"
+      ],
+      "additionalProperties": false
+    },
+    "literal": {
+      "description": "A scalar constant with an explicit logical type.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "integer literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "integer",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "number literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "number",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "boolean literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "boolean",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "string literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "string",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "timestamp literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "timestamp",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "$ref": "#/$defs/utcTimestamp"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "date literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "date",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "$ref": "#/$defs/date"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "null literal.",
+          "properties": {
+            "kind": {
+              "const": "literal",
+              "description": "Typed constant."
+            },
+            "type": {
+              "const": "null",
+              "description": "Declared literal type."
+            },
+            "value": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "kind",
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "expression": {
+      "description": "Portable typed expression AST. Three-valued null logic and operator arities are specified normatively.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/literal"
+        },
+        {
+          "type": "object",
+          "description": "Alias-qualified input column.",
+          "properties": {
+            "kind": {
+              "const": "column",
+              "description": "Read a declared input column."
+            },
+            "input": {
+              "$ref": "#/$defs/identifier",
+              "description": "Feature input alias, not a global source ID."
+            },
+            "column": {
+              "$ref": "#/$defs/columnName"
+            }
+          },
+          "required": [
+            "kind",
+            "input",
+            "column"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Feature dependency expression.",
+          "properties": {
+            "kind": {
+              "const": "feature",
+              "description": "Read a pinned, same-entity feature dependency."
+            },
+            "feature": {
+              "$ref": "#/$defs/identifier"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            }
+          },
+          "required": [
+            "kind",
+            "feature",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Structured computation; no SQL, Python or executable template strings.",
+          "properties": {
+            "kind": {
+              "const": "call",
+              "description": "Apply one portable operator."
+            },
+            "operator": {
+              "type": "string",
+              "enum": [
+                "add",
+                "subtract",
+                "multiply",
+                "divide",
+                "safe_divide",
+                "equal",
+                "not_equal",
+                "less_than",
+                "less_or_equal",
+                "greater_than",
+                "greater_or_equal",
+                "and",
+                "or",
+                "not",
+                "is_null",
+                "coalesce",
+                "if_else",
+                "absolute"
+              ],
+              "description": "Fixed operator vocabulary. Arity and type compatibility are semantic validation rules."
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expression"
+              },
+              "minItems": 1,
+              "description": "Ordered operand expressions."
+            }
+          },
+          "required": [
+            "kind",
+            "operator",
+            "args"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "input": {
+      "type": "object",
+      "description": "Declared source dependency with an explicit column allowlist.",
+      "properties": {
+        "alias": {
+          "$ref": "#/$defs/identifier",
+          "description": "Unique local alias used in expressions and joins."
+        },
+        "source": {
+          "$ref": "#/$defs/identifier",
+          "description": "Exact source ID declared by this project."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/columnName"
+          },
+          "minItems": 1,
+          "description": "All accessed columns, including reconstruction, time, grouping, join and completeness metadata when column-backed.",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "alias",
+        "source",
+        "columns"
+      ],
+      "additionalProperties": false
+    },
+    "dependency": {
+      "type": "object",
+      "description": "Exact dependency pin. Cross-entity or resampled dependencies require a future contract.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "alignment": {
+          "const": "same_entity_as_of",
+          "description": "Dependency is evaluated for exactly the same composite entity and as-of instant."
+        }
+      },
+      "required": [
+        "feature",
+        "version",
+        "alignment"
+      ],
+      "additionalProperties": false
+    },
+    "window": {
+      "type": "object",
+      "description": "Event window bounds: lower = as_of minus lookback_seconds; upper = as_of.",
+      "properties": {
+        "lookback_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Elapsed event-time lookback from feature as-of, with no calendar arithmetic."
+        },
+        "lower": {
+          "$ref": "#/$defs/boundary"
+        },
+        "upper": {
+          "$ref": "#/$defs/boundary"
+        }
+      },
+      "required": [
+        "lookback_seconds",
+        "lower",
+        "upper"
+      ],
+      "additionalProperties": false
+    },
+    "featureTime": {
+      "type": "object",
+      "description": "The feature clock contract. Serving replay is a consumer selection mode, not a different mathematical feature definition.",
+      "properties": {
+        "timezone": {
+          "const": "UTC",
+          "description": "Portable baseline timezone."
+        },
+        "window": {
+          "$ref": "#/$defs/window"
+        },
+        "availability": {
+          "type": "object",
+          "description": "Availability eligibility, evaluated before revision selection.",
+          "properties": {
+            "cutoff": {
+              "const": "as_of",
+              "description": "Source availability cutoff equals feature as-of."
+            },
+            "upper": {
+              "$ref": "#/$defs/boundary"
+            }
+          },
+          "required": [
+            "cutoff",
+            "upper"
+          ],
+          "additionalProperties": false
+        },
+        "knowledge_mode": {
+          "const": "source_as_known",
+          "description": "Canonical recomputation reconstructs source knowledge available at feature as-of."
+        },
+        "publication": {
+          "type": "object",
+          "description": "Publication expectation, separate from event and source-availability eligibility.",
+          "properties": {
+            "delay_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Expected operational latency after computation. This is an SLO/simulation parameter; historical replay requires observed published_at and must never derive it from this delay."
+            }
+          },
+          "required": [
+            "delay_seconds"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "timezone",
+        "window",
+        "availability",
+        "knowledge_mode",
+        "publication"
+      ],
+      "additionalProperties": false
+    },
+    "join": {
+      "type": "object",
+      "description": "Explicit activation of a declared relationship; aliases must bind its directed endpoints.",
+      "properties": {
+        "relationship": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "left_alias": {
+          "$ref": "#/$defs/identifier"
+        },
+        "right_alias": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "relationship",
+        "version",
+        "left_alias",
+        "right_alias"
+      ],
+      "additionalProperties": false
+    },
+    "groupKey": {
+      "type": "object",
+      "description": "One full-entity grouping-key component.",
+      "properties": {
+        "entity_key": {
+          "$ref": "#/$defs/columnName",
+          "description": "Canonical key in the feature entity."
+        },
+        "input": {
+          "$ref": "#/$defs/identifier",
+          "description": "Input alias supplying this key."
+        },
+        "column": {
+          "$ref": "#/$defs/columnName",
+          "description": "Source column mapped to the entity key."
+        }
+      },
+      "required": [
+        "entity_key",
+        "input",
+        "column"
+      ],
+      "additionalProperties": false
+    },
+    "aggregate": {
+      "type": "object",
+      "description": "Exact grouped aggregation.",
+      "properties": {
+        "kind": {
+          "const": "aggregate",
+          "description": "Exact aggregate over eligible rows."
+        },
+        "input": {
+          "$ref": "#/$defs/identifier",
+          "description": "Primary fact input alias."
+        },
+        "joins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/join"
+          },
+          "minItems": 0,
+          "description": "Ordered join stages before the business filter."
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/groupKey"
+          },
+          "minItems": 1,
+          "description": "Complete canonical entity-key mapping."
+        },
+        "filter": {
+          "description": "Optional boolean business filter. Only true rows pass; false and null do not.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "count",
+            "count_distinct",
+            "sum",
+            "mean",
+            "min",
+            "max"
+          ],
+          "description": "Exact portable aggregation; approximate algorithms are not permitted."
+        },
+        "value": {
+          "description": "Value expression for sum/mean/min/max; null for row count and count_distinct.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "distinct_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expression"
+          },
+          "minItems": 0,
+          "description": "Distinct tuple expressions, required only for count_distinct."
+        },
+        "nulls": {
+          "type": "string",
+          "enum": [
+            "ignore",
+            "propagate",
+            "error"
+          ],
+          "description": "Null value handling; count counts eligible rows and count_distinct excludes tuples containing null when ignore."
+        }
+      },
+      "required": [
+        "kind",
+        "input",
+        "joins",
+        "group_by",
+        "filter",
+        "operation",
+        "value",
+        "distinct_by",
+        "nulls"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "enum": [
+                  "sum",
+                  "mean",
+                  "min",
+                  "max"
+                ]
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "$ref": "#/$defs/expression"
+              },
+              "distinct_by": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "count"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "distinct_by": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "count_distinct"
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "null"
+              },
+              "distinct_by": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "recency": {
+      "type": "object",
+      "description": "Exact event recency in seconds.",
+      "properties": {
+        "kind": {
+          "const": "recency",
+          "description": "Elapsed seconds since the latest eligible event."
+        },
+        "input": {
+          "$ref": "#/$defs/identifier"
+        },
+        "joins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/join"
+          },
+          "minItems": 0,
+          "description": "Ordered join stages."
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/groupKey"
+          },
+          "minItems": 1,
+          "description": "Complete entity-key mapping."
+        },
+        "filter": {
+          "description": "Optional boolean event filter.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "event_time": {
+          "$ref": "#/$defs/columnName",
+          "description": "Timestamp on the primary input used for latest-event selection."
+        },
+        "unit": {
+          "const": "second",
+          "description": "Recency output unit."
+        },
+        "rounding": {
+          "const": "floor",
+          "description": "Floor nonnegative elapsed seconds after exact timestamp subtraction; for example, 59.9 seconds yields 59."
+        }
+      },
+      "required": [
+        "kind",
+        "input",
+        "joins",
+        "group_by",
+        "filter",
+        "event_time",
+        "unit",
+        "rounding"
+      ],
+      "additionalProperties": false
+    },
+    "lookup": {
+      "type": "object",
+      "description": "Deterministic single-row lookup within the feature window.",
+      "properties": {
+        "kind": {
+          "const": "lookup",
+          "description": "Select one eligible row per entity."
+        },
+        "input": {
+          "$ref": "#/$defs/identifier"
+        },
+        "joins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/join"
+          },
+          "minItems": 0,
+          "description": "Ordered join stages."
+        },
+        "group_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/groupKey"
+          },
+          "minItems": 1,
+          "description": "Complete entity-key mapping."
+        },
+        "filter": {
+          "description": "Optional boolean row filter.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value": {
+          "$ref": "#/$defs/expression"
+        },
+        "order_by": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Lookup ordering component.",
+            "properties": {
+              "input": {
+                "$ref": "#/$defs/identifier"
+              },
+              "column": {
+                "$ref": "#/$defs/columnName"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc"
+                ],
+                "description": "Sort direction."
+              }
+            },
+            "required": [
+              "input",
+              "column",
+              "direction"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "Deterministic total ordering; remaining ties are errors."
+        },
+        "on_tie": {
+          "const": "error",
+          "description": "Never pick an arbitrary row."
+        }
+      },
+      "required": [
+        "kind",
+        "input",
+        "joins",
+        "group_by",
+        "filter",
+        "value",
+        "order_by",
+        "on_tie"
+      ],
+      "additionalProperties": false
+    },
+    "expressionTransform": {
+      "type": "object",
+      "description": "Derived feature. Source-column nodes are forbidden here; declare source transforms separately.",
+      "properties": {
+        "kind": {
+          "const": "expression",
+          "description": "Compute an entity-level expression from pinned features and literals."
+        },
+        "expression": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "required": [
+        "kind",
+        "expression"
+      ],
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "description": "Immutable fitted artifact with leakage-relevant fitting boundaries.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Immutable model/scaler artifact URI; actual physical authorization is an adapter concern."
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "onnx",
+            "json",
+            "custom"
+          ],
+          "description": "Artifact serialization format; runtime capability must support it."
+        },
+        "created_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "training_cutoff": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Latest business timestamp eligible for fitting."
+        },
+        "training_available_cutoff": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Latest source-availability timestamp eligible for fitting."
+        },
+        "split_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Evaluation/training split to which this fitted artifact belongs."
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "uri",
+        "sha256",
+        "format",
+        "created_at",
+        "training_cutoff",
+        "training_available_cutoff",
+        "split_id"
+      ],
+      "additionalProperties": false
+    },
+    "fitting": {
+      "type": "object",
+      "description": "Fit-time provenance, separate from apply-time inputs.",
+      "properties": {
+        "policy": {
+          "const": "training_split_only",
+          "description": "Fit only from the named training split; never refit on evaluation or production inputs."
+        },
+        "split_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "training_start": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "training_end": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "label_availability_cutoff": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Exact fit procedure, sampling policy and leakage safeguards."
+        }
+      },
+      "required": [
+        "policy",
+        "split_id",
+        "training_start",
+        "training_end",
+        "label_availability_cutoff",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "contractInput": {
+      "type": "object",
+      "description": "Named, typed input to an external computation contract.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/columnName"
+        },
+        "type": {
+          "$ref": "#/$defs/logicalType"
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether contract accepts a null argument."
+        },
+        "expression": {
+          "$ref": "#/$defs/expression"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "nullable",
+        "expression"
+      ],
+      "additionalProperties": false
+    },
+    "contract": {
+      "type": "object",
+      "description": "Typed execution boundary. Schema validity does not establish behavioral correctness of arbitrary code.",
+      "properties": {
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Logical operation symbol, not inline executable code."
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contractInput"
+          },
+          "minItems": 1,
+          "description": "Ordered typed arguments."
+        },
+        "output_type": {
+          "$ref": "#/$defs/logicalType"
+        },
+        "output_nullable": {
+          "type": "boolean",
+          "description": "Whether adapter may produce a null."
+        },
+        "deterministic": {
+          "type": "boolean",
+          "description": "Whether equal inputs and the pinned artifact guarantee equal outputs."
+        },
+        "side_effects": {
+          "const": "none",
+          "description": "Feature execution cannot send messages or mutate unrelated systems."
+        },
+        "network_access": {
+          "const": "forbidden",
+          "description": "Baseline execution sandbox has no network access."
+        },
+        "resource_limits": {
+          "type": "object",
+          "description": "Required enforceable execution limits.",
+          "properties": {
+            "timeout_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-evaluation time budget."
+            },
+            "memory_mib": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Memory ceiling in mebibytes."
+            }
+          },
+          "required": [
+            "timeout_seconds",
+            "memory_mib"
+          ],
+          "additionalProperties": false
+        },
+        "null_policy": {
+          "type": "string",
+          "enum": [
+            "propagate",
+            "reject",
+            "handled"
+          ],
+          "description": "Null input contract; handled requires documented behavior."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Precise algorithm, units, null behavior, failure behavior and deterministic assumptions."
+        }
+      },
+      "required": [
+        "entrypoint",
+        "inputs",
+        "output_type",
+        "output_nullable",
+        "deterministic",
+        "side_effects",
+        "network_access",
+        "resource_limits",
+        "null_policy",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "learned": {
+      "type": "object",
+      "description": "Fitted transform contract. The shipped reference verifier deliberately does not execute model artifacts.",
+      "properties": {
+        "kind": {
+          "const": "learned",
+          "description": "Apply an immutable artifact fitted separately on a training split."
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "fitting": {
+          "$ref": "#/$defs/fitting"
+        },
+        "contract": {
+          "$ref": "#/$defs/contract"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 1,
+          "description": "Explicit adapter capabilities that must be checked before planning.",
+          "uniqueItems": true
+        },
+        "conformance_suite": {
+          "$ref": "#/$defs/identifier",
+          "description": "Acceptance suite containing golden application behavior."
+        }
+      },
+      "required": [
+        "kind",
+        "artifact",
+        "fitting",
+        "contract",
+        "required_capabilities",
+        "conformance_suite"
+      ],
+      "additionalProperties": false
+    },
+    "custom": {
+      "type": "object",
+      "description": "Escape boundary for non-portable computation; never treat schema validation as code verification.",
+      "properties": {
+        "kind": {
+          "const": "custom",
+          "description": "Execute separately reviewed custom code via a capability-gated adapter."
+        },
+        "implementation": {
+          "$ref": "#/$defs/codeProvenance"
+        },
+        "contract": {
+          "$ref": "#/$defs/contract"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 1,
+          "description": "Explicit adapter capabilities needed for this operation.",
+          "uniqueItems": true
+        },
+        "conformance_suite": {
+          "$ref": "#/$defs/identifier",
+          "description": "Golden behavior and failure cases for the adapter."
+        }
+      },
+      "required": [
+        "kind",
+        "implementation",
+        "contract",
+        "required_capabilities",
+        "conformance_suite"
+      ],
+      "additionalProperties": false
+    },
+    "transform": {
+      "description": "Exactly one supported transform family.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/aggregate"
+        },
+        {
+          "$ref": "#/$defs/recency"
+        },
+        {
+          "$ref": "#/$defs/lookup"
+        },
+        {
+          "$ref": "#/$defs/expressionTransform"
+        },
+        {
+          "$ref": "#/$defs/learned"
+        },
+        {
+          "$ref": "#/$defs/custom"
+        }
+      ]
+    },
+    "output": {
+      "type": "object",
+      "description": "Typed feature output contract.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/logicalType"
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether the published value may be null for any declared state."
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Output unit and scale, or null for unitless output."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable output meaning including window and population."
+        },
+        "constraints": {
+          "type": "object",
+          "description": "Optional output domain constraints; type compatibility checked semantically.",
+          "properties": {
+            "minimum": {
+              "type": "number",
+              "description": "Inclusive numeric lower bound."
+            },
+            "maximum": {
+              "type": "number",
+              "description": "Inclusive numeric upper bound."
+            },
+            "enum": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/scalar"
+              },
+              "minItems": 1,
+              "description": "Finite accepted value set.",
+              "uniqueItems": true
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "numeric_tolerance": {
+          "type": "object",
+          "description": "Tolerance for numeric comparison. Integer results require zero tolerance.",
+          "properties": {
+            "absolute": {
+              "type": "number",
+              "description": "Maximum absolute golden-test error.",
+              "minimum": 0
+            },
+            "relative": {
+              "type": "number",
+              "description": "Maximum relative golden-test error, evaluated against expected magnitude.",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "absolute",
+            "relative"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "nullable",
+        "unit",
+        "description",
+        "constraints"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "integer",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "numeric_tolerance"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "integer"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "numeric_tolerance": {
+                "properties": {
+                  "absolute": {
+                    "const": 0
+                  },
+                  "relative": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "string",
+                  "boolean",
+                  "timestamp",
+                  "date"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "numeric_tolerance"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "lineageEntry": {
+      "type": "object",
+      "description": "An output-to-source-column lineage edge, including implicit temporal and revision fields.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier"
+        },
+        "column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "value",
+              "filter",
+              "entity_key",
+              "join_key",
+              "event_time",
+              "availability_time",
+              "coverage",
+              "ordering",
+              "revision",
+              "deletion",
+              "valid_time",
+              "population"
+            ],
+            "description": "How this source field affects the result."
+          },
+          "minItems": 1,
+          "description": "All applicable uses of this column.",
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this field is necessary for output value or eligibility."
+        }
+      },
+      "required": [
+        "source",
+        "column",
+        "roles",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "dependencyLineage": {
+      "type": "object",
+      "description": "Pinned feature-to-feature lineage edge.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How the dependent output contributes to this output."
+        }
+      },
+      "required": [
+        "feature",
+        "version",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "featureLineage": {
+      "type": "object",
+      "description": "Auditable column and feature lineage.",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lineageEntry"
+          },
+          "minItems": 0,
+          "description": "Complete directly read source columns, plus population dependencies. Transitive feature lineage is resolved through dependency edges."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependencyLineage"
+          },
+          "minItems": 0,
+          "description": "Every declared feature dependency must have a lineage explanation."
+        },
+        "code": {
+          "description": "Immutable code provenance when custom computation requires it.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/codeProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sources",
+        "dependencies",
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "emptyPolicy": {
+      "description": "Applies only when completeness is established and no eligible input remains.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Known-empty output.",
+          "properties": {
+            "action": {
+              "const": "value",
+              "description": "Emit a documented empty-population identity value."
+            },
+            "value": {
+              "$ref": "#/$defs/scalar"
+            }
+          },
+          "required": [
+            "action",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Known-empty null.",
+          "properties": {
+            "action": {
+              "const": "null",
+              "description": "Emit null for a known-empty input."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Known-empty failure.",
+          "properties": {
+            "action": {
+              "const": "error",
+              "description": "Raise an explicit diagnostic."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "missingness": {
+      "type": "object",
+      "description": "Distinct absence, incompleteness, outage and execution-failure semantics.",
+      "properties": {
+        "empty": {
+          "$ref": "#/$defs/emptyPolicy"
+        },
+        "null_input": {
+          "type": "string",
+          "enum": [
+            "ignore",
+            "propagate",
+            "error"
+          ],
+          "description": "Must agree with the chosen transform null contract."
+        },
+        "insufficient_history": {
+          "type": "string",
+          "enum": [
+            "null",
+            "error"
+          ],
+          "description": "Behavior when required contiguous history is unproven."
+        },
+        "source_unavailable": {
+          "type": "string",
+          "enum": [
+            "null",
+            "error"
+          ],
+          "description": "Behavior when a required source is unavailable."
+        },
+        "execution_failure": {
+          "const": "error",
+          "description": "Execution failure is a diagnostic and can never become a default feature value."
+        }
+      },
+      "required": [
+        "empty",
+        "null_input",
+        "insufficient_history",
+        "source_unavailable",
+        "execution_failure"
+      ],
+      "additionalProperties": false
+    },
+    "qualityCheck": {
+      "description": "Declarative output quality assertion.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Numeric range assertion.",
+          "properties": {
+            "kind": {
+              "const": "range",
+              "description": "Check the numeric output domain."
+            },
+            "minimum": {
+              "type": "number",
+              "description": "Inclusive lower bound."
+            },
+            "maximum": {
+              "type": "number",
+              "description": "Inclusive upper bound."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warn"
+              ],
+              "description": "Operational severity."
+            }
+          },
+          "required": [
+            "kind",
+            "severity"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Nullability assertion.",
+          "properties": {
+            "kind": {
+              "const": "not_null",
+              "description": "Require a non-null output in successful states."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warn"
+              ],
+              "description": "Operational severity."
+            }
+          },
+          "required": [
+            "kind",
+            "severity"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Finite numeric assertion.",
+          "properties": {
+            "kind": {
+              "const": "finite",
+              "description": "Require a finite numeric output."
+            },
+            "severity": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warn"
+              ],
+              "description": "Operational severity."
+            }
+          },
+          "required": [
+            "kind",
+            "severity"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "featureQuality": {
+      "type": "object",
+      "description": "Feature quality gate.",
+      "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/qualityCheck"
+          },
+          "minItems": 0,
+          "description": "Checks evaluated before publication."
+        },
+        "on_violation": {
+          "type": "string",
+          "enum": [
+            "error",
+            "quarantine"
+          ],
+          "description": "Failure behavior; quarantine must not be published as successful data."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "checks",
+        "on_violation"
+      ],
+      "additionalProperties": false
+    },
+    "history": {
+      "type": "object",
+      "description": "History and completeness requirements.",
+      "properties": {
+        "required_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Required contiguous event history before as-of. Must cover the feature window when coverage is contiguous."
+        },
+        "coverage": {
+          "const": "contiguous",
+          "description": "A complete contiguous event-time window must be proven by persisted evidence. Partial-coverage outputs require a future explicit contract."
+        },
+        "earliest_as_of": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Earliest supported feature as-of after retention and history requirements."
+        }
+      },
+      "required": [
+        "required_seconds",
+        "coverage",
+        "earliest_as_of"
+      ],
+      "additionalProperties": false
+    },
+    "featureAcceptance": {
+      "type": "object",
+      "description": "Human-readable conformance intent plus suite references.",
+      "properties": {
+        "suites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 1,
+          "description": "Acceptance suite IDs governing this feature.",
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Coverage objective and known limits of the declared suite."
+        }
+      },
+      "required": [
+        "suites",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "feature": {
+      "type": "object",
+      "description": "Versioned feature definition, independent of a physical execution environment.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable feature name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Business definition and precise behavioral purpose."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable feature-owning team."
+        },
+        "entity": {
+          "$ref": "#/$defs/identifier"
+        },
+        "output": {
+          "$ref": "#/$defs/output"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input"
+          },
+          "minItems": 0,
+          "description": "Direct source inputs; expression-only features normally use an empty list."
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          },
+          "minItems": 0,
+          "description": "Exact direct feature dependencies."
+        },
+        "time": {
+          "$ref": "#/$defs/featureTime"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "lineage": {
+          "$ref": "#/$defs/featureLineage"
+        },
+        "missingness": {
+          "$ref": "#/$defs/missingness"
+        },
+        "quality": {
+          "$ref": "#/$defs/featureQuality"
+        },
+        "history": {
+          "$ref": "#/$defs/history"
+        },
+        "acceptance": {
+          "$ref": "#/$defs/featureAcceptance"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "entity",
+        "output",
+        "inputs",
+        "dependencies",
+        "time",
+        "transform",
+        "lineage",
+        "missingness",
+        "quality",
+        "history",
+        "acceptance"
+      ],
+      "additionalProperties": false
+    },
+    "featureSet": {
+      "type": "object",
+      "description": "Versioned atomic publication unit.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable feature-set name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Purpose and compatibility promise."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable set owner."
+        },
+        "entity": {
+          "$ref": "#/$defs/identifier"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/namedFeatureRef"
+          },
+          "minItems": 1,
+          "description": "Pinned feature membership; all members share the declared entity."
+        },
+        "publication": {
+          "const": "atomic",
+          "description": "All values in one entity/as-of snapshot become visible together."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "entity",
+        "features",
+        "publication"
+      ],
+      "additionalProperties": false
+    },
+    "entityInput": {
+      "type": "object",
+      "description": "Mapping from request schema to canonical entity identity.",
+      "properties": {
+        "entity_key": {
+          "$ref": "#/$defs/columnName"
+        },
+        "input_field": {
+          "$ref": "#/$defs/columnName",
+          "description": "Caller field carrying this key."
+        }
+      },
+      "required": [
+        "entity_key",
+        "input_field"
+      ],
+      "additionalProperties": false
+    },
+    "label": {
+      "type": "object",
+      "description": "Separate future label contract. Label values cannot enter feature inputs or fitting before their declared availability.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier"
+        },
+        "value_column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "entity_keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Label entity-key mapping.",
+            "properties": {
+              "entity_key": {
+                "$ref": "#/$defs/columnName"
+              },
+              "column": {
+                "$ref": "#/$defs/columnName"
+              }
+            },
+            "required": [
+              "entity_key",
+              "column"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "Complete entity-key mapping."
+        },
+        "event_time_column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "available_time_column": {
+          "$ref": "#/$defs/columnName"
+        },
+        "horizon_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Forward label observation horizon from the feature as-of."
+        },
+        "lower": {
+          "$ref": "#/$defs/boundary"
+        },
+        "upper": {
+          "$ref": "#/$defs/boundary"
+        },
+        "availability_policy": {
+          "const": "at_or_before_dataset_cutoff",
+          "description": "Only labels available by the separately supplied dataset cutoff are eligible."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target construction, censoring and label aggregation semantics."
+        },
+        "aggregation": {
+          "type": "string",
+          "enum": [
+            "any_true",
+            "count",
+            "sum",
+            "max",
+            "latest"
+          ],
+          "description": "Exact target construction over eligible future label rows. latest requires a unique latest event timestamp; ties fail."
+        },
+        "empty": {
+          "$ref": "#/$defs/emptyPolicy",
+          "description": "Value for a proven complete horizon containing no eligible label rows."
+        },
+        "incomplete_horizon": {
+          "type": "string",
+          "enum": [
+            "exclude",
+            "error"
+          ],
+          "description": "Censor incomplete observations explicitly; never turn an incomplete horizon into a negative/zero label."
+        },
+        "full_horizon_required": {
+          "const": true,
+          "description": "The dataset cutoff and independent source completeness evidence must cover the entire forward label horizon."
+        }
+      },
+      "required": [
+        "source",
+        "value_column",
+        "entity_keys",
+        "event_time_column",
+        "available_time_column",
+        "horizon_seconds",
+        "lower",
+        "upper",
+        "availability_policy",
+        "description",
+        "aggregation",
+        "empty",
+        "incomplete_horizon",
+        "full_horizon_required"
+      ],
+      "additionalProperties": false
+    },
+    "consumer": {
+      "type": "object",
+      "description": "Explicit training, batch or serving feature consumer.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable consumer name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Use case, entity/time request meaning and operational assumptions."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable consumer owner."
+        },
+        "feature_set": {
+          "$ref": "#/$defs/featureSetRef"
+        },
+        "entity_inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entityInput"
+          },
+          "minItems": 1,
+          "description": "Complete composite entity-key request mapping."
+        },
+        "time_inputs": {
+          "type": "object",
+          "description": "Named UTC request timestamp fields.",
+          "properties": {
+            "as_of": {
+              "$ref": "#/$defs/columnName",
+              "description": "Request field defining event and source-knowledge cutoff."
+            },
+            "requested_at": {
+              "$ref": "#/$defs/columnName",
+              "description": "Request field defining publication visibility cutoff."
+            },
+            "dataset_cutoff": {
+              "$ref": "#/$defs/columnName",
+              "description": "Optional request field for label availability cutoff."
+            }
+          },
+          "required": [
+            "as_of",
+            "requested_at"
+          ],
+          "additionalProperties": false
+        },
+        "selection": {
+          "type": "object",
+          "description": "Selection semantics for materialized feature values.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "source_as_known",
+                "historical_serving_replay"
+              ],
+              "description": "Recompute canonical source knowledge or select actual publications that existed at request time."
+            },
+            "tie_breaker": {
+              "const": "sequence",
+              "description": "Select maximal as_of, then published_at, then sequence; duplicate ordering keys are errors."
+            }
+          },
+          "required": [
+            "mode",
+            "tie_breaker"
+          ],
+          "additionalProperties": false
+        },
+        "max_staleness_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum request as-of minus selected value as-of; exceeding it is a stale diagnostic."
+        },
+        "missing_value_policy": {
+          "type": "string",
+          "enum": [
+            "preserve_null",
+            "reject"
+          ],
+          "description": "No undeclared imputation or fallback to an older non-null publication."
+        },
+        "label": {
+          "description": "Optional independent training/evaluation label contract.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/label"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "feature_set",
+        "entity_inputs",
+        "time_inputs",
+        "selection",
+        "max_staleness_seconds",
+        "missing_value_policy",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "physicalLocation": {
+      "description": "Credential-free coordinates interpreted by the selected adapter, never by feature semantics. Locations grant no I/O authority.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Local or object-store file binding.",
+          "properties": {
+            "kind": {
+              "const": "file",
+              "description": "File resource."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Credential-free file path or URI."
+            },
+            "format": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Adapter-validated format identifier such as parquet, csv, or jsonl."
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "format"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Generic table coordinates; Databricks interprets two namespace components as catalog and schema.",
+          "properties": {
+            "kind": {
+              "const": "table",
+              "description": "Table resource."
+            },
+            "namespace": {
+              "type": "array",
+              "description": "Ordered namespace components; arbitrary depth, including an empty sequence.",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "description": "One namespace component."
+              },
+              "minItems": 0
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Physical table name."
+            },
+            "format": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Adapter-validated format identifier; Delta is not a core-language requirement."
+            }
+          },
+          "required": [
+            "kind",
+            "namespace",
+            "name",
+            "format"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Opaque provider resource, including stores without SQL table namespaces.",
+          "properties": {
+            "kind": {
+              "const": "resource",
+              "description": "Opaque resource."
+            },
+            "uri": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Credential-free opaque URI. Never fetch merely because it appears in a contract.",
+              "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:[^\\s]+$"
+            },
+            "format": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Adapter-specific record/resource format identifier."
+            }
+          },
+          "required": [
+            "kind",
+            "uri",
+            "format"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Synthetic fixture binding used only by local conformance tools.",
+          "properties": {
+            "kind": {
+              "const": "fixture",
+              "description": "Bundled fixture."
+            },
+            "suite": {
+              "$ref": "#/$defs/identifier"
+            }
+          },
+          "required": [
+            "kind",
+            "suite"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "sourceBinding": {
+      "type": "object",
+      "description": "One logical source bound to a physical read-only dataset.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/identifier"
+        },
+        "read_only": {
+          "const": true,
+          "description": "Source bindings grant no writes."
+        },
+        "location": {
+          "$ref": "#/$defs/physicalLocation"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "adapter": {
+          "$ref": "#/$defs/identifier",
+          "description": "Deployment-local catalog adapter instance."
+        },
+        "column_mapping": {
+          "$ref": "#/$defs/physicalColumnMap"
+        }
+      },
+      "required": [
+        "source",
+        "read_only",
+        "location",
+        "version",
+        "adapter",
+        "column_mapping"
+      ],
+      "additionalProperties": false
+    },
+    "outputTarget": {
+      "type": "object",
+      "description": "Physical destination for a pinned feature set.",
+      "properties": {
+        "feature_set": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "location": {
+          "$ref": "#/$defs/physicalLocation"
+        },
+        "write_mode": {
+          "type": "string",
+          "enum": [
+            "append",
+            "merge"
+          ],
+          "description": "Adapter write strategy; retries must preserve idempotent publication identity."
+        },
+        "adapter": {
+          "$ref": "#/$defs/identifier",
+          "description": "Deployment-local storage adapter instance."
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "offline_store",
+            "online_store"
+          ],
+          "description": "Storage surface for this target."
+        },
+        "entity_key_mapping": {
+          "$ref": "#/$defs/physicalColumnMap"
+        },
+        "feature_mapping": {
+          "type": "array",
+          "description": "Exact feature-set membership; each value and state is mapped once.",
+          "items": {
+            "$ref": "#/$defs/outputFeatureMapping"
+          },
+          "minItems": 1
+        },
+        "metadata_columns": {
+          "$ref": "#/$defs/publicationColumns"
+        }
+      },
+      "required": [
+        "feature_set",
+        "version",
+        "location",
+        "write_mode",
+        "adapter",
+        "role",
+        "entity_key_mapping",
+        "feature_mapping",
+        "metadata_columns"
+      ],
+      "additionalProperties": false
+    },
+    "schedule": {
+      "description": "Deployment execution trigger.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Manual execution.",
+          "properties": {
+            "mode": {
+              "const": "manual",
+              "description": "No autonomous scheduled execution."
+            }
+          },
+          "required": [
+            "mode"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Deterministic interval schedule.",
+          "properties": {
+            "mode": {
+              "const": "interval",
+              "description": "Elapsed-second periodic schedule in UTC."
+            },
+            "every_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Period in elapsed seconds."
+            },
+            "offset_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Offset from the UTC epoch; must be less than every_seconds."
+            }
+          },
+          "required": [
+            "mode",
+            "every_seconds",
+            "offset_seconds"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "backfill": {
+      "description": "Backfill controls.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "No backfill.",
+          "properties": {
+            "allowed": {
+              "const": false,
+              "description": "Backfill disabled for this deployment."
+            }
+          },
+          "required": [
+            "allowed"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Bounded historical recomputation.",
+          "properties": {
+            "allowed": {
+              "const": true,
+              "description": "Backfill permitted only within these explicit bounds."
+            },
+            "start": {
+              "$ref": "#/$defs/utcTimestamp"
+            },
+            "end": {
+              "$ref": "#/$defs/utcTimestamp"
+            },
+            "mode": {
+              "const": "source_as_known",
+              "description": "Backfill cannot fabricate historical publication evidence."
+            },
+            "publish": {
+              "type": "string",
+              "enum": [
+                "disabled",
+                "separate_namespace"
+              ],
+              "description": "Historical recomputations never silently overwrite observed serving history."
+            }
+          },
+          "required": [
+            "allowed",
+            "start",
+            "end",
+            "mode",
+            "publish"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "deployment": {
+      "type": "object",
+      "description": "Environment-specific execution intent and bindings. This document does not execute or authorize a deployment.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable deployment name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Intended environment and capability assumptions; descriptive configuration is not deployment authorization."
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accountable operator."
+        },
+        "environment": {
+          "type": "string",
+          "enum": [
+            "development",
+            "staging",
+            "production"
+          ],
+          "description": "Deployment environment."
+        },
+        "source_bindings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceBinding"
+          },
+          "minItems": 1,
+          "description": "Read-only physical source mapping."
+        },
+        "output_targets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/outputTarget"
+          },
+          "minItems": 1,
+          "description": "Pinned feature-set destinations."
+        },
+        "schedule": {
+          "$ref": "#/$defs/schedule"
+        },
+        "refresh": {
+          "type": "object",
+          "description": "Refresh and correction policy.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "incremental"
+              ],
+              "description": "Recomputation strategy."
+            },
+            "lookback_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Revisit horizon for late arrivals and corrections."
+            },
+            "late_arrival_policy": {
+              "type": "string",
+              "enum": [
+                "recompute_affected",
+                "reject"
+              ],
+              "description": "Behavior when newly available evidence changes earlier computations."
+            }
+          },
+          "required": [
+            "mode",
+            "lookback_seconds",
+            "late_arrival_policy"
+          ],
+          "additionalProperties": false
+        },
+        "publication": {
+          "type": "object",
+          "description": "Atomic publication contract.",
+          "properties": {
+            "atomicity": {
+              "const": "feature_set",
+              "description": "Publish complete feature-set snapshots together."
+            },
+            "visibility": {
+              "const": "after_success",
+              "description": "Only committed, quality-passing runs become visible."
+            },
+            "observed_timestamp_required": {
+              "const": true,
+              "description": "Persist actual published_at; expected delay is not historical evidence."
+            },
+            "surface": {
+              "type": "string",
+              "enum": [
+                "offline_snapshot",
+                "online_store"
+              ],
+              "description": "Required visibility surface. Offline commit evidence does not establish online serving visibility."
+            }
+          },
+          "required": [
+            "atomicity",
+            "visibility",
+            "observed_timestamp_required",
+            "surface"
+          ],
+          "additionalProperties": false
+        },
+        "backfill": {
+          "$ref": "#/$defs/backfill"
+        },
+        "runtime": {
+          "type": "object",
+          "description": "Capability and SDK boundary.",
+          "properties": {
+            "sdk_policy": {
+              "const": "pin_and_probe_at_implementation",
+              "description": "Resolve exact SDK/runtime versions and supported APIs at implementation time; do not infer support from this file."
+            },
+            "required_capabilities": {
+              "type": "array",
+              "description": "Required adapter capabilities. The planner also derives requirements from operations; listing a subset cannot disable checks.",
+              "items": {
+                "$ref": "#/$defs/capabilityRequirement"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "required_capabilities",
+            "sdk_policy"
+          ],
+          "additionalProperties": false
+        },
+        "slo": {
+          "type": "object",
+          "description": "Service objectives.",
+          "properties": {
+            "max_compute_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Operational compute-time target."
+            },
+            "max_staleness_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Maximum age target."
+            },
+            "max_error_rate": {
+              "type": "number",
+              "description": "Maximum failing-run fraction.",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "max_compute_seconds",
+            "max_staleness_seconds",
+            "max_error_rate"
+          ],
+          "additionalProperties": false
+        },
+        "budget": {
+          "type": "object",
+          "description": "Execution budget guard.",
+          "properties": {
+            "currency": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Three-letter currency code for the declared cost budget.",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "max_daily_cost": {
+              "type": "number",
+              "description": "Maximum planned daily execution cost; example values are synthetic.",
+              "minimum": 0
+            },
+            "max_scan_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum input bytes scanned per run."
+            },
+            "max_output_rows": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum feature rows emitted per run."
+            },
+            "max_memory_mib": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum runtime memory in mebibytes."
+            },
+            "max_concurrent_runs": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum overlapping runs."
+            }
+          },
+          "required": [
+            "currency",
+            "max_daily_cost",
+            "max_scan_bytes",
+            "max_output_rows",
+            "max_memory_mib",
+            "max_concurrent_runs"
+          ],
+          "additionalProperties": false
+        },
+        "monitoring": {
+          "type": "object",
+          "description": "Monitoring requirements.",
+          "properties": {
+            "metrics": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "freshness",
+                  "coverage",
+                  "row_count",
+                  "null_rate",
+                  "quality_failures",
+                  "compute_seconds",
+                  "cost",
+                  "publication_lag"
+                ],
+                "description": "Required monitored signal."
+              },
+              "minItems": 1,
+              "description": "Operational monitoring requirements.",
+              "uniqueItems": true
+            },
+            "alert_owner": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Accountable alert recipient identity; no message is sent by this specification."
+            }
+          },
+          "required": [
+            "metrics",
+            "alert_owner"
+          ],
+          "additionalProperties": false
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        },
+        "access": {
+          "type": "object",
+          "description": "Credential-free authorization intent; identities and grants must be verified in the target environment.",
+          "properties": {
+            "read_principal": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Non-secret identity used to read bound sources."
+            },
+            "write_principal": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Non-secret identity used to publish outputs."
+            },
+            "required_permissions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "description": "One least-privilege access requirement.",
+                "properties": {
+                  "resource": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Explicit logical or physical resource identifier."
+                  },
+                  "privilege": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "write",
+                      "create_table"
+                    ],
+                    "description": "Minimum required permission; no wildcard administrative grant."
+                  }
+                },
+                "required": [
+                  "resource",
+                  "privilege"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "description": "Permissions that the adapter must verify before execution."
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Approved data-use purpose for source access and output publication."
+            }
+          },
+          "required": [
+            "read_principal",
+            "write_principal",
+            "required_permissions",
+            "purpose"
+          ],
+          "additionalProperties": false
+        },
+        "output_retention_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum retained publication and audit history. Privacy/legal maximums must also be enforced by the organization policy."
+        },
+        "adapters": {
+          "type": "array",
+          "description": "Explicit implementation instances with role-scoped configuration.",
+          "items": {
+            "$ref": "#/$defs/adapterInstance"
+          },
+          "minItems": 1
+        },
+        "execution": {
+          "type": "object",
+          "description": "Select compute, catalog, and optional orchestration without selecting a storage vendor in logical features.",
+          "properties": {
+            "compute": {
+              "$ref": "#/$defs/identifier"
+            },
+            "catalog": {
+              "$ref": "#/$defs/identifier"
+            },
+            "orchestrator": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/identifier"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Scheduler adapter or null for externally triggered/manual execution."
+            }
+          },
+          "required": [
+            "compute",
+            "catalog",
+            "orchestrator"
+          ],
+          "additionalProperties": false
+        },
+        "consumer_bindings": {
+          "type": "array",
+          "description": "Explicit logical-consumer to target mappings. Consumers outside this deployment may be omitted.",
+          "items": {
+            "$ref": "#/$defs/consumerBinding"
+          },
+          "minItems": 0
+        },
+        "portability": {
+          "type": "object",
+          "description": "Declare native escape hatches separately from portable feature meaning.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "portable",
+                "allow_native"
+              ],
+              "description": "Portable mode prohibits user-supplied target-specific native bindings. A portable request still requires capability verification."
+            },
+            "native_bindings": {
+              "type": "array",
+              "description": "Reviewed target-specific code bindings; each keeps the referenced logical feature semantics.",
+              "items": {
+                "$ref": "#/$defs/nativeBinding"
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "mode",
+            "native_bindings"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "owner",
+        "environment",
+        "source_bindings",
+        "output_targets",
+        "schedule",
+        "refresh",
+        "publication",
+        "backfill",
+        "runtime",
+        "slo",
+        "budget",
+        "monitoring",
+        "access",
+        "output_retention_seconds",
+        "adapters",
+        "execution",
+        "consumer_bindings",
+        "portability"
+      ],
+      "additionalProperties": false
+    },
+    "outputState": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "empty",
+        "insufficient_history",
+        "source_unavailable",
+        "not_published"
+      ],
+      "description": "Observable output state. A null value must not erase the reason for absence."
+    },
+    "expectedRow": {
+      "type": "object",
+      "description": "One human-reviewed expected feature output.",
+      "properties": {
+        "entity_keys": {
+          "$ref": "#/$defs/row",
+          "description": "Exact composite entity key."
+        },
+        "value": {
+          "$ref": "#/$defs/scalar"
+        },
+        "state": {
+          "$ref": "#/$defs/outputState"
+        }
+      },
+      "required": [
+        "entity_keys",
+        "value",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "publication": {
+      "type": "object",
+      "description": "Immutable observed publication. Selection includes nulls and enforces max staleness.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "entity_keys": {
+          "$ref": "#/$defs/row"
+        },
+        "as_of": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "published_at": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Actual observed commit/visibility timestamp."
+        },
+        "run_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Auditable production execution identity."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic publication tie-breaker within feature/version/entity."
+        },
+        "value": {
+          "$ref": "#/$defs/scalar"
+        },
+        "state": {
+          "$ref": "#/$defs/outputState"
+        }
+      },
+      "required": [
+        "feature",
+        "version",
+        "entity_keys",
+        "as_of",
+        "published_at",
+        "run_id",
+        "sequence",
+        "value",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "sourceStatus": {
+      "description": "Explicit source health and completeness evidence for a fixture.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Completeness envelope [coverage_start, coverage_end) independent of row count.",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/identifier"
+            },
+            "state": {
+              "const": "available",
+              "description": "The source can be read and this complete event-time interval is proven."
+            },
+            "coverage_start": {
+              "$ref": "#/$defs/utcTimestamp"
+            },
+            "coverage_end": {
+              "$ref": "#/$defs/utcTimestamp"
+            }
+          },
+          "required": [
+            "source",
+            "state",
+            "coverage_start",
+            "coverage_end"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Observed source outage.",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/identifier"
+            },
+            "state": {
+              "const": "unavailable",
+              "description": "Source cannot be read; no row-count inference is allowed."
+            }
+          },
+          "required": [
+            "source",
+            "state"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "caseContext": {
+      "type": "object",
+      "description": "Synthetic execution evidence. Fixtures must not assume empty sources prove completeness.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "source_as_known",
+            "historical_serving_replay"
+          ],
+          "description": "Fixture execution or selection mode."
+        },
+        "source_status": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceStatus"
+          },
+          "minItems": 0,
+          "description": "Explicit status for all directly and transitively used sources, including populations."
+        },
+        "requested_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "evaluation_completed_at": {
+          "$ref": "#/$defs/utcTimestamp",
+          "description": "Observed completion time for a synthetic run, separate from publication."
+        },
+        "published_values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/publication"
+          },
+          "minItems": 0,
+          "description": "Actual synthetic publication history used only by replay fixtures."
+        },
+        "consumer": {
+          "$ref": "#/$defs/identifier",
+          "description": "Optional consumer whose staleness and missing-value rules apply."
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "description": "Available capabilities for deliberate preflight or adapter contract tests.",
+          "uniqueItems": true
+        },
+        "split_id": {
+          "$ref": "#/$defs/identifier",
+          "description": "Fit/apply split identity for learned adapter tests."
+        }
+      },
+      "required": [
+        "mode",
+        "source_status",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "expectation": {
+      "description": "Exactly one success result or diagnostic expectation.",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Golden result rows.",
+          "properties": {
+            "rows": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/expectedRow"
+              },
+              "minItems": 0,
+              "description": "Expected output rows; each eligible population entity appears exactly once."
+            }
+          },
+          "required": [
+            "rows"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "description": "Golden diagnostic.",
+          "properties": {
+            "diagnostic": {
+              "type": "object",
+              "description": "Expected failure, rather than an invented null/default result.",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Stable diagnostic code.",
+                  "pattern": "^[A-Z][A-Z0-9_]+$"
+                },
+                "message_contains": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Optional stable explanatory substring."
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "diagnostic"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "acceptanceCase": {
+      "type": "object",
+      "description": "Self-contained deterministic conformance case.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable isolated scenario."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What semantic edge this synthetic fixture proves."
+        },
+        "feature": {
+          "$ref": "#/$defs/namedFeatureRef"
+        },
+        "as_of": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "population_rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/row"
+          },
+          "minItems": 0,
+          "description": "Synthetic canonical entity rows. Must equal the entity keys reconstructed from the supplied population source rows."
+        },
+        "source_rows": {
+          "type": "object",
+          "description": "Synthetic physical rows keyed by logical source ID; every transitive source and population source must have an entry, even if empty.",
+          "propertyNames": {
+            "$ref": "#/$defs/identifier"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/row"
+            },
+            "minItems": 0,
+            "description": "Rows in this source fixture."
+          }
+        },
+        "context": {
+          "$ref": "#/$defs/caseContext"
+        },
+        "expected": {
+          "$ref": "#/$defs/expectation"
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "feature",
+        "as_of",
+        "population_rows",
+        "source_rows",
+        "context",
+        "expected"
+      ],
+      "additionalProperties": false
+    },
+    "acceptanceSuite": {
+      "type": "object",
+      "description": "Versioned acceptance suite.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable acceptance-suite name."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Scope, limitations and the independent reasoning behind golden expectations."
+        },
+        "runner": {
+          "type": "string",
+          "enum": [
+            "reference",
+            "adapter_required"
+          ],
+          "description": "Whether the bundled limited verifier can execute this suite or an external adapter is required."
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/acceptanceCase"
+          },
+          "minItems": 1,
+          "description": "Isolated human-reviewed synthetic scenarios."
+        },
+        "extensions": {
+          "$ref": "#/$defs/extensions"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "description",
+        "runner",
+        "cases"
+      ],
+      "additionalProperties": false
+    },
+    "adapterRole": {
+      "type": "string",
+      "enum": [
+        "compute",
+        "catalog",
+        "offline_store",
+        "online_store",
+        "orchestrator"
+      ],
+      "description": "Independent adapter responsibility; several roles may be provided by one package."
+    },
+    "adapterImplementation": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Reverse-domain adapter implementation identifier. Names do not imply installation or support.",
+      "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+:[a-z][a-z0-9_.-]*$"
+    },
+    "adapterInstance": {
+      "type": "object",
+      "description": "Pinned deployment-local adapter instance. SDK/build pins and evidence are resolved separately at implementation time.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "implementation": {
+          "$ref": "#/$defs/adapterImplementation"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "roles": {
+          "type": "array",
+          "description": "Roles this adapter is requested to provide; planning must independently verify them.",
+          "items": {
+            "$ref": "#/$defs/adapterRole"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "configuration": {
+          "type": "object",
+          "description": "Credential-free adapter configuration. The selected adapter must validate this against its own exact-version schema before planning or execution. Core validation does not interpret these values.",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "id",
+        "implementation",
+        "version",
+        "roles",
+        "configuration"
+      ],
+      "additionalProperties": false
+    },
+    "physicalColumnMap": {
+      "type": "object",
+      "description": "Complete one-to-one logical-field to physical-field mapping. Names only: no casts, expressions, defaults, or unit conversion.",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/columnName"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Physical column or record-field name; quoting/encoding belongs to the adapter."
+      }
+    },
+    "outputFeatureMapping": {
+      "type": "object",
+      "description": "Map a pinned logical feature and its state to distinct physical fields.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "column": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Physical value field."
+        },
+        "state_column": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Physical state field; null does not encode missingness state by itself."
+        }
+      },
+      "required": [
+        "feature",
+        "version",
+        "column",
+        "state_column"
+      ],
+      "additionalProperties": false
+    },
+    "publicationColumns": {
+      "type": "object",
+      "description": "Physical fields carrying original publication evidence and current materialization identity.",
+      "properties": {
+        "as_of": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Feature evaluation instant field."
+        },
+        "published_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original observed visibility timestamp field; never fabricated during backfill/import."
+        },
+        "publication_sequence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Original deterministic publication sequence field."
+        },
+        "publication_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable original publication identity field."
+        },
+        "materialization_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Current write/import execution identity field; distinct from original publication identity."
+        }
+      },
+      "required": [
+        "as_of",
+        "published_at",
+        "publication_sequence",
+        "publication_id",
+        "materialization_id"
+      ],
+      "additionalProperties": false
+    },
+    "consumerBinding": {
+      "type": "object",
+      "description": "Resolve a logical consumer to an output target without rewriting the consumer contract.",
+      "properties": {
+        "consumer": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "adapter": {
+          "$ref": "#/$defs/identifier"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "offline_store",
+            "online_store"
+          ],
+          "description": "Selected retrieval surface. The selected output target must contain the pinned feature set."
+        }
+      },
+      "required": [
+        "consumer",
+        "version",
+        "adapter",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "capabilityRequirement": {
+      "type": "object",
+      "description": "A requirement, never evidence that an adapter supports it.",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/identifier"
+        },
+        "role": {
+          "$ref": "#/$defs/adapterRole"
+        },
+        "capability": {
+          "$ref": "#/$defs/identifier"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this capability is required and which contract behavior depends on it."
+        }
+      },
+      "required": [
+        "adapter",
+        "role",
+        "capability",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "nativeBinding": {
+      "type": "object",
+      "description": "Explicit target-specific implementation preserving the referenced feature contract; metadata extensions cannot carry executable semantics.",
+      "properties": {
+        "feature": {
+          "$ref": "#/$defs/namedFeatureRef"
+        },
+        "adapter": {
+          "$ref": "#/$defs/identifier"
+        },
+        "role": {
+          "$ref": "#/$defs/adapterRole"
+        },
+        "implementation": {
+          "$ref": "#/$defs/codeProvenance"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "description": "Each capability must also be required for the same adapter and role.",
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "conformance_suite": {
+          "$ref": "#/$defs/identifier"
+        },
+        "migration_notes": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Nonportable dependencies, replacement requirements, and validation needed on another adapter."
+        }
+      },
+      "required": [
+        "feature",
+        "adapter",
+        "role",
+        "implementation",
+        "required_capabilities",
+        "conformance_suite",
+        "migration_notes"
+      ],
+      "additionalProperties": false
+    },
+    "reportEvidence": {
+      "type": "object",
+      "description": "Immutable evidence reference. Remote references are not fetched during validation.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Evidence URI; normally a local report or a controlled evidence-store record."
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the evidence demonstrates, including its limits."
+        }
+      },
+      "required": [
+        "uri",
+        "sha256",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "adapterAssessment": {
+      "type": "object",
+      "description": "Resolved adapter identity recorded by a capability assessment.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "implementation": {
+          "$ref": "#/$defs/adapterImplementation"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "implementation_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact installed build digest, or null when unverified."
+        },
+        "runtime_versions": {
+          "type": "object",
+          "description": "Actual SDK/runtime version pins; empty if not observed.",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact observed version."
+          }
+        }
+      },
+      "required": [
+        "id",
+        "implementation",
+        "version",
+        "implementation_sha256",
+        "runtime_versions"
+      ],
+      "additionalProperties": false
+    },
+    "capabilityCheck": {
+      "type": "object",
+      "description": "One assessed capability for one exact adapter and role.",
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/identifier"
+        },
+        "role": {
+          "$ref": "#/$defs/adapterRole"
+        },
+        "capability": {
+          "$ref": "#/$defs/identifier"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "supported_native",
+            "supported_emulated",
+            "unsupported",
+            "unverified"
+          ],
+          "description": "Capability result. Input declarations cannot establish support."
+        },
+        "evidence_scope": {
+          "type": "string",
+          "enum": [
+            "declaration",
+            "static",
+            "local_reference",
+            "local_mock",
+            "live_target"
+          ],
+          "description": "Where evidence was obtained; a mock is never a live-target result."
+        },
+        "evidence": {
+          "type": "array",
+          "description": "Immutable supporting evidence. Supported claims require at least one item.",
+          "items": {
+            "$ref": "#/$defs/reportEvidence"
+          },
+          "minItems": 0
+        },
+        "limitations": {
+          "type": "array",
+          "description": "Material restrictions and unresolved conditions.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A concrete limitation."
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "adapter",
+        "role",
+        "capability",
+        "status",
+        "evidence_scope",
+        "evidence",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "capabilityReport": {
+      "type": "object",
+      "description": "Capability assessment tied to exact project bytes, deployment, adapters, and evidence; not a deployment command.",
+      "properties": {
+        "spec_version": {
+          "const": "0.2.0",
+          "description": "Specification/report contract version."
+        },
+        "kind": {
+          "const": "AdapterCapabilityReport",
+          "description": "Report discriminator."
+        },
+        "project_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "project_version": {
+          "$ref": "#/$defs/version"
+        },
+        "project_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "deployment": {
+          "type": "object",
+          "description": "Exact deployment being assessed.",
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "assessed_at": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "execution_scope": {
+          "type": "string",
+          "enum": [
+            "local_reference",
+            "external_target"
+          ],
+          "description": "External execution readiness requires live-target evidence for every mandatory capability."
+        },
+        "adapters": {
+          "type": "array",
+          "description": "Exact deployment adapter instances; never infer installed support from requested versions.",
+          "items": {
+            "$ref": "#/$defs/adapterAssessment"
+          },
+          "minItems": 1
+        },
+        "checks": {
+          "type": "array",
+          "description": "Complete assessment of explicit and planner-derived required capabilities.",
+          "items": {
+            "$ref": "#/$defs/capabilityCheck"
+          },
+          "minItems": 1
+        },
+        "execution_ready": {
+          "type": "boolean",
+          "description": "Computed readiness. False for unsupported/unverified required capabilities and for external requirements without live evidence."
+        },
+        "limitations": {
+          "type": "array",
+          "description": "Assessment-wide limitations.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A concrete limitation."
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "spec_version",
+        "kind",
+        "project_id",
+        "project_version",
+        "project_file_sha256",
+        "deployment",
+        "assessed_at",
+        "execution_scope",
+        "adapters",
+        "checks",
+        "execution_ready",
+        "limitations"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

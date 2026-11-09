@@ -1,0 +1,287 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "7affb5602f118c5f5556fb08a5d0bd224a6c866e16beb396f8cd3106becd0e92",
+  "summary": {
+    "executed": 9,
+    "passed": 9,
+    "failed": 0,
+    "not_executed": 0,
+    "cases": [
+      {
+        "suite": "temperature_history_conformance",
+        "case": "historical_join_and_late_revision",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 1,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "valid_interval_boundary",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "correction_moves_event_outside_window",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "selected_retraction",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "value_correction_before_filter",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "dimension_boundary_correction",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "overlapping_dimension_intervals",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "MULTIPLE_MATCHES"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "MULTIPLE_MATCHES",
+          "rule": "SEM-REL-002",
+          "message": "reading_to_device_threshold: 2 eligible right rows match one left row; no arbitrary choice is made"
+        }
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "unmatched_dimension",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "temperature_history_conformance",
+        "case": "join_tenant_isolation",
+        "feature": "device.hot_reading_count_24h",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1,
+              "state": "ok"
+            },
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_b",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 1,
+            "state": "ok"
+          },
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_b",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      }
+    ]
+  }
+}

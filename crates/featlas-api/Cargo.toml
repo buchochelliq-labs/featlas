@@ -1,0 +1,11 @@
+[package]
+name = "featlas-api"
+description = "Transport-neutral JSON API over the featlas core and adapters (used by the CLI, MCP and Python bindings)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+featlas-core = { path = "../featlas-core" }
+featlas-adapters = { path = "../featlas-adapters" }
+serde_json.workspace = true

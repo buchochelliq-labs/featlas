@@ -1,0 +1,11 @@
+{
+  "artifact_kind": "standard_scaler",
+  "artifact_version": "1.0.0",
+  "input_feature": "device.fault_count_7d",
+  "input_version": "1.0.0",
+  "mean": 2.0,
+  "scale": 2.0,
+  "output_unit": "standard_deviation",
+  "split_id": "temporal_split_2026_02",
+  "description": "Synthetic fitted parameters chosen to make conformance arithmetic transparent. They were not estimated from real customer data."
+}

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.16,<2"]
+build-backend = "maturin"
+
+[project]
+name = "featlas"
+version = "0.1.0"
+description = "Python bindings (PyO3) to the featlas Rust core, plus a thin Azure Databricks host."
+requires-python = ">=3.12"
+dependencies = []
+classifiers = ["Programming Language :: Rust", "Programming Language :: Python :: Implementation :: CPython"]
+
+[project.optional-dependencies]
+# Pinned only after a successful live target run; see docs/DATABRICKS_RUNBOOK.md.
+databricks = ["databricks-sdk", "databricks-connect"]
+local = ["pyspark==4.0.1"]
+test = ["pytest", "PyYAML==6.0.3"]
+
+[project.scripts]
+featlas-databricks = "featlas_databricks.cli:main"
+
+[tool.maturin]
+manifest-path = "../crates/featlas-py/Cargo.toml"
+module-name = "featlas._native"
+python-source = "."
+python-packages = ["featlas_databricks"]
+features = []

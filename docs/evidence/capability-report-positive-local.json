@@ -1,0 +1,168 @@
+{
+  "spec_version": "0.2.0",
+  "kind": "AdapterCapabilityReport",
+  "project_id": "fault_count_example",
+  "project_version": "1.0.0",
+  "project_file_sha256": "a09bc543bee57bba411f6e2a30676d0eefe223a7b747e4c2156db3a137ae7400",
+  "deployment": {
+    "id": "fault_dev",
+    "version": "1.0.0"
+  },
+  "assessed_at": "2026-11-09T00:00:00Z",
+  "execution_scope": "local_reference",
+  "adapters": [
+    {
+      "id": "local_reference",
+      "implementation": "dev.featlas:local_reference",
+      "version": "0.1.0",
+      "implementation_sha256": "9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b",
+      "runtime_versions": {
+        "featlas-core": "0.1.0",
+        "target": "x86_64-linux"
+      }
+    }
+  ],
+  "checks": [
+    {
+      "adapter": "local_reference",
+      "role": "compute",
+      "capability": "core.aggregate",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Executed by the canonical exact evaluator over bounded in-memory inputs. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "compute",
+      "capability": "core.as_of_join",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Executed by the canonical exact evaluator over bounded in-memory inputs. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "compute",
+      "capability": "core.expression",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Executed by the canonical exact evaluator over bounded in-memory inputs. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "compute",
+      "capability": "core.revision_reconstruction",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Executed by the canonical exact evaluator over bounded in-memory inputs. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "compute",
+      "capability": "core.source_as_known",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Executed by the canonical exact evaluator over bounded in-memory inputs. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "catalog",
+      "capability": "core.source_read",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Reads read-only acceptance-fixture sources only. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "offline_store",
+      "capability": "core.atomic_publication",
+      "status": "supported_emulated",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "JSON Lines snapshot file replaced by atomic rename; single process, no concurrent writers. Local reference evidence only; not a production or external-target claim."
+      ]
+    },
+    {
+      "adapter": "local_reference",
+      "role": "offline_store",
+      "capability": "core.serving_replay",
+      "status": "supported_native",
+      "evidence_scope": "local_reference",
+      "evidence": [
+        {
+          "uri": "file:docs/evidence/local-acceptance/local-acceptance.json",
+          "sha256": "c0f0d5923dd2433908f280f803710abc2e32c910518450304a6e43dfba664a61",
+          "description": "Local reference acceptance run: 13 passed, 0 not executed"
+        }
+      ],
+      "limitations": [
+        "Replay selection is performed by the core over stored publication evidence. Local reference evidence only; not a production or external-target claim."
+      ]
+    }
+  ],
+  "execution_ready": true,
+  "limitations": [
+    "Requirements include planner-derived operations as well as declared ones; declared support strings are never treated as evidence.",
+    "Evidence references are recorded, not fetched or authenticated by this report generator."
+  ]
+}

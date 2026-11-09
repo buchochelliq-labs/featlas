@@ -1,0 +1,209 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "37d6a2ced2e4bcb612a977602f944f79721fcaf4913c17ba58143f142507f4f4",
+  "summary": {
+    "executed": 6,
+    "passed": 6,
+    "failed": 0,
+    "not_executed": 0,
+    "cases": [
+      {
+        "suite": "commerce_conformance",
+        "case": "seven_day_sum",
+        "feature": "customer.spend_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": 2500,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": 2500,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "commerce_conformance",
+        "case": "thirty_day_lower_boundary",
+        "feature": "customer.spend_30d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": 3500,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": 3500,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "commerce_conformance",
+        "case": "derived_ratio",
+        "feature": "customer.recent_spend_ratio",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": 0.25,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": 0.25,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "commerce_conformance",
+        "case": "zero_denominator",
+        "feature": "customer.recent_spend_ratio",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": null,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": null,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "commerce_conformance",
+        "case": "late_purchase_excluded",
+        "feature": "customer.recent_spend_ratio",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": 0.25,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": 0.25,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "commerce_conformance",
+        "case": "derived_tenant_isolation",
+        "feature": "customer.recent_spend_ratio",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "customer_id": "customer_1"
+              },
+              "value": 1.0,
+              "state": "ok"
+            },
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_b",
+                "customer_id": "customer_1"
+              },
+              "value": 0.0,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "customer_id": "customer_1"
+            },
+            "value": 1.0,
+            "state": "ok"
+          },
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_b",
+              "customer_id": "customer_1"
+            },
+            "value": 0.0,
+            "state": "ok"
+          }
+        ]
+      }
+    ]
+  }
+}

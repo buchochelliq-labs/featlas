@@ -1,0 +1,132 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "2b244155aa16119f84d6070b1f9a996d10e1da6c695ec52734475dd4347bbf9b",
+  "summary": {
+    "executed": 3,
+    "passed": 3,
+    "failed": 0,
+    "not_executed": 3,
+    "cases": [
+      {
+        "suite": "fitted_core_conformance",
+        "case": "portable_upstream_count",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 4,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 4,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fitted_preflight_conformance",
+        "case": "reject_missing_learned_capability",
+        "feature": "device.fault_count_zscore_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "UNSUPPORTED_CAPABILITY"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "UNSUPPORTED_CAPABILITY",
+          "rule": "SEM-CUSTOM-002",
+          "message": "device.fault_count_zscore_7d is a learned transform; the local evaluator never loads artifacts or executes custom code"
+        }
+      },
+      {
+        "suite": "fitted_preflight_conformance",
+        "case": "reject_missing_custom_capability",
+        "feature": "device.fault_priority_score",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "UNSUPPORTED_CAPABILITY"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "UNSUPPORTED_CAPABILITY",
+          "rule": "SEM-CUSTOM-002",
+          "message": "device.fault_count_zscore_7d is a learned transform; the local evaluator never loads artifacts or executes custom code"
+        }
+      },
+      {
+        "suite": "fitted_adapter_conformance",
+        "case": "frozen_scaler_golden",
+        "feature": "device.fault_count_zscore_7d",
+        "feature_version": "1.0.0",
+        "status": "not_executed",
+        "reason": "Suite runner is adapter_required; the local reference evaluator does not execute it",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1.0,
+              "state": "ok"
+            }
+          ]
+        }
+      },
+      {
+        "suite": "fitted_adapter_conformance",
+        "case": "custom_priority_golden",
+        "feature": "device.fault_priority_score",
+        "feature_version": "1.0.0",
+        "status": "not_executed",
+        "reason": "Suite runner is adapter_required; the local reference evaluator does not execute it",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0.25,
+              "state": "ok"
+            }
+          ]
+        }
+      },
+      {
+        "suite": "fitted_adapter_conformance",
+        "case": "reject_wrong_fitted_split",
+        "feature": "device.fault_count_zscore_7d",
+        "feature_version": "1.0.0",
+        "status": "not_executed",
+        "reason": "Suite runner is adapter_required; the local reference evaluator does not execute it",
+        "expected": {
+          "diagnostic": {
+            "code": "FIT_SPLIT_MISMATCH"
+          }
+        }
+      }
+    ]
+  }
+}

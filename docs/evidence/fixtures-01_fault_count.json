@@ -1,0 +1,383 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "e1969d08f15b068831b35b920e1fb618bec09380acc74157bf35e0a8cd7cb5ad",
+  "summary": {
+    "executed": 13,
+    "passed": 13,
+    "failed": 0,
+    "not_executed": 0,
+    "cases": [
+      {
+        "suite": "fault_count_conformance",
+        "case": "event_window_edges",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 2,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 2,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "availability_edges",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 1,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "identical_duplicates",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 1,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "conflicting_duplicates",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "DUPLICATE_CONFLICT"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "DUPLICATE_CONFLICT",
+          "rule": "SEM-REV-002",
+          "message": "fault_events: rows sharing primary key disagree; collapse_identical never masks conflicts"
+        }
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "known_empty",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "null_predicate",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "insufficient_history",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": null,
+              "state": "insufficient_history"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": null,
+            "state": "insufficient_history"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "source_outage",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": null,
+              "state": "source_unavailable"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": null,
+            "state": "source_unavailable"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "tenant_isolation",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 1,
+              "state": "ok"
+            },
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_b",
+                "device_id": "device_1"
+              },
+              "value": 2,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 1,
+            "state": "ok"
+          },
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_b",
+              "device_id": "device_1"
+            },
+            "value": 2,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "publication_visibility",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 2,
+              "state": "ok"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 2,
+            "state": "ok"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "new_null_supersedes",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": null,
+              "state": "insufficient_history"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": null,
+            "state": "insufficient_history"
+          }
+        ]
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "stale_publication",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "STALE_FEATURE"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "STALE_FEATURE",
+          "rule": "SEM-FRESH-002",
+          "message": "Selected publication is 7200s older than the request as_of; maximum 3600s; no fallback is applied"
+        }
+      },
+      {
+        "suite": "fault_count_conformance",
+        "case": "ambiguous_publication",
+        "feature": "device.fault_count_7d",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "diagnostic": {
+            "code": "PUBLICATION_TIE"
+          }
+        },
+        "actual_diagnostic": {
+          "code": "PUBLICATION_TIE",
+          "rule": "SEM-REPLAY-002",
+          "message": "Two eligible publications share (as_of, published_at, sequence); no arbitrary choice is made"
+        }
+      }
+    ]
+  }
+}

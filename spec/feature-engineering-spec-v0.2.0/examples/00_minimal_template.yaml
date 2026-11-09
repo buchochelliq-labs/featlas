@@ -1,0 +1,428 @@
+# Complete FeatureEngineeringProject, specification 0.2.0.
+# Synthetic contracts only; no adapters are installed or resources provisioned.
+spec_version: 0.2.0
+kind: FeatureEngineeringProject
+metadata:
+  id: minimal_fault_template
+  name: Minimal complete feature template
+  version: 1.0.0
+  description: A valid concrete starting point. Keep all required contracts and replace the synthetic
+    business definitions, ownership, columns, lineage and goldens together.
+  owners:
+  - example.feature-engineering
+  status: draft
+  tags:
+  - synthetic
+  - specification-example
+entities:
+- id: device
+  version: 1.0.0
+  name: Device
+  description: A registered device identified by the full tenant-scoped composite key.
+  owner: example.analytics
+  keys:
+  - name: tenant_id
+    type: string
+    description: Tenant isolation boundary.
+    source_column: tenant_id
+    is_tenant: true
+  - name: device_id
+    type: string
+    description: Tenant-local device identifier.
+    source_column: device_id
+    is_tenant: false
+  population:
+    source: device_registry
+    mode: as_of_keys
+    event_time_upper: inclusive
+    availability_upper: inclusive
+    deletion_policy: exclude_deleted
+sources:
+- id: device_registry
+  version: 1.0.0
+  name: Device registry
+  description: One immutable registration row per tenant and device; registration defines population membership
+    after it is observed. Decommissioning would require a versioned population source in a new source
+    version.
+  owner: example.data-platform
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant boundary; the same local entity ID may exist in different tenants.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Device identifier unique only within one tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: registered_at
+    type: timestamp
+    description: Business instant when this entity joined the population.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Instant this registration became visible to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - tenant_id
+  - device_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - tenant_id
+    - device_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: registered_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: tenant_id
+      origin: synthetic.device_registry.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant boundary; the same local entity ID may
+        exist in different tenants.'
+    - column: device_id
+      origin: synthetic.device_registry.device_id
+      description: 'Created as a synthetic fixture field: Device identifier unique only within one tenant.'
+    - column: registered_at
+      origin: synthetic.device_registry.registered_at
+      description: 'Created as a synthetic fixture field: Business instant when this entity joined the
+        population.'
+    - column: available_at
+      origin: synthetic.device_registry.available_at
+      description: 'Created as a synthetic fixture field: Instant this registration became visible to
+        the feature system.'
+    code: null
+- id: fault_events
+  version: 1.0.0
+  name: Device fault events
+  description: One immutable device observation per event_id; nullable is_fault means the sensor did not
+    classify the observation.
+  owner: example.data-platform
+  columns:
+  - name: event_id
+    type: string
+    description: Globally unique immutable observation identity, used to collapse exact retransmissions.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: tenant_id
+    type: string
+    description: Tenant owning the observed device.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Tenant-local observed device identifier.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: occurred_at
+    type: timestamp
+    description: Business timestamp of the sensor observation.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Earliest instant this exact observation was readable by feature computation.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: is_fault
+    type: boolean
+    description: True denotes a fault, false a healthy observation, null an unknown classification.
+    nullable: true
+    unit: null
+    classification: internal
+  primary_key:
+  - event_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - event_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: occurred_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: event_id
+      origin: synthetic.fault_events.event_id
+      description: 'Created as a synthetic fixture field: Globally unique immutable observation identity,
+        used to collapse exact retransmissions.'
+    - column: tenant_id
+      origin: synthetic.fault_events.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant owning the observed device.'
+    - column: device_id
+      origin: synthetic.fault_events.device_id
+      description: 'Created as a synthetic fixture field: Tenant-local observed device identifier.'
+    - column: occurred_at
+      origin: synthetic.fault_events.occurred_at
+      description: 'Created as a synthetic fixture field: Business timestamp of the sensor observation.'
+    - column: available_at
+      origin: synthetic.fault_events.available_at
+      description: 'Created as a synthetic fixture field: Earliest instant this exact observation was
+        readable by feature computation.'
+    - column: is_fault
+      origin: synthetic.fault_events.is_fault
+      description: 'Created as a synthetic fixture field: True denotes a fault, false a healthy observation,
+        null an unknown classification.'
+    code: null
+relationships: []
+features:
+- id: device.fault_count_60s
+  version: 1.0.0
+  name: Fault count in 60 seconds
+  description: Count true fault observations in [as_of - 60 seconds, as_of) for each known registered
+    device.
+  owner: example.feature-engineering
+  entity: device
+  output:
+    type: integer
+    nullable: true
+    unit: count
+    description: Count true fault observations in [as_of - 60 seconds, as_of) for each known registered
+      device.
+    constraints:
+      minimum: 0
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  inputs:
+  - alias: faults
+    source: fault_events
+    columns:
+    - event_id
+    - tenant_id
+    - device_id
+    - occurred_at
+    - available_at
+    - is_fault
+  dependencies: []
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 60
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: aggregate
+    input: faults
+    joins: []
+    group_by:
+    - entity_key: tenant_id
+      input: faults
+      column: tenant_id
+    - entity_key: device_id
+      input: faults
+      column: device_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: faults
+        column: is_fault
+      - kind: literal
+        type: boolean
+        value: true
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  lineage:
+    sources:
+    - source: fault_events
+      column: event_id
+      roles:
+      - ordering
+      description: Globally unique immutable observation identity, used to collapse exact retransmissions.
+        Used for ordering.
+    - source: fault_events
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Tenant owning the observed device. Used for entity_key.
+    - source: fault_events
+      column: device_id
+      roles:
+      - entity_key
+      description: Tenant-local observed device identifier. Used for entity_key.
+    - source: fault_events
+      column: occurred_at
+      roles:
+      - event_time
+      description: Business timestamp of the sensor observation. Used for event_time.
+    - source: fault_events
+      column: available_at
+      roles:
+      - availability_time
+      description: Earliest instant this exact observation was readable by feature computation. Used for
+        availability_time.
+    - source: fault_events
+      column: is_fault
+      roles:
+      - filter
+      description: True denotes a fault, false a healthy observation, null an unknown classification.
+        Used for filter.
+    - source: device_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: device_registry
+      column: device_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Device identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: device_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: device_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 60
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:01:00Z'
+  acceptance:
+    suites:
+    - minimal_template_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+feature_sets:
+- id: minimal_device_features
+  version: 1.0.0
+  name: Minimal Device Features
+  description: Atomic, exactly pinned synthetic example feature set.
+  owner: example.feature-engineering
+  entity: device
+  features:
+  - id: device.fault_count_60s
+    version: 1.0.0
+  publication: atomic
+consumers: []
+deployments: []
+acceptance_suites:
+- id: minimal_template_conformance
+  version: 1.0.0
+  name: Minimal Template Conformance
+  description: All values are synthetic. Expected values are derived from small enumerated cases and intentional
+    boundary conditions; structural validity alone does not verify a production implementation.
+  runner: reference
+  cases:
+  - id: empty_known_device
+    name: Empty Known Device
+    description: Complete source coverage plus one registered device and no faults yields zero, with the
+      empty state.
+    feature:
+      id: device.fault_count_60s
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      fault_events: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: fault_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty

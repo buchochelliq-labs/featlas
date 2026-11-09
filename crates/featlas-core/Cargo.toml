@@ -1,0 +1,15 @@
+[package]
+name = "featlas-core"
+description = "Canonical semantic core: parsing, validation, hashing, planning and exact local evaluation. No vendor SDKs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+yaml-rust2.workspace = true
+jsonschema.workspace = true
+sha2.workspace = true
+hex.workspace = true
+regex.workspace = true

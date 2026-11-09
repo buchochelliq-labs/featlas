@@ -1,0 +1,14 @@
+[package]
+name = "featlas-adapters"
+description = "Adapter implementations (local reference, in-memory test store, Azure Databricks lowering). Depends on the core; the core never depends on this crate."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+featlas-core = { path = "../featlas-core" }
+serde.workspace = true
+serde_json.workspace = true
+jsonschema.workspace = true
+sha2.workspace = true
+hex.workspace = true

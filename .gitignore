@@ -1,0 +1,10 @@
+/target
+__pycache__/
+*.pyc
+.venv/
+/generated/
+/example-output/
+*.so
+*.pyd
+/python/build/
+*.egg-info/
