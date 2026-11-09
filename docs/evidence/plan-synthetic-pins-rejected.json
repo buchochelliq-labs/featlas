@@ -1,0 +1,941 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "plan",
+  "plannable": false,
+  "execution_ready": false,
+  "diagnostics": [
+    {
+      "code": "UNRESOLVED_ADAPTER",
+      "severity": "error",
+      "stage": "planning",
+      "rule": "SEM-PORT-002",
+      "path": "/deployments/1/adapters/0",
+      "message": "No installed adapter implements org.example.fe_spec:databricks@0.0.0-example; registered: [(\"dev.featlas:local_reference\", \"0.1.0\"), (\"dev.featlas:memory_store\", \"0.1.0\"), (\"dev.featlas:databricks\", \"0.1.0\")]. Example/synthetic adapter pins are not installed packages."
+    },
+    {
+      "code": "CAPABILITY_REQUIREMENT_DERIVED",
+      "severity": "warning",
+      "stage": "planning",
+      "rule": "SEM-PORT-006",
+      "path": "/deployments/1/runtime/required_capabilities",
+      "message": "Planner derived databricks_platform/orchestrator/core.scheduling from the actual operations; it is required even though not declared"
+    }
+  ],
+  "checks": [
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.aggregate",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Exact aggregate required by device.fault_count_7d@1.0.0",
+        "Required by the pinned feature computation or historical retrieval contract."
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.as_of_join",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Required by the pinned feature computation or historical retrieval contract."
+      ],
+      "declared": true,
+      "derived": false,
+      "operations": [
+        "declared"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.expression",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Required by the pinned feature computation or historical retrieval contract.",
+        "Typed predicate required by device.fault_count_7d@1.0.0"
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.revision_reconstruction",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Availability-first revision reconstruction required by device.fault_count_7d@1.0.0",
+        "Required by the pinned feature computation or historical retrieval contract."
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.source_as_known",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Required by the pinned feature computation or historical retrieval contract.",
+        "Source-as-known recomputation required by device.fault_count_7d@1.0.0"
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "catalog",
+      "capability": "core.source_read",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Read source snapshots through complete logical-to-physical mappings.",
+        "Read-only reconstructible history for device_registry through its complete column mapping",
+        "Read-only reconstructible history for fault_events through its complete column mapping"
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.atomic_publication",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Publish complete entity/as-of feature-set snapshots with observed visibility evidence.",
+        "Publish device_reliability@1.0.0 as an atomic feature-set snapshot with observed visibility evidence"
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "materialize"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.serving_replay",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Consumer reliability_replay@1.0.0 replays observed publications",
+        "Required by the pinned feature computation or historical retrieval contract."
+      ],
+      "declared": true,
+      "derived": true,
+      "operations": [
+        "declared",
+        "serve"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "orchestrator",
+      "capability": "core.scheduling",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Adapter implementation is not installed; nothing about this capability is established"
+      ],
+      "reasons": [
+        "Interval schedule with bounded, idempotent runs"
+      ],
+      "declared": false,
+      "derived": true,
+      "operations": [
+        "schedule"
+      ]
+    }
+  ],
+  "plan": {
+    "plan_version": "featlas.plan/v1",
+    "core": {
+      "name": "featlas-core",
+      "version": "0.1.0"
+    },
+    "project": {
+      "file_sha256": "e1969d08f15b068831b35b920e1fb618bec09380acc74157bf35e0a8cd7cb5ad",
+      "id": "fault_count_example",
+      "logical_digest": "6d512fd95cd2abe19da68d7622d659caad853f3eb39bb790918c622840c72cdb",
+      "spec_version": "0.2.0",
+      "version": "1.0.0"
+    },
+    "logical": {
+      "plan_version": "featlas.plan/v1",
+      "sources": {
+        "device_registry": {
+          "id": "device_registry",
+          "version": "1.0.0",
+          "fingerprint": "d24649d8fbae0aa15b35f8f01ec7351f1e87e2e1efa4a35743b91c2c255d0ac6",
+          "record_kind": "append_only",
+          "columns": [
+            {
+              "name": "tenant_id",
+              "type": "string",
+              "nullable": false
+            },
+            {
+              "name": "device_id",
+              "type": "string",
+              "nullable": false
+            },
+            {
+              "name": "registered_at",
+              "type": "timestamp",
+              "nullable": false
+            },
+            {
+              "name": "available_at",
+              "type": "timestamp",
+              "nullable": false
+            }
+          ],
+          "event_time": "registered_at",
+          "available_time": "available_at",
+          "primary_key": [
+            "tenant_id",
+            "device_id"
+          ],
+          "duplicate_policy": "collapse_identical",
+          "logical_key": [
+            "tenant_id",
+            "device_id"
+          ],
+          "revision_order": [],
+          "tombstone": null,
+          "earliest_reproducible_at": "2026-01-01T00:00:00Z",
+          "stages": [
+            "validate_rows",
+            "availability_cutoff",
+            "primary_key_duplicates",
+            "logical_key_partition",
+            "revision_select_latest",
+            "reject_contradictory_ties",
+            "apply_tombstones"
+          ]
+        },
+        "fault_events": {
+          "id": "fault_events",
+          "version": "1.0.0",
+          "fingerprint": "a3fa3b82f93b277eeec8bedc3331469e9903106bf5bb4c4802d504a362016929",
+          "record_kind": "append_only",
+          "columns": [
+            {
+              "name": "event_id",
+              "type": "string",
+              "nullable": false
+            },
+            {
+              "name": "tenant_id",
+              "type": "string",
+              "nullable": false
+            },
+            {
+              "name": "device_id",
+              "type": "string",
+              "nullable": false
+            },
+            {
+              "name": "occurred_at",
+              "type": "timestamp",
+              "nullable": false
+            },
+            {
+              "name": "available_at",
+              "type": "timestamp",
+              "nullable": false
+            },
+            {
+              "name": "is_fault",
+              "type": "boolean",
+              "nullable": true
+            }
+          ],
+          "event_time": "occurred_at",
+          "available_time": "available_at",
+          "primary_key": [
+            "event_id"
+          ],
+          "duplicate_policy": "collapse_identical",
+          "logical_key": [
+            "event_id"
+          ],
+          "revision_order": [],
+          "tombstone": null,
+          "earliest_reproducible_at": "2026-01-01T00:00:00Z",
+          "stages": [
+            "validate_rows",
+            "availability_cutoff",
+            "primary_key_duplicates",
+            "logical_key_partition",
+            "revision_select_latest",
+            "reject_contradictory_ties",
+            "apply_tombstones"
+          ]
+        }
+      },
+      "feature_sets": [
+        {
+          "id": "device_reliability",
+          "version": "1.0.0",
+          "fingerprint": "bdaf782a814e94a8341b2400e6069bb859ee91a734443d95c29e62ddc4133680",
+          "population": {
+            "entity": "device",
+            "source": "device_registry",
+            "keys": [
+              {
+                "name": "tenant_id",
+                "type": "string",
+                "description": "Tenant isolation boundary.",
+                "source_column": "tenant_id",
+                "is_tenant": true
+              },
+              {
+                "name": "device_id",
+                "type": "string",
+                "description": "Tenant-local device identifier.",
+                "source_column": "device_id",
+                "is_tenant": false
+              }
+            ],
+            "event_time_upper": "inclusive",
+            "availability_upper": "inclusive",
+            "deletion_policy": "exclude_deleted"
+          },
+          "features": [
+            {
+              "id": "device.fault_count_7d",
+              "version": "1.0.0",
+              "fingerprint": "dbe41c1433f9f79616aa225f88ff483eaa0101e8abb9c94924d87aedcaf73a00",
+              "kind": "aggregate",
+              "output": {
+                "type": "integer",
+                "nullable": true,
+                "unit": "count",
+                "description": "Number of classified fault observations for a registered device in [as_of - 7 days, as_of), using only observations available at as_of.",
+                "constraints": {
+                  "minimum": 0.0
+                },
+                "numeric_tolerance": {
+                  "absolute": 0.0,
+                  "relative": 0.0
+                }
+              },
+              "static_type": "integer",
+              "dependencies": [],
+              "steps": [
+                {
+                  "step": "reconstruct",
+                  "alias": "faults",
+                  "source": "fault_events",
+                  "availability_upper": "inclusive"
+                },
+                {
+                  "step": "event_window",
+                  "alias": "faults",
+                  "column": "occurred_at",
+                  "lookback_seconds": 604800,
+                  "lower": "inclusive",
+                  "upper": "exclusive"
+                },
+                {
+                  "step": "filter",
+                  "predicate": {
+                    "kind": "call",
+                    "operator": "equal",
+                    "args": [
+                      {
+                        "kind": "column",
+                        "input": "faults",
+                        "column": "is_fault"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "boolean",
+                        "value": true
+                      }
+                    ]
+                  }
+                },
+                {
+                  "step": "group",
+                  "keys": [
+                    {
+                      "entity_key": "tenant_id",
+                      "input": "faults",
+                      "column": "tenant_id"
+                    },
+                    {
+                      "entity_key": "device_id",
+                      "input": "faults",
+                      "column": "device_id"
+                    }
+                  ]
+                },
+                {
+                  "step": "aggregate",
+                  "operation": "count",
+                  "value": null,
+                  "distinct_by": [],
+                  "nulls": "ignore"
+                }
+              ],
+              "coverage": {
+                "sources": [
+                  "device_registry",
+                  "fault_events"
+                ],
+                "required_seconds": 604800,
+                "earliest_as_of": "2026-02-01T00:00:00Z",
+                "end_rule": "coverage_end >= as_of",
+                "status_envelope": "[coverage_start, coverage_end) must contain [as_of - required_seconds, as_of]; outage => source_unavailable; otherwise insufficient_history"
+              },
+              "missingness": {
+                "empty": {
+                  "action": "value",
+                  "value": 0
+                },
+                "null_input": "ignore",
+                "insufficient_history": "null",
+                "source_unavailable": "null",
+                "execution_failure": "error"
+              },
+              "quality": {
+                "checks": [
+                  {
+                    "kind": "finite",
+                    "severity": "error"
+                  }
+                ],
+                "on_violation": "error"
+              },
+              "lineage": {
+                "sources": [
+                  {
+                    "source": "fault_events",
+                    "column": "event_id",
+                    "roles": [
+                      "ordering"
+                    ],
+                    "description": "Globally unique immutable observation identity, used to collapse exact retransmissions. Used for ordering."
+                  },
+                  {
+                    "source": "fault_events",
+                    "column": "tenant_id",
+                    "roles": [
+                      "entity_key"
+                    ],
+                    "description": "Tenant owning the observed device. Used for entity_key."
+                  },
+                  {
+                    "source": "fault_events",
+                    "column": "device_id",
+                    "roles": [
+                      "entity_key"
+                    ],
+                    "description": "Tenant-local observed device identifier. Used for entity_key."
+                  },
+                  {
+                    "source": "fault_events",
+                    "column": "occurred_at",
+                    "roles": [
+                      "event_time"
+                    ],
+                    "description": "Business timestamp of the sensor observation. Used for event_time."
+                  },
+                  {
+                    "source": "fault_events",
+                    "column": "available_at",
+                    "roles": [
+                      "availability_time"
+                    ],
+                    "description": "Earliest instant this exact observation was readable by feature computation. Used for availability_time."
+                  },
+                  {
+                    "source": "fault_events",
+                    "column": "is_fault",
+                    "roles": [
+                      "filter"
+                    ],
+                    "description": "True denotes a fault, false a healthy observation, null an unknown classification. Used for filter."
+                  },
+                  {
+                    "source": "device_registry",
+                    "column": "tenant_id",
+                    "roles": [
+                      "entity_key",
+                      "ordering",
+                      "population"
+                    ],
+                    "description": "Tenant boundary; the same local entity ID may exist in different tenants. Used for entity_key, ordering, population."
+                  },
+                  {
+                    "source": "device_registry",
+                    "column": "device_id",
+                    "roles": [
+                      "entity_key",
+                      "ordering",
+                      "population"
+                    ],
+                    "description": "Device identifier unique only within one tenant. Used for entity_key, ordering, population."
+                  },
+                  {
+                    "source": "device_registry",
+                    "column": "registered_at",
+                    "roles": [
+                      "event_time",
+                      "population"
+                    ],
+                    "description": "Business instant when this entity joined the population. Used for event_time, population."
+                  },
+                  {
+                    "source": "device_registry",
+                    "column": "available_at",
+                    "roles": [
+                      "availability_time",
+                      "population"
+                    ],
+                    "description": "Instant this registration became visible to the feature system. Used for availability_time, population."
+                  }
+                ],
+                "dependencies": [],
+                "code": null
+              },
+              "publication_delay_seconds": 60
+            }
+          ],
+          "members": [
+            "device.fault_count_7d@1.0.0"
+          ],
+          "publication": {
+            "atomicity": "feature_set",
+            "visibility": "after_success",
+            "surface": "offline_snapshot",
+            "observed_timestamp_required": true,
+            "metadata": [
+              "as_of",
+              "published_at",
+              "publication_sequence",
+              "publication_id",
+              "materialization_id"
+            ],
+            "target_role": "offline_store"
+          }
+        }
+      ]
+    },
+    "logical_plan_digest": "667733be32666af0c9a3a6e08ce0e1bf8a9ce01bcedf074ba4e1b998f44f1575",
+    "bindings": {
+      "deployment": "fault_prod",
+      "deployment_version": "1.0.0",
+      "deployment_identity": "bd1cc41f7d905aec2522cafd72b7ce9e19fcc5c4356684eea14eeaff79dcc029",
+      "adapters": [
+        {
+          "id": "databricks_platform",
+          "implementation": "org.example.fe_spec:databricks",
+          "version": "0.0.0-example",
+          "roles": [
+            "compute",
+            "catalog",
+            "offline_store",
+            "orchestrator"
+          ],
+          "configuration": {
+            "connection_profile": "example_databricks",
+            "feature_api": "uc_feature_tables"
+          }
+        }
+      ],
+      "execution": {
+        "compute": "databricks_platform",
+        "catalog": "databricks_platform",
+        "orchestrator": "databricks_platform"
+      },
+      "sources": [
+        {
+          "source": "device_registry",
+          "read_only": true,
+          "location": {
+            "kind": "table",
+            "namespace": [
+              "example_catalog",
+              "synthetic_raw"
+            ],
+            "name": "device_registry",
+            "format": "delta"
+          },
+          "version": "1.0.0",
+          "adapter": "databricks_platform",
+          "column_mapping": {
+            "tenant_id": "tenant_id",
+            "device_id": "device_id",
+            "registered_at": "registered_at",
+            "available_at": "available_at"
+          }
+        },
+        {
+          "source": "fault_events",
+          "read_only": true,
+          "location": {
+            "kind": "table",
+            "namespace": [
+              "example_catalog",
+              "synthetic_raw"
+            ],
+            "name": "fault_events",
+            "format": "delta"
+          },
+          "version": "1.0.0",
+          "adapter": "databricks_platform",
+          "column_mapping": {
+            "event_id": "event_id",
+            "tenant_id": "tenant_id",
+            "device_id": "device_id",
+            "occurred_at": "occurred_at",
+            "available_at": "available_at",
+            "is_fault": "is_fault"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "feature_set": "device_reliability",
+          "version": "1.0.0",
+          "location": {
+            "kind": "table",
+            "namespace": [
+              "example_catalog",
+              "synthetic_features"
+            ],
+            "name": "device_reliability",
+            "format": "delta"
+          },
+          "write_mode": "merge",
+          "adapter": "databricks_platform",
+          "role": "offline_store",
+          "entity_key_mapping": {
+            "tenant_id": "tenant_id",
+            "device_id": "device_id"
+          },
+          "feature_mapping": [
+            {
+              "feature": "device.fault_count_7d",
+              "version": "1.0.0",
+              "column": "device_fault_count_7d",
+              "state_column": "device_fault_count_7d_state"
+            }
+          ],
+          "metadata_columns": {
+            "as_of": "feature_as_of",
+            "published_at": "published_at",
+            "publication_sequence": "publication_sequence",
+            "publication_id": "publication_id",
+            "materialization_id": "materialization_id"
+          }
+        }
+      ],
+      "consumers": [
+        {
+          "consumer": "reliability_batch",
+          "version": "1.0.0",
+          "adapter": "databricks_platform",
+          "role": "offline_store"
+        },
+        {
+          "consumer": "reliability_replay",
+          "version": "1.0.0",
+          "adapter": "databricks_platform",
+          "role": "offline_store"
+        }
+      ],
+      "consumer_contracts": [
+        {
+          "id": "reliability_batch",
+          "version": "1.0.0",
+          "name": "Reliability Batch",
+          "description": "Synthetic request contract. Request as_of anchors feature windows; requested_at determines what published values were visible.",
+          "owner": "example.modeling",
+          "feature_set": {
+            "feature_set": "device_reliability",
+            "version": "1.0.0"
+          },
+          "entity_inputs": [
+            {
+              "entity_key": "tenant_id",
+              "input_field": "tenant_id"
+            },
+            {
+              "entity_key": "device_id",
+              "input_field": "device_id"
+            }
+          ],
+          "time_inputs": {
+            "as_of": "as_of",
+            "requested_at": "requested_at"
+          },
+          "selection": {
+            "mode": "source_as_known",
+            "tie_breaker": "sequence"
+          },
+          "max_staleness_seconds": 3600,
+          "missing_value_policy": "preserve_null",
+          "label": null
+        },
+        {
+          "id": "reliability_replay",
+          "version": "1.0.0",
+          "name": "Reliability Replay",
+          "description": "Synthetic request contract. Request as_of anchors feature windows; requested_at determines what published values were visible.",
+          "owner": "example.modeling",
+          "feature_set": {
+            "feature_set": "device_reliability",
+            "version": "1.0.0"
+          },
+          "entity_inputs": [
+            {
+              "entity_key": "tenant_id",
+              "input_field": "tenant_id"
+            },
+            {
+              "entity_key": "device_id",
+              "input_field": "device_id"
+            }
+          ],
+          "time_inputs": {
+            "as_of": "as_of",
+            "requested_at": "requested_at"
+          },
+          "selection": {
+            "mode": "historical_serving_replay",
+            "tie_breaker": "sequence"
+          },
+          "max_staleness_seconds": 3600,
+          "missing_value_policy": "preserve_null",
+          "label": null
+        }
+      ],
+      "schedule": {
+        "mode": "interval",
+        "every_seconds": 3600,
+        "offset_seconds": 0
+      },
+      "budget": {
+        "currency": "USD",
+        "max_daily_cost": 25.0,
+        "max_scan_bytes": 1073741824,
+        "max_output_rows": 1000000,
+        "max_memory_mib": 2048,
+        "max_concurrent_runs": 1
+      },
+      "backfill": {
+        "allowed": true,
+        "start": "2026-02-01T00:00:00Z",
+        "end": "2026-06-08T00:00:00Z",
+        "mode": "source_as_known",
+        "publish": "separate_namespace"
+      },
+      "portability": {
+        "mode": "portable",
+        "native_bindings": []
+      }
+    },
+    "requirements": [
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.aggregate",
+        "reasons": [
+          "Exact aggregate required by device.fault_count_7d@1.0.0",
+          "Required by the pinned feature computation or historical retrieval contract."
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.as_of_join",
+        "reasons": [
+          "Required by the pinned feature computation or historical retrieval contract."
+        ],
+        "declared": true,
+        "derived": false,
+        "operations": [
+          "declared"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.expression",
+        "reasons": [
+          "Required by the pinned feature computation or historical retrieval contract.",
+          "Typed predicate required by device.fault_count_7d@1.0.0"
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.revision_reconstruction",
+        "reasons": [
+          "Availability-first revision reconstruction required by device.fault_count_7d@1.0.0",
+          "Required by the pinned feature computation or historical retrieval contract."
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.source_as_known",
+        "reasons": [
+          "Required by the pinned feature computation or historical retrieval contract.",
+          "Source-as-known recomputation required by device.fault_count_7d@1.0.0"
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "catalog",
+        "capability": "core.source_read",
+        "reasons": [
+          "Read source snapshots through complete logical-to-physical mappings.",
+          "Read-only reconstructible history for device_registry through its complete column mapping",
+          "Read-only reconstructible history for fault_events through its complete column mapping"
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "capability": "core.atomic_publication",
+        "reasons": [
+          "Publish complete entity/as-of feature-set snapshots with observed visibility evidence.",
+          "Publish device_reliability@1.0.0 as an atomic feature-set snapshot with observed visibility evidence"
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "materialize"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "capability": "core.serving_replay",
+        "reasons": [
+          "Consumer reliability_replay@1.0.0 replays observed publications",
+          "Required by the pinned feature computation or historical retrieval contract."
+        ],
+        "declared": true,
+        "derived": true,
+        "operations": [
+          "declared",
+          "serve"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "orchestrator",
+        "capability": "core.scheduling",
+        "reasons": [
+          "Interval schedule with bounded, idempotent runs"
+        ],
+        "declared": false,
+        "derived": true,
+        "operations": [
+          "schedule"
+        ]
+      }
+    ],
+    "nonportable": [],
+    "plan_digest": "c5aad73846771d70a9a895a5274b3384ee30c95ed4ff8b1d7efe18ad41cf53fe"
+  }
+}

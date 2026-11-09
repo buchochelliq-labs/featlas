@@ -1,0 +1,10 @@
+[
+  {
+    "code": "CAPABILITY_REQUIREMENT_DERIVED",
+    "severity": "warning",
+    "stage": "planning",
+    "rule": "SEM-PORT-006",
+    "path": "/deployments/1/runtime/required_capabilities",
+    "message": "Planner derived databricks_platform/orchestrator/core.scheduling from the actual operations; it is required even though not declared"
+  }
+]

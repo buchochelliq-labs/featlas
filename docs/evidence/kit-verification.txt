@@ -1,0 +1,8 @@
+PASS
+Schemas: 12; projects: 7
+Reference fixtures: 50/50; adapter-required cases not executed: 3
+Unit/negative tests: 127; failures: 0; artifact digests: 2
+Capability reports: 1 checked; records consistent: True
+Scope: local specification verification only; no production/cloud execution.
+Report limits: readiness remains a producer claim; no planner-completeness, evidence-authenticity, or runtime certification; evidence references are not fetched.
+PASS: 52 declared payload files verified

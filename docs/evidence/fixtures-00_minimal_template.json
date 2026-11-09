@@ -1,0 +1,43 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "test",
+  "project_file_sha256": "f97fefc5af2fa8bf3574d590410847da7c8c2a5ff4c309e6092099b94b22e806",
+  "summary": {
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_executed": 0,
+    "cases": [
+      {
+        "suite": "minimal_template_conformance",
+        "case": "empty_known_device",
+        "feature": "device.fault_count_60s",
+        "feature_version": "1.0.0",
+        "status": "passed",
+        "reason": "",
+        "expected": {
+          "rows": [
+            {
+              "entity_keys": {
+                "tenant_id": "tenant_a",
+                "device_id": "device_1"
+              },
+              "value": 0,
+              "state": "empty"
+            }
+          ]
+        },
+        "actual_rows": [
+          {
+            "entity_keys": {
+              "tenant_id": "tenant_a",
+              "device_id": "device_1"
+            },
+            "value": 0,
+            "state": "empty"
+          }
+        ]
+      }
+    ]
+  }
+}

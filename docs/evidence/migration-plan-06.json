@@ -1,0 +1,528 @@
+{
+  "plan_version": "featlas.migration-plan/v1",
+  "identity": {
+    "project": {
+      "id": "fault_count_example",
+      "version": "1.0.0",
+      "file_sha256": "656e0a4875bfd7779f46399116ad8939df64ef1e8c720bad8e968d82b835c3c5",
+      "logical_digest": "6d512fd95cd2abe19da68d7622d659caad853f3eb39bb790918c622840c72cdb"
+    },
+    "source": {
+      "deployment": "fault_prod",
+      "version": "1.0.0",
+      "identity": "f19fc51466f7868d8776477d5eea63cd37c3ad7ca51fc2fc45a4bd27f1fa0827",
+      "adapters": [
+        {
+          "id": "databricks_platform",
+          "implementation": "dev.featlas:databricks",
+          "version": "0.1.0",
+          "roles": [
+            "compute",
+            "catalog",
+            "offline_store",
+            "orchestrator"
+          ]
+        }
+      ]
+    },
+    "destination": {
+      "deployment": "fault_alternative_store",
+      "version": "1.0.0",
+      "identity": "c622e48fbf25a67cf4751eb54e1308f812bbb727af92bdb24d59932a58ba191d",
+      "adapters": [
+        {
+          "id": "databricks_platform",
+          "implementation": "dev.featlas:databricks",
+          "version": "0.1.0",
+          "roles": [
+            "compute",
+            "catalog",
+            "offline_store",
+            "orchestrator"
+          ]
+        },
+        {
+          "id": "alternative_store",
+          "implementation": "dev.featlas:memory_store",
+          "version": "0.1.0",
+          "roles": [
+            "offline_store"
+          ]
+        }
+      ]
+    },
+    "logical_pins_preserved": "Both deployments belong to one project; logical entity/source/relationship/feature/set/consumer identities and fingerprints are shared by construction.",
+    "feature_set_fingerprints": {
+      "device_reliability@1.0.0": "bdaf782a814e94a8341b2400e6069bb859ee91a734443d95c29e62ddc4133680"
+    }
+  },
+  "consumers": [
+    {
+      "consumer": "reliability_batch",
+      "version": "1.0.0",
+      "selection_mode": "source_as_known",
+      "max_staleness_seconds": 3600,
+      "missing_value_policy": "preserve_null",
+      "current_route": {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "surface": "offline_snapshot"
+      },
+      "destination_route": {
+        "adapter": "alternative_store",
+        "role": "offline_store",
+        "surface": "offline_snapshot"
+      }
+    },
+    {
+      "consumer": "reliability_replay",
+      "version": "1.0.0",
+      "selection_mode": "historical_serving_replay",
+      "max_staleness_seconds": 3600,
+      "missing_value_policy": "preserve_null",
+      "current_route": {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "surface": "offline_snapshot"
+      },
+      "destination_route": {
+        "adapter": "alternative_store",
+        "role": "offline_store",
+        "surface": "offline_snapshot"
+      }
+    }
+  ],
+  "capabilities": {
+    "source": [
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.aggregate",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.as_of_join",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.expression",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.revision_reconstruction",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.source_as_known",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "catalog",
+        "capability": "core.source_read",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "capability": "core.atomic_publication",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "offline_store",
+        "capability": "core.serving_replay",
+        "status": "unverified",
+        "evidence_scope": "static"
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "orchestrator",
+        "capability": "core.scheduling",
+        "status": "unverified",
+        "evidence_scope": "declaration"
+      }
+    ],
+    "destination": [
+      {
+        "adapter": "alternative_store",
+        "role": "offline_store",
+        "capability": "core.atomic_publication",
+        "status": "unverified",
+        "evidence_scope": "local_mock",
+        "limitations": [
+          "In-process test double; no rebinding evidence supplied"
+        ]
+      },
+      {
+        "adapter": "alternative_store",
+        "role": "offline_store",
+        "capability": "core.serving_replay",
+        "status": "unverified",
+        "evidence_scope": "local_mock",
+        "limitations": [
+          "In-process test double; no rebinding evidence supplied"
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.aggregate",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.as_of_join",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.expression",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.revision_reconstruction",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "compute",
+        "capability": "core.source_as_known",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "catalog",
+        "capability": "core.source_read",
+        "status": "unverified",
+        "evidence_scope": "static",
+        "limitations": [
+          "Unity Catalog reads are generated as SELECT statements; physical schema, history retention and permissions are not probed. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+        ]
+      },
+      {
+        "adapter": "databricks_platform",
+        "role": "orchestrator",
+        "capability": "core.scheduling",
+        "status": "unverified",
+        "evidence_scope": "declaration",
+        "limitations": [
+          "Databricks job scheduling is not implemented in this version; manual runs only"
+        ]
+      }
+    ],
+    "destination_execution_ready": false
+  },
+  "data": [
+    {
+      "source": "device_registry",
+      "version": "1.0.0",
+      "earliest_reproducible_at": "2026-01-01T00:00:00Z",
+      "revision_history_seconds": 31536000,
+      "raw_seconds": 31536000,
+      "source_location": "table:[\"example_catalog\",\"synthetic_raw\",\"device_registry\"]",
+      "destination_location": "table:[\"example_catalog\",\"synthetic_raw\",\"device_registry\"]",
+      "binding_changed": false,
+      "obligation": "Snapshot identity, retained revisions/deletions and coverage evidence must be pinned before any transfer or backfill; a binding change cannot recover overwritten revisions."
+    },
+    {
+      "source": "fault_events",
+      "version": "1.0.0",
+      "earliest_reproducible_at": "2026-01-01T00:00:00Z",
+      "revision_history_seconds": 31536000,
+      "raw_seconds": 31536000,
+      "source_location": "table:[\"example_catalog\",\"synthetic_raw\",\"fault_events\"]",
+      "destination_location": "table:[\"example_catalog\",\"synthetic_raw\",\"fault_events\"]",
+      "binding_changed": false,
+      "obligation": "Snapshot identity, retained revisions/deletions and coverage evidence must be pinned before any transfer or backfill; a binding change cannot recover overwritten revisions."
+    }
+  ],
+  "mapping": [
+    {
+      "feature_set": "device_reliability",
+      "version": "1.0.0",
+      "role": "offline_store",
+      "source_resource": {
+        "adapter": "databricks_platform",
+        "location": {
+          "kind": "table",
+          "namespace": [
+            "example_catalog",
+            "synthetic_features"
+          ],
+          "name": "device_reliability",
+          "format": "delta"
+        }
+      },
+      "destination_resource": {
+        "adapter": "alternative_store",
+        "location": {
+          "kind": "resource",
+          "uri": "example-store://migration-demo/device-reliability",
+          "format": "example_record"
+        }
+      },
+      "fields": [
+        {
+          "logical": "tenant_id",
+          "kind": "entity_key",
+          "source_field": "tenant_id",
+          "destination_field": "tenant_key"
+        },
+        {
+          "logical": "device_id",
+          "kind": "entity_key",
+          "source_field": "device_id",
+          "destination_field": "asset_key"
+        },
+        {
+          "logical": "device.fault_count_7d@1.0.0",
+          "kind": "value",
+          "source_field": "device_fault_count_7d",
+          "destination_field": "fault_total"
+        },
+        {
+          "logical": "device.fault_count_7d@1.0.0",
+          "kind": "state",
+          "source_field": "device_fault_count_7d_state",
+          "destination_field": "fault_status"
+        },
+        {
+          "logical": "as_of",
+          "kind": "publication_metadata",
+          "source_field": "feature_as_of",
+          "destination_field": "evaluated_at"
+        },
+        {
+          "logical": "published_at",
+          "kind": "publication_metadata",
+          "source_field": "published_at",
+          "destination_field": "original_visible_at"
+        },
+        {
+          "logical": "publication_sequence",
+          "kind": "publication_metadata",
+          "source_field": "publication_sequence",
+          "destination_field": "original_sequence"
+        },
+        {
+          "logical": "publication_id",
+          "kind": "publication_metadata",
+          "source_field": "publication_id",
+          "destination_field": "original_publication_id"
+        },
+        {
+          "logical": "materialization_id",
+          "kind": "publication_metadata",
+          "source_field": "materialization_id",
+          "destination_field": "target_import_id"
+        }
+      ],
+      "renamed": [
+        {
+          "logical": "tenant_id",
+          "kind": "entity_key",
+          "from": "tenant_id",
+          "to": "tenant_key"
+        },
+        {
+          "logical": "device_id",
+          "kind": "entity_key",
+          "from": "device_id",
+          "to": "asset_key"
+        },
+        {
+          "logical": "device.fault_count_7d@1.0.0",
+          "kind": "value",
+          "from": "device_fault_count_7d",
+          "to": "fault_total"
+        },
+        {
+          "logical": "device.fault_count_7d@1.0.0",
+          "kind": "state",
+          "from": "device_fault_count_7d_state",
+          "to": "fault_status"
+        },
+        {
+          "logical": "as_of",
+          "kind": "publication_metadata",
+          "from": "feature_as_of",
+          "to": "evaluated_at"
+        },
+        {
+          "logical": "published_at",
+          "kind": "publication_metadata",
+          "from": "published_at",
+          "to": "original_visible_at"
+        },
+        {
+          "logical": "publication_sequence",
+          "kind": "publication_metadata",
+          "from": "publication_sequence",
+          "to": "original_sequence"
+        },
+        {
+          "logical": "publication_id",
+          "kind": "publication_metadata",
+          "from": "publication_id",
+          "to": "original_publication_id"
+        },
+        {
+          "logical": "materialization_id",
+          "kind": "publication_metadata",
+          "from": "materialization_id",
+          "to": "target_import_id"
+        }
+      ],
+      "lossless_rules": "Rename only: entity keys, values, states and all five publication metadata fields map to distinct fields in both directions; precision (microsecond UTC, BIGINT, binary64) and explicit null/state encodings must be verified on the destination backend."
+    }
+  ],
+  "publication_history": {
+    "origin": {
+      "deployment": "fault_prod",
+      "version": "1.0.0",
+      "surface": "offline_snapshot"
+    },
+    "preserve": [
+      "published_at",
+      "publication_sequence",
+      "publication_id"
+    ],
+    "assign_new": [
+      "materialization_id"
+    ],
+    "record_separately": "Destination import/visibility observations (commit instants) go to the migration manifest; they never overwrite original published_at.",
+    "replay_continuity": "Historical-serving replay after cutover is UNVERIFIED until the copied ledger is shown complete for the retained interval and continuity of the logical service and surface is established.",
+    "backfill_rule": "A fresh backfill yields recomputed values with new publication identities; it never manufactures a historical served-value ledger."
+  },
+  "execution": {
+    "transfer_namespace": "A separate destination namespace/resource for transferred and backfilled data until cutover",
+    "destination_backfill": {
+      "allowed": true,
+      "start": "2026-02-01T00:00:00Z",
+      "end": "2026-06-08T00:00:00Z",
+      "mode": "source_as_known",
+      "publish": "separate_namespace"
+    },
+    "idempotency_key": [
+      "publication_id",
+      "materialization_id",
+      "entity keys",
+      "as_of"
+    ],
+    "budget": {
+      "currency": "USD",
+      "max_daily_cost": 25.0,
+      "max_scan_bytes": 1073741824,
+      "max_output_rows": 1000000,
+      "max_memory_mib": 2048,
+      "max_concurrent_runs": 1
+    },
+    "concurrency": 1,
+    "failure_recovery": "Re-running a transfer with the same materialization_id must not duplicate rows; interrupted imports are discarded or resumed by idempotency key before verification."
+  },
+  "verification": {
+    "golden_suites": [
+      {
+        "suite": "fault_count_conformance",
+        "version": "1.0.0",
+        "runner": "reference",
+        "cases": 13
+      }
+    ],
+    "compare": [
+      "complete entity keys",
+      "row counts",
+      "values (declared tolerances only)",
+      "states",
+      "as_of/published_at/sequence/publication_id",
+      "coverage",
+      "lineage"
+    ],
+    "shadow": "Dual-read real consumer requests through both routes via the target-neutral consumer API and compare responses including provenance.",
+    "fault_injection": [
+      "interrupted write",
+      "retry with same materialization_id",
+      "duplicate submission",
+      "concurrent run",
+      "late correction",
+      "retention expiry"
+    ]
+  },
+  "cutover": {
+    "preconditions": [
+      "All destination capabilities supported with live evidence",
+      "Golden and historical comparisons reviewed",
+      "Consumer dual-read parity met",
+      "Authorization for routing change recorded"
+    ],
+    "steps": [
+      "Freeze writes or establish a synchronization point",
+      "Final incremental transfer",
+      "Switch consumer bindings to the destination deployment",
+      "Observe end-to-end reads"
+    ],
+    "rollback": [
+      "Consumer parity or freshness regressions",
+      "Missing publication evidence",
+      "Unexpected states/nulls"
+    ],
+    "rollback_action": "Restore consumer bindings to fault_prod; the source resources are retained unchanged",
+    "retirement": "Retire source resources only after output retention (31536000s) and the recovery window elapse"
+  },
+  "semantic_review": [],
+  "blockers": [
+    "Destination alternative_store/offline_store/core.atomic_publication is unverified (local_mock)",
+    "Destination alternative_store/offline_store/core.serving_replay is unverified (local_mock)",
+    "Destination databricks_platform/compute/core.aggregate is unverified (static)",
+    "Destination databricks_platform/compute/core.as_of_join is unverified (static)",
+    "Destination databricks_platform/compute/core.expression is unverified (static)",
+    "Destination databricks_platform/compute/core.revision_reconstruction is unverified (static)",
+    "Destination databricks_platform/compute/core.source_as_known is unverified (static)",
+    "Destination databricks_platform/catalog/core.source_read is unverified (static)",
+    "Destination databricks_platform/orchestrator/core.scheduling is unverified (declaration)"
+  ],
+  "limitations": [
+    "This is a plan. No data was transferred, backfilled, compared on live stores or cut over.",
+    "A local alternate-store round trip establishes boundary separation only, not a migration (SEM-PORT-010)."
+  ]
+}

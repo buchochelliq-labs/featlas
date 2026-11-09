@@ -1,0 +1,32 @@
+{
+  "schema": "featlas.cli/v1",
+  "command": "hash",
+  "project_file_sha256": "656e0a4875bfd7779f46399116ad8939df64ef1e8c720bad8e968d82b835c3c5",
+  "logical": {
+    "canon": "featlas-canon/1",
+    "features": {
+      "device.fault_count_7d@1.0.0": "dbe41c1433f9f79616aa225f88ff483eaa0101e8abb9c94924d87aedcaf73a00"
+    },
+    "feature_sets": {
+      "device_reliability@1.0.0": "bdaf782a814e94a8341b2400e6069bb859ee91a734443d95c29e62ddc4133680"
+    },
+    "consumers": {
+      "reliability_batch@1.0.0": "bbcc18609cfad9bf1ff4620538a422c95139d16cffe986c53a1a4063a928128d",
+      "reliability_replay@1.0.0": "6f79d2ac1ac483b4a128438830b9dc4f45c911939b552d62c5728b55eca7aea9"
+    },
+    "entities": {
+      "device@1.0.0": "2a76deaef75a4ea59c4fbf1435d7e295d4924f27e4ae5a518aa4c12d479264cd"
+    },
+    "sources": {
+      "device_registry@1.0.0": "d24649d8fbae0aa15b35f8f01ec7351f1e87e2e1efa4a35743b91c2c255d0ac6",
+      "fault_events@1.0.0": "a3fa3b82f93b277eeec8bedc3331469e9903106bf5bb4c4802d504a362016929"
+    },
+    "relationships": {},
+    "logical_project": "6d512fd95cd2abe19da68d7622d659caad853f3eb39bb790918c622840c72cdb"
+  },
+  "deployments": {
+    "fault_prod@1.0.0": "f19fc51466f7868d8776477d5eea63cd37c3ad7ca51fc2fc45a4bd27f1fa0827",
+    "fault_alternative_store@1.0.0": "c622e48fbf25a67cf4751eb54e1308f812bbb727af92bdb24d59932a58ba191d"
+  },
+  "note": "Logical fingerprints exclude documentation and all deployment bindings; the project-file digest and deployment identities are binding-sensitive."
+}

@@ -1,0 +1,165 @@
+{
+  "spec_version": "0.2.0",
+  "kind": "AdapterCapabilityReport",
+  "project_id": "fitted_contract_example",
+  "project_version": "1.0.0",
+  "project_file_sha256": "9c0055f2b53a0d79cb72562d1b0ebe3ecbdd131940b9c61a4a76b513a09a9895",
+  "deployment": {
+    "id": "contracts_prod",
+    "version": "1.0.0"
+  },
+  "assessed_at": "2026-11-09T00:00:00Z",
+  "execution_scope": "external_target",
+  "adapters": [
+    {
+      "id": "databricks_platform",
+      "implementation": "dev.featlas:databricks",
+      "version": "0.1.0",
+      "implementation_sha256": null,
+      "runtime_versions": {}
+    }
+  ],
+  "checks": [
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "artifact.json.v1",
+      "status": "unsupported",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "artifact.json.v1 is not provided for role compute"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.aggregate",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.as_of_join",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.expression",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.revision_reconstruction",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.source_as_known",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Spark SQL lowering is generated and differential-tested on local Apache Spark only. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "custom.priority_score.v1",
+      "status": "unsupported",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "custom.priority_score.v1 has no attested implementation in this adapter; custom/learned execution is not supported"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "learned.standard_scaler.v1",
+      "status": "unsupported",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "learned.standard_scaler.v1 has no attested implementation in this adapter; custom/learned execution is not supported"
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "catalog",
+      "capability": "core.source_read",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Unity Catalog reads are generated as SELECT statements; physical schema, history retention and permissions are not probed. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.atomic_publication",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Single-statement Delta MERGE per feature-set snapshot plus commit-history evidence is generated; atomic visibility is not observed. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.serving_replay",
+      "status": "unverified",
+      "evidence_scope": "static",
+      "evidence": [],
+      "limitations": [
+        "Replay reads require persisted published_at evidence from Delta commit history; no historical ledger has been observed. No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "orchestrator",
+      "capability": "core.scheduling",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Databricks job scheduling is not implemented in this version; manual runs only"
+      ]
+    }
+  ],
+  "execution_ready": false,
+  "limitations": [
+    "Requirements include planner-derived operations as well as declared ones; declared support strings are never treated as evidence.",
+    "Evidence references are recorded, not fetched or authenticated by this report generator.",
+    "Execution is not ready: at least one requirement is unsupported, unverified, or lacks evidence adequate for the execution scope.",
+    "UNSUPPORTED_CAPABILITY: databricks_platform/compute cannot satisfy artifact.json.v1 (gates: declared, materialize): artifact.json.v1 is not provided for role compute",
+    "UNSUPPORTED_CAPABILITY: databricks_platform/compute cannot satisfy custom.priority_score.v1 (gates: declared, materialize): custom.priority_score.v1 has no attested implementation in this adapter; custom/learned execution is not supported",
+    "UNSUPPORTED_CAPABILITY: databricks_platform/compute cannot satisfy learned.standard_scaler.v1 (gates: declared, materialize): learned.standard_scaler.v1 has no attested implementation in this adapter; custom/learned execution is not supported"
+  ]
+}
