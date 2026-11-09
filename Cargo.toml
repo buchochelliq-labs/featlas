@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/featlas-core", "crates/featlas-adapters", "crates/featlas-cli"]
+members = ["crates/featlas-core", "crates/featlas-adapters", "crates/featlas-api", "crates/featlas-cli", "crates/featlas-py"]
+# The Python extension is built by maturin (python/pyproject.toml), not by plain `cargo test`.
+default-members = ["crates/featlas-core", "crates/featlas-adapters", "crates/featlas-api", "crates/featlas-cli"]
 
 [workspace.package]
 version = "0.1.0"

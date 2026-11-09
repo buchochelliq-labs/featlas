@@ -1,7 +1,8 @@
 # commands run by tools/make_evidence.sh
-candidate_commit: 4aa55166980d0e5aa1cfe421e156d66797741ac7
-dirty: 2 files
+candidate_commit: de231bab1b6861e5984ca5d258d2d3f2fb008bd4
+dirty: 19 files
 rustc: rustc 1.97.0 (2d8144b78 2026-07-07)
 fe-spec: fe-spec 0.1.0
-fe-spec sha256: 0ee14f715ad5f397840afb92d0ca4aa27cd9b44faa9e15eed896c2e42f7052c2
-Cargo.lock sha256: cb52be79e0b6831f646529af10c842f46e1d6dbc2829522b730d1b232e24ed93
+fe-spec sha256: 9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b
+Cargo.lock sha256: 9f9cd4d66c812bfc4bbb1870696442ce5dd6659d5fb09889750ce4a5c01574eb
+featlas 0.1.0 core 0.1.0 _native sha256 992c10145e6285d30a0e9cc3938a4857405786f72ad84e1bd524f31faf66790b

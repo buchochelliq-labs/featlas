@@ -9,12 +9,7 @@
 //! * bounded input (4 MiB document, 1 MiB per line beyond that rejected),
 //!   bounded output (8 MiB), per-call time limit, sequential execution.
 
-use crate::commands::{limits, now_utc};
-use featlas_adapters::{databricks, Registry};
-use featlas_core::canon::logical_identities;
-use featlas_core::capability::{capability_report, plan_deployment, AssessmentContext};
-use featlas_core::fixtures::{run_case, run_suites};
-use featlas_core::load::{load_project, LoadedProject};
+use featlas_api as api;
 use featlas_core::parse::Format;
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
@@ -65,107 +60,50 @@ pub fn tools() -> Vec<Value> {
     ]
 }
 
-fn load(args: &Value) -> Result<LoadedProject, Value> {
-    let format = if args["format"] == "json" {
-        Format::Json
-    } else {
-        Format::Yaml
-    };
-    let text = args["document"].as_str().unwrap_or("");
-    let (loaded, report) = load_project(text.as_bytes(), format);
-    match loaded {
-        Some(l) if report.passed() => Ok(l),
-        _ => Err(json!({"ok": false, "report": report})),
-    }
-}
-
 fn call(name: &str, args: &Value) -> Value {
-    let reg = Registry::default();
     let wrap = |mut v: Value, ok: bool| {
         v["schema"] = json!(TOOL_SCHEMA_VERSION);
         v["tool"] = json!(name);
         v["ok"] = json!(ok);
         v
     };
-    if name == "validate_v1" {
-        let format = if args["format"] == "json" {
-            Format::Json
-        } else {
-            Format::Yaml
-        };
-        let (loaded, report) =
-            load_project(args["document"].as_str().unwrap_or("").as_bytes(), format);
-        let passed = loaded.is_some() && report.passed();
-        return wrap(json!({"report": report}), passed);
-    }
-    let l = match load(args) {
-        Ok(l) => l,
-        Err(v) => return wrap(v, false),
+    let format = if args["format"] == "json" { Format::Json } else { Format::Yaml };
+    let doc = args["document"].as_str().unwrap_or("").as_bytes();
+    let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
+    // Same featlas-api functions as the CLI and the Python bindings (transport parity).
+    let result: api::ApiResult = match name {
+        "validate_v1" => {
+            let v = api::validate(doc, format);
+            let ok = v["passed"] == json!(true);
+            return wrap(v, ok);
+        }
+        "hash_v1" => api::hash(doc, format),
+        "explain_v1" => api::explain(doc, format, &s("feature")),
+        "plan_v1" => api::plan(doc, format, &s("deployment")).map(|v| {
+            let ok = v["plannable"] == json!(true);
+            json!({"outcome": v, "plannable": ok})
+        }),
+        "capabilities_v1" => api::capabilities(doc, format, &s("deployment"), None, Vec::new()).map(|r| json!({"report": r})),
+        "run_fixtures_v1" => api::run_fixtures(doc, format, args["suite"].as_str()),
+        "evaluate_fixture_v1" => api::evaluate_case(doc, format, &s("case")),
+        "generate_v1" => api::generate(doc, format, &s("deployment"), None).and_then(|g| {
+            let fs = s("feature_set");
+            let script = g["files"].get(format!("databricks/{fs}/script.sql")).cloned().ok_or_else(|| api::ApiError { code: "NO_GENERATED_CODE".into(), message: format!("No Databricks code for feature set {fs}"), detail: Value::Null })?;
+            Ok(json!({"script": script, "artifacts": g["artifacts"][&fs], "manifest": g["manifest"], "statement": "Not executed."}))
+        }),
+        _ => Err(api::ApiError { code: "UNKNOWN_TOOL".into(), message: name.into(), detail: Value::Null }),
     };
-    let p = &l.project;
-    match name {
-        "hash_v1" => wrap(
-            json!({"project_file_sha256": l.file_sha256, "logical": logical_identities(p)}),
-            true,
-        ),
-        "explain_v1" => match p.feature(args["feature"].as_str().unwrap_or("")) {
-            Some(f) => wrap(
-                json!({"feature": f, "fingerprint": logical_identities(p).features.get(&format!("{}@{}", f.id, f.version))}),
-                true,
-            ),
-            None => wrap(json!({"error": "UNKNOWN_FEATURE"}), false),
-        },
-        "plan_v1" | "capabilities_v1" | "generate_v1" => {
-            let d = args["deployment"].as_str().unwrap_or("");
-            let outcome =
-                plan_deployment(p, &l.file_sha256, d, &reg, &AssessmentContext::default());
-            if name == "plan_v1" {
-                let ok = outcome.plannable;
-                return wrap(serde_json::to_value(&outcome).unwrap(), ok);
-            }
-            if outcome.plan.is_none() {
-                return wrap(json!({"diagnostics": outcome.diagnostics}), false);
-            }
-            if name == "capabilities_v1" {
-                let r = capability_report(p, &l.file_sha256, d, &reg, &outcome, &now_utc());
-                return wrap(json!({"report": r}), true);
-            }
-            if !outcome.plannable {
-                return wrap(json!({"diagnostics": outcome.diagnostics}), false);
-            }
-            match databricks::lower(
-                outcome.plan.as_ref().unwrap(),
-                args["feature_set"].as_str().unwrap_or(""),
-                p,
-            ) {
-                Ok(a) => wrap(
-                    json!({"script": databricks::render_script(&a), "artifacts": a, "statement": "Not executed."}),
-                    true,
-                ),
-                Err(e) => wrap(json!({"error": e}), false),
-            }
+    match result {
+        Ok(v) => {
+            let ok = match name {
+                "plan_v1" => v["plannable"] == json!(true),
+                "run_fixtures_v1" => v["summary"]["failed"] == json!(0),
+                "evaluate_fixture_v1" => v["result"]["status"] != json!("failed"),
+                _ => true,
+            };
+            wrap(v, ok)
         }
-        "run_fixtures_v1" => {
-            let s = run_suites(p, args["suite"].as_str(), &limits(), false);
-            let ok = s.failed == 0;
-            wrap(json!({"summary": s}), ok)
-        }
-        "evaluate_fixture_v1" => {
-            let id = args["case"].as_str().unwrap_or("");
-            match p
-                .acceptance_suites
-                .iter()
-                .find_map(|s| s.cases.iter().find(|c| c.id == id).map(|c| (s, c)))
-            {
-                Some((s, c)) => {
-                    let r = run_case(p, s, c, &limits(), true);
-                    let ok = r.status != featlas_core::fixtures::CaseStatus::Failed;
-                    wrap(json!({"result": r}), ok)
-                }
-                None => wrap(json!({"error": "UNKNOWN_CASE"}), false),
-            }
-        }
-        _ => wrap(json!({"error": "UNKNOWN_TOOL"}), false),
+        Err(e) => wrap(json!({"error": e.to_json()}), false),
     }
 }
 

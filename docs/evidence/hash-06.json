@@ -1,6 +1,4 @@
 {
-  "schema": "featlas.cli/v1",
-  "command": "hash",
   "project_file_sha256": "656e0a4875bfd7779f46399116ad8939df64ef1e8c720bad8e968d82b835c3c5",
   "logical": {
     "canon": "featlas-canon/1",
@@ -28,5 +26,7 @@
     "fault_prod@1.0.0": "f19fc51466f7868d8776477d5eea63cd37c3ad7ca51fc2fc45a4bd27f1fa0827",
     "fault_alternative_store@1.0.0": "c622e48fbf25a67cf4751eb54e1308f812bbb727af92bdb24d59932a58ba191d"
   },
-  "note": "Logical fingerprints exclude documentation and all deployment bindings; the project-file digest and deployment identities are binding-sensitive."
+  "schema": "featlas.api/v1",
+  "operation": "hash",
+  "command": "hash"
 }

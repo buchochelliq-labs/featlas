@@ -13,10 +13,17 @@ spec clause it serves and, where the spec left a choice open, the interpretation
   `dev.featlas:memory_store` (test double), `dev.featlas:databricks` (Spark SQL lowering and
   Unity Catalog statements). The core resolves adapters only through the
   `AdapterRegistry`/`StoreRegistry` traits by exact `(implementation, version)`.
+* **Shared API** (`crates/featlas-api`): JSON-in/JSON-out functions used by the CLI, the MCP
+  server and the Python bindings, so transports cannot drift (parity is tested in
+  `python/tests/test_native.py::test_transport_parity_with_cli` and the CLI/MCP tests).
+* **Python bindings** (`crates/featlas-py`, PyO3 0.30, abi3-py312, built by maturin into
+  `featlas._native`; ergonomic wrapper `python/featlas`). Bindings pass exact document bytes and
+  JSON text across the boundary and return the API's JSON, release the GIL during core work and
+  map failures to `featlas.FeatlasError(code, message, detail)`. They add no semantics.
 * **Thin Python host** (`python/featlas_databricks`): executes generated statements in a
-  caller-provided Spark session (Databricks Connect or a job). It calls `fe-spec` for plans,
-  coverage states and consumer selection; it contains no temporal, typing, null or selection
-  rules. Boundary: subprocess + JSON (simple, auditable, no ABI coupling).
+  caller-provided Spark session (Databricks Connect or a job). It calls the core in-process via
+  the bindings for plans, code, coverage states and consumer selection; it contains no
+  temporal, typing, null or selection rules.
 * Repository was empty (greenfield), so the prompt's recommendation was followed.
 
 ## D2. Identity scopes (SEM-ID-004, SEM-PORT-008)

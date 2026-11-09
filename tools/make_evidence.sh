@@ -34,8 +34,12 @@ if [ -n "${KIT_PYTHON:-}" ]; then
   find spec -name __pycache__ -prune -exec rm -rf {} +
 fi
 if [ -n "${SPARK_PYTHON:-}" ]; then
-  (cd python && PYSPARK_PYTHON="$SPARK_PYTHON" PYSPARK_DRIVER_PYTHON="$SPARK_PYTHON" FEATLAS_FE_SPEC="../$B" FEATLAS_DIFFERENTIAL_REPORT="../$OUT/local-spark-differential.json" "$SPARK_PYTHON" -m pytest -q tests -p no:cacheprovider) > "$OUT/local-spark-pytest.txt" 2>&1 || true
-  tail -1 "$OUT/local-spark-pytest.txt"
+  # Build and install the PyO3 extension (featlas._native) into the Spark interpreter's environment.
+  (cd python && VIRTUAL_ENV="$(dirname "$(dirname "$SPARK_PYTHON")")" PATH="$(dirname "$SPARK_PYTHON"):$PATH" maturin develop --release) > "$OUT/maturin-build.txt" 2>&1
+  (cd python && PYSPARK_PYTHON="$SPARK_PYTHON" PYSPARK_DRIVER_PYTHON="$SPARK_PYTHON" FEATLAS_DIFFERENTIAL_REPORT="../$OUT/local-spark-differential.json" "$SPARK_PYTHON" -m pytest -q tests -p no:cacheprovider) > "$OUT/python-pytest.txt" 2>&1 || true
+  rm -f "$OUT/local-spark-pytest.txt"
+  "$SPARK_PYTHON" -c "import featlas, featlas._native as n, hashlib; print('featlas', featlas.__version__, 'core', featlas.CORE_VERSION, '_native sha256', hashlib.sha256(open(n.__file__,'rb').read()).hexdigest())" >> "$OUT/candidate.txt"
+  tail -1 "$OUT/python-pytest.txt"
 fi
 (cd "$OUT" && find . -type f ! -name SHA256SUMS | sort | xargs sha256sum > SHA256SUMS)
 echo "evidence written to $OUT"

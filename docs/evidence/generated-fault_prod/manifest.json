@@ -2,8 +2,9 @@
   "schema": "featlas.generation-manifest/v1",
   "generator": {
     "core": "0.1.0",
+    "api": "0.1.0",
     "cli": "0.1.0",
-    "executable_sha256": "0ee14f715ad5f397840afb92d0ca4aa27cd9b44faa9e15eed896c2e42f7052c2"
+    "executable_sha256": "9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b"
   },
   "project_file_sha256": "a09bc543bee57bba411f6e2a30676d0eefe223a7b747e4c2156db3a137ae7400",
   "deployment": {
@@ -20,19 +21,9 @@
   "execution_ready": false,
   "files": [
     {
-      "path": "plan.json",
-      "sha256": "b27dab7c0c989d3b4c4544cd3d13d005202b438cb0b5d6df0f1ab59037fe271d",
-      "bytes": 22272
-    },
-    {
       "path": "capability-report.json",
-      "sha256": "55c64e39c0c5fb0300331839b7ad7ffe26fe6dec3212cacc4201ddc7550bf6bf",
+      "sha256": "a6f33fe028a95dce0027a267121ad925714f222b300391b24604904f08b8e936",
       "bytes": 5061
-    },
-    {
-      "path": "planning-diagnostics.json",
-      "sha256": "60fef0be9f4757db584374e52dce88fa9b25359685f20e3a7f1a45527093602f",
-      "bytes": 347
     },
     {
       "path": "databricks/device_reliability/artifacts.json",
@@ -43,7 +34,17 @@
       "path": "databricks/device_reliability/script.sql",
       "sha256": "e724e8078cf13f005b2b2960f3f1796990f4b5380423f82fbe7e5caf5b52da23",
       "bytes": 9602
+    },
+    {
+      "path": "plan.json",
+      "sha256": "b27dab7c0c989d3b4c4544cd3d13d005202b438cb0b5d6df0f1ab59037fe271d",
+      "bytes": 22272
+    },
+    {
+      "path": "planning-diagnostics.json",
+      "sha256": "60fef0be9f4757db584374e52dce88fa9b25359685f20e3a7f1a45527093602f",
+      "bytes": 347
     }
   ],
-  "statement": "Generated code has not been executed by this command. No resource was created and nothing was published."
+  "statement": "Generated code has not been executed by this operation. No resource was created and nothing was published."
 }

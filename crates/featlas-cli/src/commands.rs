@@ -1,19 +1,16 @@
 use crate::OutFormat;
-use featlas_adapters::{databricks, LocalStores, Registry};
-use featlas_core::canon::{deployment_identity, logical_identities};
+use featlas_adapters::Registry;
+use featlas_core::canon::logical_identities;
 use featlas_core::capability::{
     capability_report, check_report as check_report_core, plan_deployment, AssessmentContext,
 };
-use featlas_core::consumer::{
-    serve, ConsumerRequest, PhysicalReadRequest, PublicationStore, StoreCommit, StoreRegistry,
-};
-use featlas_core::diag::{Diagnostic, EvalError};
-use featlas_core::eval::{coverage_state, Limits};
+use featlas_core::diag::Diagnostic;
+use featlas_core::eval::Limits;
 use featlas_core::fixtures::{run_suites, CaseStatus};
 use featlas_core::load::{load_path, sha256_hex, LoadReport, LoadedProject};
 use featlas_core::model::*;
 use featlas_core::time::Instant;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -94,6 +91,31 @@ macro_rules! loaded {
     };
 }
 
+
+fn fmt_of(path: &Path) -> featlas_core::parse::Format {
+    featlas_core::parse::Format::from_path(&path.to_string_lossy())
+}
+
+fn read_json(path: &Path) -> Result<Value, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    featlas_api::parse_json(&text).map_err(|e| e.to_string())
+}
+
+/// Print an API result envelope; errors become `{"error": ...}` with exit code 1.
+fn emit(command: &str, r: featlas_api::ApiResult) -> Result<ExitCode, String> {
+    match r {
+        Ok(mut v) => {
+            v["command"] = json!(command);
+            print_json(&v);
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(e) => {
+            print_json(&json!({"schema": CLI_SCHEMA, "command": command, "error": e.to_json()}));
+            Ok(ExitCode::from(1))
+        }
+    }
+}
+
 pub fn validate(path: &Path, format: OutFormat) -> Result<ExitCode, String> {
     let (loaded, report) = load_path(path)?;
     let passed = loaded.is_some() && report.passed();
@@ -122,24 +144,8 @@ pub fn validate(path: &Path, format: OutFormat) -> Result<ExitCode, String> {
 }
 
 pub fn hash(path: &Path) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(path, OutFormat::Json);
-    let ids = logical_identities(&l.project);
-    let deployments: Map<String, Value> = l
-        .project
-        .deployments
-        .iter()
-        .map(|d| {
-            (
-                format!("{}@{}", d.id, d.version),
-                json!(deployment_identity(&l.project, &d.id)),
-            )
-        })
-        .collect();
-    print_json(
-        &json!({"schema": CLI_SCHEMA, "command": "hash", "project_file_sha256": l.file_sha256, "logical": ids, "deployments": deployments,
-        "note": "Logical fingerprints exclude documentation and all deployment bindings; the project-file digest and deployment identities are binding-sensitive."}),
-    );
-    Ok(ExitCode::SUCCESS)
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    emit("hash", featlas_api::hash(&bytes, fmt_of(path)))
 }
 
 pub fn explain(path: &Path, feature: &str, format: OutFormat) -> Result<ExitCode, String> {
@@ -302,20 +308,16 @@ pub fn capabilities(
 }
 
 pub fn check_report(report: &Path, project: &Path) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(project, OutFormat::Json);
-    let bytes = std::fs::read(report).map_err(|e| e.to_string())?;
-    let doc = featlas_core::parse::parse_bytes(&bytes, featlas_core::parse::Format::Json)
-        .map_err(|d| format!("{:?}", d.iter().map(|x| x.to_string()).collect::<Vec<_>>()))?;
-    let diags = check_report_core(&doc.value, &l.project, &l.file_sha256);
-    print_json(
-        &json!({"schema": CLI_SCHEMA, "command": "check-report", "consistent": diags.is_empty(), "diagnostics": diags,
-        "scope": "Record consistency only; evidence is not fetched or authenticated and readiness is not certified."}),
-    );
-    Ok(if diags.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    })
+    let bytes = std::fs::read(project).map_err(|e| format!("{}: {e}", project.display()))?;
+    let r = read_json(report)?;
+    match featlas_api::check_report(&r, &bytes, fmt_of(project)) {
+        Ok(v) => {
+            let ok = v["consistent"] == json!(true);
+            print_json(&v);
+            Ok(if ok { ExitCode::SUCCESS } else { ExitCode::from(1) })
+        }
+        Err(e) => emit("check-report", Err(e)),
+    }
 }
 
 pub fn test(path: &Path, suite: Option<&str>, format: OutFormat) -> Result<ExitCode, String> {
@@ -389,232 +391,47 @@ pub fn evaluate(path: &Path, case_id: &str, format: OutFormat) -> Result<ExitCod
     })
 }
 
-pub fn coverage(
-    path: &Path,
-    deployment: &str,
-    feature_set: &str,
-    as_of: &str,
-    status: &Path,
-) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(path, OutFormat::Json);
-    let p = &l.project;
-    let as_of = Instant::parse(as_of)?;
-    let text = std::fs::read(status).map_err(|e| e.to_string())?;
-    let doc =
-        featlas_core::parse::parse_bytes(&wrap_array(&text)?, featlas_core::parse::Format::Json)
-            .map_err(|d| format!("{:?}", d.iter().map(|x| x.to_string()).collect::<Vec<_>>()))?;
-    let statuses: Vec<SourceStatus> = serde_json::from_value(doc.value["items"].clone())
-        .map_err(|e| format!("status records: {e}"))?;
-    let plan = featlas_core::plan::build_plan(p, &l.file_sha256, deployment)
-        .ok_or("Unknown deployment")?;
-    let fs = plan
-        .logical
-        .feature_sets
-        .iter()
-        .find(|x| x.id == feature_set)
-        .ok_or("Feature set is not targeted by the deployment")?;
-    let mut out = Map::new();
-    for f in &fs.features {
-        let model = p.feature(&f.id).ok_or("unknown feature")?;
-        let st = coverage_state(p, model, as_of, &statuses).map_err(|e| e.to_string())?;
-        let policy = match st {
-            Some("source_unavailable") => Some(model.missingness.source_unavailable),
-            Some(_) => Some(model.missingness.insufficient_history),
-            None => None,
-        };
-        out.insert(f.id.clone(), json!({"coverage_state": st.unwrap_or("established"), "policy": policy, "variant": if st.is_some() { "degraded" } else { "computed" }}));
-    }
-    print_json(
-        &json!({"schema": CLI_SCHEMA, "command": "coverage", "as_of": as_of.to_string(), "features": out}),
-    );
-    Ok(ExitCode::SUCCESS)
-}
-
-fn wrap_array(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let s = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-    Ok(format!("{{\"items\": {s}}}").into_bytes())
-}
-
-fn write_file(out: &Path, rel: &str, body: &str, files: &mut Vec<Value>) -> Result<(), String> {
-    let path = out.join(rel);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, body).map_err(|e| format!("{}: {e}", path.display()))?;
-    files.push(json!({"path": rel, "sha256": sha256_hex(body.as_bytes()), "bytes": body.len()}));
-    Ok(())
+pub fn coverage(path: &Path, deployment: &str, feature_set: &str, as_of: &str, status: &Path) -> Result<ExitCode, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let statuses = read_json(status)?;
+    emit("coverage", featlas_api::coverage(&bytes, fmt_of(path), deployment, feature_set, as_of, &statuses))
 }
 
 pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(path, OutFormat::Text);
-    let reg = Registry::default();
-    let outcome = plan_deployment(
-        &l.project,
-        &l.file_sha256,
-        deployment,
-        &reg,
-        &AssessmentContext::default(),
-    );
-    if !outcome.plannable {
-        print_diags(&outcome.diagnostics);
-        println!("Not generated: planning failed (unsupported or unresolved requirements block code generation).");
-        return Ok(ExitCode::from(1));
-    }
-    let plan = outcome.plan.as_ref().unwrap();
-    let mut files = Vec::new();
-    write_file(
-        out,
-        "plan.json",
-        &serde_json::to_string_pretty(plan).unwrap(),
-        &mut files,
-    )?;
-    let report = capability_report(
-        &l.project,
-        &l.file_sha256,
-        deployment,
-        &reg,
-        &outcome,
-        &now_utc(),
-    );
-    write_file(
-        out,
-        "capability-report.json",
-        &serde_json::to_string_pretty(&report).unwrap(),
-        &mut files,
-    )?;
-    write_file(
-        out,
-        "planning-diagnostics.json",
-        &serde_json::to_string_pretty(&outcome.diagnostics).unwrap(),
-        &mut files,
-    )?;
-    let d = l.project.deployment(deployment).unwrap();
-    let compute = d.adapter(&d.execution.compute).unwrap();
-    let mut generated = Vec::new();
-    if compute.implementation == databricks::IMPLEMENTATION {
-        for fs in &plan.logical.feature_sets {
-            let art = databricks::lower(plan, &fs.id, &l.project)?;
-            let dir = format!("databricks/{}", fs.id.replace(['/', '\\'], "_"));
-            write_file(
-                out,
-                &format!("{dir}/artifacts.json"),
-                &serde_json::to_string_pretty(&art).unwrap(),
-                &mut files,
-            )?;
-            write_file(
-                out,
-                &format!("{dir}/script.sql"),
-                &databricks::render_script(&art),
-                &mut files,
-            )?;
-            generated.push(dir);
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let gen = match featlas_api::generate(&bytes, fmt_of(path), deployment, None) {
+        Ok(g) => g,
+        Err(e) => {
+            if let Some(diags) = e.detail.as_array() {
+                for d in diags {
+                    println!("{} {} [{}]: {}", d["severity"].as_str().unwrap_or(""), d["code"].as_str().unwrap_or(""), d["rule"].as_str().unwrap_or(""), d["message"].as_str().unwrap_or(""));
+                }
+            }
+            println!("Not generated: {e}");
+            return Ok(ExitCode::from(1));
         }
+    };
+    let files = gen["files"].as_object().cloned().unwrap_or_default();
+    for (rel, content) in &files {
+        let target = out.join(rel);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&target, content.as_str().unwrap_or("")).map_err(|e| format!("{}: {e}", target.display()))?;
     }
-    let manifest = json!({
-        "schema": "featlas.generation-manifest/v1",
-        "generator": {"core": featlas_core::plan::CORE_VERSION, "cli": env!("CARGO_PKG_VERSION"), "executable_sha256": featlas_adapters::local::executable_sha256()},
-        "project_file_sha256": l.file_sha256,
-        "deployment": {"id": d.id, "version": d.version, "identity": plan.bindings.deployment_identity},
-        "plan_digest": plan.plan_digest,
-        "logical_plan_digest": plan.logical_plan_digest,
-        "compute_adapter": {"implementation": compute.implementation, "version": compute.version},
-        "execution_ready": outcome.execution_ready,
-        "files": files,
-        "statement": "Generated code has not been executed by this command. No resource was created and nothing was published.",
-    });
-    std::fs::write(
-        out.join("manifest.json"),
-        serde_json::to_string_pretty(&manifest).unwrap(),
-    )
-    .map_err(|e| e.to_string())?;
-    println!(
-        "Generated {} files under {} (code for: {:?}); execution_ready={}",
-        files.len() + 1,
-        out.display(),
-        generated,
-        outcome.execution_ready
-    );
+    let mut manifest = gen["manifest"].clone();
+    manifest["generator"]["cli"] = json!(env!("CARGO_PKG_VERSION"));
+    manifest["generator"]["executable_sha256"] = json!(featlas_adapters::local::executable_sha256());
+    std::fs::write(out.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
+    println!("Generated {} files under {}; execution_ready={}", files.len() + 1, out.display(), manifest["execution_ready"]);
     Ok(ExitCode::SUCCESS)
 }
 
-/// Physical records already read by an external host for the bound adapter.
-struct HostRecords {
-    rows: Vec<Map<String, Value>>,
-}
-
-impl PublicationStore for HostRecords {
-    fn read(
-        &self,
-        _: &AdapterInstance,
-        req: &PhysicalReadRequest,
-    ) -> Result<Vec<Map<String, Value>>, EvalError> {
-        Ok(self
-            .rows
-            .iter()
-            .filter(|r| {
-                req.keys.iter().any(|k| {
-                    req.key_columns
-                        .iter()
-                        .zip(k)
-                        .all(|(c, v)| r.get(c) == Some(v))
-                })
-            })
-            .cloned()
-            .collect())
-    }
-    fn write(
-        &self,
-        _: &AdapterInstance,
-        _: &Location,
-        _: Vec<Map<String, Value>>,
-    ) -> Result<StoreCommit, EvalError> {
-        Err(EvalError::new(
-            "READ_ONLY",
-            "SEM-CONF-002",
-            "Host-supplied records are read-only",
-        ))
-    }
-}
-
-impl StoreRegistry for HostRecords {
-    fn store(&self, _: &str, _: &str) -> Option<&dyn PublicationStore> {
-        Some(self)
-    }
-}
-
 pub fn consume(path: &Path, request: &Path, records: Option<&Path>) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(path, OutFormat::Json);
-    let bytes = std::fs::read(request).map_err(|e| e.to_string())?;
-    let doc = featlas_core::parse::parse_bytes(&bytes, featlas_core::parse::Format::Json)
-        .map_err(|d| format!("{:?}", d.iter().map(|x| x.to_string()).collect::<Vec<_>>()))?;
-    let req: ConsumerRequest =
-        serde_json::from_value(doc.value).map_err(|e| format!("consumer request: {e}"))?;
-    let result = match records {
-        Some(r) => {
-            let raw = std::fs::read(r).map_err(|e| e.to_string())?;
-            let parsed = featlas_core::parse::parse_bytes(
-                &wrap_array(&raw)?,
-                featlas_core::parse::Format::Json,
-            )
-            .map_err(|d| format!("{:?}", d.iter().map(|x| x.to_string()).collect::<Vec<_>>()))?;
-            let rows: Vec<Map<String, Value>> =
-                serde_json::from_value(parsed.value["items"].clone()).map_err(|e| e.to_string())?;
-            serve(&l.project, &HostRecords { rows }, &req, 100_000)
-        }
-        None => serve(&l.project, &LocalStores::new(now_utc), &req, 100_000),
-    };
-    match result {
-        Ok(resp) => {
-            print_json(&json!({"schema": CLI_SCHEMA, "command": "consume", "response": resp}));
-            Ok(ExitCode::SUCCESS)
-        }
-        Err(e) => {
-            print_json(
-                &json!({"schema": CLI_SCHEMA, "command": "consume", "error": {"code": e.code, "rule": e.rule, "message": e.message}}),
-            );
-            Ok(ExitCode::from(1))
-        }
-    }
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let req = read_json(request)?;
+    let recs = records.map(read_json).transpose()?;
+    emit("consume", featlas_api::consume(&bytes, fmt_of(path), &req, recs.as_ref()))
 }
 
 pub fn migration_plan(
@@ -647,22 +464,7 @@ pub fn migration_plan(
 }
 
 pub fn label(path: &Path, consumer: &str, input: &Path) -> Result<ExitCode, String> {
-    let (l, _) = loaded!(path, OutFormat::Json);
-    let bytes = std::fs::read(input).map_err(|e| e.to_string())?;
-    let doc = featlas_core::parse::parse_bytes(&bytes, featlas_core::parse::Format::Json)
-        .map_err(|d| format!("{:?}", d.iter().map(|x| x.to_string()).collect::<Vec<_>>()))?;
-    let li: featlas_core::label::LabelInput =
-        serde_json::from_value(doc.value).map_err(|e| e.to_string())?;
-    match featlas_core::label::build_labels(&l.project, consumer, &li, &limits()) {
-        Ok(ds) => {
-            print_json(&json!({"schema": CLI_SCHEMA, "command": "label", "dataset": ds}));
-            Ok(ExitCode::SUCCESS)
-        }
-        Err(e) => {
-            print_json(
-                &json!({"schema": CLI_SCHEMA, "command": "label", "error": {"code": e.code, "rule": e.rule, "message": e.message}}),
-            );
-            Ok(ExitCode::from(1))
-        }
-    }
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let li = read_json(input)?;
+    emit("label", featlas_api::labels(&bytes, fmt_of(path), consumer, &li))
 }

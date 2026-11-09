@@ -1,6 +1,4 @@
 {
-  "schema": "featlas.cli/v1",
-  "command": "check-report",
   "consistent": false,
   "diagnostics": [
     {
@@ -12,5 +10,7 @@
       "message": "Missing assessment for databricks_platform/orchestrator/core.scheduling (planner-derived)"
     }
   ],
-  "scope": "Record consistency only; evidence is not fetched or authenticated and readiness is not certified."
+  "scope": "Record consistency only; evidence is not fetched or authenticated and readiness is not certified.",
+  "schema": "featlas.api/v1",
+  "operation": "check_report"
 }

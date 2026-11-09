@@ -96,4 +96,5 @@ def test_custom_contract_deployment_is_rejected_before_code_generation(core):
 
     with pytest.raises(CoreError) as e:
         core.generate(str(ROOT / "projects" / "04_fitted_and_custom_contracts.yaml"), "contracts_prod", tempfile.mkdtemp())
-    assert e.value.exit_code == 1
+    assert e.value.code == "PLANNING_FAILED"
+    assert any(d["code"] == "UNSUPPORTED_CAPABILITY" for d in e.value.detail)

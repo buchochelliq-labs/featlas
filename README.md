@@ -10,9 +10,14 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
   dispatch.
 * **`crates/featlas-adapters`** — `dev.featlas:local_reference`, `dev.featlas:memory_store`
   (test double) and `dev.featlas:databricks` (Spark SQL lowering, Unity Catalog statements).
+* **`crates/featlas-api`** — transport-neutral JSON API; the CLI, the MCP server and the Python
+  bindings all call it, so every transport returns identical results.
 * **`crates/featlas-cli`** — the `fe-spec` CLI and a read-only MCP stdio server.
+* **`crates/featlas-py`** — PyO3 bindings, built by maturin into the `featlas._native` extension
+  (abi3, CPython ≥ 3.12).
+* **`python/featlas`** — the Python package: `Project` wrapper over the native core.
 * **`python/featlas_databricks`** — thin host that runs core-generated statements in a Spark
-  session and hands physical records back to the core; no semantics of its own.
+  session, calling the core in-process through `featlas`; no semantics of its own.
 
 ## Status (read before relying on it)
 
@@ -53,12 +58,31 @@ identical.
 No command deploys, publishes or creates resources. Publication to Databricks requires the host
 CLI's explicit `--publish` flags and an authorized environment.
 
+## Python bindings
+
+```sh
+cd python
+pip install maturin
+maturin develop --release        # or: maturin build --release && pip install target/wheels/*.whl
+python -c "
+from featlas import Project
+p = Project.from_path('../spec/feature-engineering-spec-v0.2.0/examples/01_fault_count.yaml')
+print(p.run_fixtures()['summary']['passed'], p.file_sha256)
+"
+```
+
+`Project` exposes `hash`, `explain`, `plan`, `capabilities`, `check_report`, `run_fixtures`,
+`evaluate_case`, `coverage`, `generate` (in memory; returns file contents), `consume`,
+`migration_plan` and `labels`. Documents are passed as exact bytes, so `file_sha256` matches the
+CLI. Failures raise `featlas.FeatlasError` with `code`, `message` and structured `detail`. The GIL
+is released while the core runs.
+
 ## Tests and evidence
 
 ```sh
 cargo test
-# Local Spark differential (needs Java 17+, pyspark==4.0.1, PyYAML, pytest):
-cd python && PYSPARK_PYTHON=$(which python) python -m pytest -q tests
+# Bindings + local Spark differential (needs maturin; Java 17+ and pyspark==4.0.1 for Spark):
+cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) python -m pytest -q tests
 # Regenerate docs/evidence (KIT_PYTHON / SPARK_PYTHON optional):
 ./tools/make_evidence.sh
 ```

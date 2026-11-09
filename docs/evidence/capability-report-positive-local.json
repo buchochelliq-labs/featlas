@@ -15,7 +15,7 @@
       "id": "local_reference",
       "implementation": "dev.featlas:local_reference",
       "version": "0.1.0",
-      "implementation_sha256": "0ee14f715ad5f397840afb92d0ca4aa27cd9b44faa9e15eed896c2e42f7052c2",
+      "implementation_sha256": "9e0f5fa67e13510457961f76627d0cdf52581f61b83daaef7427e3b5db227d3b",
       "runtime_versions": {
         "featlas-core": "0.1.0",
         "target": "x86_64-linux"

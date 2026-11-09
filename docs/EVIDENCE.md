@@ -11,9 +11,10 @@ SHA-256 `347e812228d72faa5140ea50344bc4dfef8a6772669cc5eaa2411c2031d9d042`).
 | Check | Result |
 | --- | --- |
 | Supplied kit: `verify_bundle.py`, `verify_manifest.py` (Python 3.12, PyYAML 6.0.3, jsonschema 4.26.0, referencing 0.37.0) | PASS: 12 schemas, 7 projects, 50/50 fixtures, 3 adapter cases not executed, 127 tests, manifest 52/52 |
-| `cargo test --release` (rustc 1.97.0) | 61 tests passed, 0 failed |
+| `cargo test --release` (rustc 1.97.0) | 62 tests passed, 0 failed |
 | `fe-spec test` on all 7 examples | 50 passed, 0 failed, 3 not executed (adapter_required suite of example 04) |
 | `fe-spec validate` on 7 examples + 7 derived projects | all PASS (parse, schema, references) |
+| Python bindings (`maturin develop --release`, PyO3 0.30, abi3 ≥3.12) | 15 binding tests passed, including byte-identical fixture results and logical hashes vs the CLI |
 | Local Apache Spark differential (`pyspark==4.0.1`, OpenJDK 21, local[1]) | 47 passed: 46 reference cases from projects 01, 02, 03, 05, 06 executed through generated Spark SQL (source-as-known cases) or generated consumer-read SQL + core consumer API (replay cases) and compared with goldens **and** the core; 1 rejection test (custom contract not generated) |
 | Capability reports | positive local (`execution_ready: true`, scope `local_reference`); Databricks `unverified` (scopes `static`/`declaration`, `execution_ready: false`); custom contract `unsupported` |
 | Kit sample report vs example 06 | flagged `REPORT_REQUIRED_CAPABILITY_MISSING` for the planner-derived `core.scheduling` requirement |
