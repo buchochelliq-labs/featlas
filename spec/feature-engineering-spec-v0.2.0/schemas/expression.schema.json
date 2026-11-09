@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/feature-engineering-spec/0.2.0/expression.schema.json",
+  "title": "Expression AST Specification 0.1.0",
+  "description": "Convenience entry point. Resolve project.schema.json from this archive locally; do not fetch the reserved example.org identifier.",
+  "$ref": "project.schema.json#/$defs/expression"
+}

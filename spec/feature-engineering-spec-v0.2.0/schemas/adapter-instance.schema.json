@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/feature-engineering-spec/0.2.0/adapter-instance.schema.json",
+  "title": "Adapter Instance 0.2.0",
+  "$ref": "project.schema.json#/$defs/adapterInstance"
+}

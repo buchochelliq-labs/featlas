@@ -1,0 +1,120 @@
+{
+  "spec_version": "0.2.0",
+  "kind": "AdapterCapabilityReport",
+  "project_id": "fault_count_example",
+  "project_version": "1.0.0",
+  "project_file_sha256": "1ccf1ce1cce00676c08fa0e9c017bcaf3dd355a5c825cb141a16a409de121c08",
+  "deployment": {
+    "id": "fault_prod",
+    "version": "1.0.0"
+  },
+  "assessed_at": "2026-11-09T18:48:11Z",
+  "execution_scope": "external_target",
+  "adapters": [
+    {
+      "id": "databricks_platform",
+      "implementation": "org.example.fe_spec:databricks",
+      "version": "0.0.0-example",
+      "implementation_sha256": null,
+      "runtime_versions": {}
+    }
+  ],
+  "checks": [
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.aggregate",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.expression",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.revision_reconstruction",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.as_of_join",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "compute",
+      "capability": "core.source_as_known",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.serving_replay",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "catalog",
+      "capability": "core.source_read",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    },
+    {
+      "adapter": "databricks_platform",
+      "role": "offline_store",
+      "capability": "core.atomic_publication",
+      "status": "unverified",
+      "evidence_scope": "declaration",
+      "evidence": [],
+      "limitations": [
+        "Required by the specification; no installed adapter or live target result has been observed."
+      ]
+    }
+  ],
+  "execution_ready": false,
+  "limitations": [
+    "This is an honest requirement inventory for the exact example project bytes, not a Databricks capability certification.",
+    "The adapter version is illustrative. No production adapter implementation, runtime/package installation, or workspace capability was verified.",
+    "The production planner must derive the complete transitive requirement set; this example enumerates only explicit deployment requirements.",
+    "No cloud execution, publication, online visibility, or historical serving replay was performed.",
+    "Local report checking validates consistency only and does not fetch evidence references or authenticate claimed runtime observations."
+  ]
+}

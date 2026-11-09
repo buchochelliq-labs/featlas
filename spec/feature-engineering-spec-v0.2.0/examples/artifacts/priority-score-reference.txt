@@ -1,0 +1,11 @@
+Synthetic custom contract fixture, version 1.0.0.
+This text is an immutable behavioral reference, not an installed runtime adapter.
+An adapter must implement and independently test the following scalar operation.
+
+FUNCTION priority_score(z: nullable finite binary64) -> nullable binary64:
+    IF z IS NULL: RETURN NULL
+    RETURN MIN(1.0, MAX(0.0, z / 4.0))
+
+No I/O, clocks, randomness, mutable state, network calls or other side effects.
+Null propagation is intentional. Positive finite inputs produce values in [0, 1].
+Execution failure is a diagnostic and cannot be converted into a zero value.
