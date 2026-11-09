@@ -12,7 +12,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "fe-spec", version, about = "Feature engineering specification 0.2.0 toolchain (featlas)")]
+#[command(
+    name = "fe-spec",
+    version,
+    about = "Feature engineering specification 0.2.0 toolchain (featlas)"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -149,19 +153,65 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command {
         Command::Validate { project, format } => commands::validate(&project, format),
-        Command::Explain { project, feature, format } => commands::explain(&project, &feature, format),
+        Command::Explain {
+            project,
+            feature,
+            format,
+        } => commands::explain(&project, &feature, format),
         Command::Hash { project } => commands::hash(&project),
-        Command::Plan { project, deployment, format } => commands::plan(&project, &deployment, format),
-        Command::Capabilities { project, deployment, evidence_dir, assessed_at } => commands::capabilities(&project, &deployment, evidence_dir.as_deref(), assessed_at),
+        Command::Plan {
+            project,
+            deployment,
+            format,
+        } => commands::plan(&project, &deployment, format),
+        Command::Capabilities {
+            project,
+            deployment,
+            evidence_dir,
+            assessed_at,
+        } => commands::capabilities(&project, &deployment, evidence_dir.as_deref(), assessed_at),
         Command::CheckReport { report, project } => commands::check_report(&report, &project),
-        Command::Test { project, suite, format } => commands::test(&project, suite.as_deref(), format),
-        Command::Evaluate { project, fixture, format } => commands::evaluate(&project, &fixture, format),
-        Command::Coverage { project, deployment, feature_set, as_of, status } => commands::coverage(&project, &deployment, &feature_set, &as_of, &status),
-        Command::Generate { project, deployment, out } => commands::generate(&project, &deployment, &out),
-        Command::Consume { project, request, records } => commands::consume(&project, &request, records.as_deref()),
-        Command::MigrationPlan { project, from, to, format } => commands::migration_plan(&project, &from, &to, format),
-        Command::Label { project, consumer, input } => commands::label(&project, &consumer, &input),
-        Command::Mcp { action: McpAction::Serve } => mcp::serve(),
+        Command::Test {
+            project,
+            suite,
+            format,
+        } => commands::test(&project, suite.as_deref(), format),
+        Command::Evaluate {
+            project,
+            fixture,
+            format,
+        } => commands::evaluate(&project, &fixture, format),
+        Command::Coverage {
+            project,
+            deployment,
+            feature_set,
+            as_of,
+            status,
+        } => commands::coverage(&project, &deployment, &feature_set, &as_of, &status),
+        Command::Generate {
+            project,
+            deployment,
+            out,
+        } => commands::generate(&project, &deployment, &out),
+        Command::Consume {
+            project,
+            request,
+            records,
+        } => commands::consume(&project, &request, records.as_deref()),
+        Command::MigrationPlan {
+            project,
+            from,
+            to,
+            format,
+        } => commands::migration_plan(&project, &from, &to, format),
+        Command::Label {
+            project,
+            consumer,
+            input,
+        } => commands::label(&project, &consumer, &input),
+        Command::Mcp {
+            action: McpAction::Serve,
+        } => mcp::serve(),
     };
     match result {
         Ok(code) => code,

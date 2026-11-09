@@ -130,19 +130,32 @@ pub enum DuplicatePolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RecordSemantics {
-    AppendOnly { logical_key: Vec<String>, duplicate_policy: DuplicatePolicy },
-    Versioned { logical_key: Vec<String>, duplicate_policy: DuplicatePolicy, revision: Revision },
+    AppendOnly {
+        logical_key: Vec<String>,
+        duplicate_policy: DuplicatePolicy,
+    },
+    Versioned {
+        logical_key: Vec<String>,
+        duplicate_policy: DuplicatePolicy,
+        revision: Revision,
+    },
 }
 
 impl RecordSemantics {
     pub fn logical_key(&self) -> &[String] {
         match self {
-            RecordSemantics::AppendOnly { logical_key, .. } | RecordSemantics::Versioned { logical_key, .. } => logical_key,
+            RecordSemantics::AppendOnly { logical_key, .. }
+            | RecordSemantics::Versioned { logical_key, .. } => logical_key,
         }
     }
     pub fn duplicate_policy(&self) -> DuplicatePolicy {
         match self {
-            RecordSemantics::AppendOnly { duplicate_policy, .. } | RecordSemantics::Versioned { duplicate_policy, .. } => *duplicate_policy,
+            RecordSemantics::AppendOnly {
+                duplicate_policy, ..
+            }
+            | RecordSemantics::Versioned {
+                duplicate_policy, ..
+            } => *duplicate_policy,
         }
     }
     pub fn revision(&self) -> Option<&Revision> {
@@ -274,7 +287,14 @@ pub struct Endpoint {
 #[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RelationshipTemporal {
     None,
-    AsOf { reference: String, valid_from: String, valid_to: String, lower: Boundary, upper: Boundary, available_time_cutoff: String },
+    AsOf {
+        reference: String,
+        valid_from: String,
+        valid_to: String,
+        lower: Boundary,
+        upper: Boundary,
+        available_time_cutoff: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -335,9 +355,18 @@ pub enum Expr {
         ty: String,
         value: Value,
     },
-    Column { input: String, column: String },
-    Feature { feature: String, version: String },
-    Call { operator: Operator, args: Vec<Expr> },
+    Column {
+        input: String,
+        column: String,
+    },
+    Feature {
+        feature: String,
+        version: String,
+    },
+    Call {
+        operator: Operator,
+        args: Vec<Expr>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -592,9 +621,27 @@ impl Transform {
     /// The row-level shape shared by aggregate, recency and lookup.
     pub fn row_shape(&self) -> Option<(&str, &[Join], &[GroupKey], Option<&Expr>)> {
         match self {
-            Transform::Aggregate { input, joins, group_by, filter, .. }
-            | Transform::Recency { input, joins, group_by, filter, .. }
-            | Transform::Lookup { input, joins, group_by, filter, .. } => Some((input, joins, group_by, filter.as_ref())),
+            Transform::Aggregate {
+                input,
+                joins,
+                group_by,
+                filter,
+                ..
+            }
+            | Transform::Recency {
+                input,
+                joins,
+                group_by,
+                filter,
+                ..
+            }
+            | Transform::Lookup {
+                input,
+                joins,
+                group_by,
+                filter,
+                ..
+            } => Some((input, joins, group_by, filter.as_ref())),
             _ => None,
         }
     }
@@ -691,14 +738,20 @@ pub enum QualityCheck {
         maximum: Option<f64>,
         severity: String,
     },
-    NotNull { severity: String },
-    Finite { severity: String },
+    NotNull {
+        severity: String,
+    },
+    Finite {
+        severity: String,
+    },
 }
 
 impl QualityCheck {
     pub fn severity(&self) -> &str {
         match self {
-            QualityCheck::Range { severity, .. } | QualityCheck::NotNull { severity } | QualityCheck::Finite { severity } => severity,
+            QualityCheck::Range { severity, .. }
+            | QualityCheck::NotNull { severity }
+            | QualityCheck::Finite { severity } => severity,
         }
     }
 }
@@ -866,10 +919,22 @@ pub struct Consumer {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Location {
-    File { path: String, format: String },
-    Table { namespace: Vec<String>, name: String, format: String },
-    Resource { uri: String, format: String },
-    Fixture { suite: String },
+    File {
+        path: String,
+        format: String,
+    },
+    Table {
+        namespace: Vec<String>,
+        name: String,
+        format: String,
+    },
+    Resource {
+        uri: String,
+        format: String,
+    },
+    Fixture {
+        suite: String,
+    },
 }
 
 impl Location {
@@ -877,8 +942,14 @@ impl Location {
     pub fn address(&self) -> String {
         match self {
             Location::File { path, .. } => format!("file:{path}"),
-            Location::Table { namespace, name, .. } => {
-                let parts: Vec<String> = namespace.iter().chain(std::iter::once(name)).map(|p| serde_json::to_string(p).unwrap()).collect();
+            Location::Table {
+                namespace, name, ..
+            } => {
+                let parts: Vec<String> = namespace
+                    .iter()
+                    .chain(std::iter::once(name))
+                    .map(|p| serde_json::to_string(p).unwrap())
+                    .collect();
                 format!("table:[{}]", parts.join(","))
             }
             Location::Resource { uri, .. } => format!("resource:{uri}"),
@@ -959,7 +1030,10 @@ pub struct OutputTarget {
 #[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Schedule {
     Manual,
-    Interval { every_seconds: i64, offset_seconds: i64 },
+    Interval {
+        every_seconds: i64,
+        offset_seconds: i64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1004,8 +1078,16 @@ pub struct DeploymentPublication {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Backfill {
-    Allowed { allowed: bool, start: String, end: String, mode: String, publish: String },
-    Disabled { allowed: bool },
+    Allowed {
+        allowed: bool,
+        start: String,
+        end: String,
+        mode: String,
+        publish: String,
+    },
+    Disabled {
+        allowed: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -1179,8 +1261,14 @@ pub struct PublishedValue {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SourceStatus {
-    Available { source: String, coverage_start: String, coverage_end: String },
-    Unavailable { source: String },
+    Available {
+        source: String,
+        coverage_start: String,
+        coverage_end: String,
+    },
+    Unavailable {
+        source: String,
+    },
 }
 
 impl SourceStatus {

@@ -64,11 +64,27 @@ pub fn load_project(bytes: &[u8], format: Format) -> (Option<LoadedProject>, Loa
     let file_sha256 = sha256_hex(bytes);
     let document = match parse_bytes(bytes, format) {
         Ok(d) => d,
-        Err(diagnostics) => return (None, LoadReport { file_sha256, stages: stages([Failed, NotEvaluated, NotEvaluated]), diagnostics }),
+        Err(diagnostics) => {
+            return (
+                None,
+                LoadReport {
+                    file_sha256,
+                    stages: stages([Failed, NotEvaluated, NotEvaluated]),
+                    diagnostics,
+                },
+            )
+        }
     };
     let mut diagnostics = validate_project(&document);
     if has_errors(&diagnostics) {
-        return (None, LoadReport { file_sha256, stages: stages([Passed, Failed, NotEvaluated]), diagnostics });
+        return (
+            None,
+            LoadReport {
+                file_sha256,
+                stages: stages([Passed, Failed, NotEvaluated]),
+                diagnostics,
+            },
+        );
     }
     let project: Project = match serde_json::from_value(document.value.clone()) {
         Ok(p) => p,
@@ -80,7 +96,14 @@ pub fn load_project(bytes: &[u8], format: Format) -> (Option<LoadedProject>, Loa
                 "",
                 format!("Schema-valid document does not match the canonical model; report this schema/model conflict: {e}"),
             ));
-            return (None, LoadReport { file_sha256, stages: stages([Passed, Failed, NotEvaluated]), diagnostics });
+            return (
+                None,
+                LoadReport {
+                    file_sha256,
+                    stages: stages([Passed, Failed, NotEvaluated]),
+                    diagnostics,
+                },
+            );
         }
     };
     let mut semantic = semantic_diagnostics(&project);
@@ -91,15 +114,33 @@ pub fn load_project(bytes: &[u8], format: Format) -> (Option<LoadedProject>, Loa
     }
     let failed = has_errors(&semantic);
     diagnostics.extend(semantic);
-    let loaded = LoadedProject { document, project, file_sha256: file_sha256.clone() };
+    let loaded = LoadedProject {
+        document,
+        project,
+        file_sha256: file_sha256.clone(),
+    };
     let status = if failed { Failed } else { Passed };
-    (Some(loaded), LoadReport { file_sha256, stages: stages([Passed, Passed, status]), diagnostics })
+    (
+        Some(loaded),
+        LoadReport {
+            file_sha256,
+            stages: stages([Passed, Passed, status]),
+            diagnostics,
+        },
+    )
 }
 
 pub fn load_path(path: &std::path::Path) -> Result<(Option<LoadedProject>, LoadReport), String> {
     let bytes = std::fs::read(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     if bytes.len() > crate::parse::MAX_DOCUMENT_BYTES {
-        return Err(format!("{} exceeds the {}-byte document limit", path.display(), crate::parse::MAX_DOCUMENT_BYTES));
+        return Err(format!(
+            "{} exceeds the {}-byte document limit",
+            path.display(),
+            crate::parse::MAX_DOCUMENT_BYTES
+        ));
     }
-    Ok(load_project(&bytes, Format::from_path(&path.to_string_lossy())))
+    Ok(load_project(
+        &bytes,
+        Format::from_path(&path.to_string_lossy()),
+    ))
 }

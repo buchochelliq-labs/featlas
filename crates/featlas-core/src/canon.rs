@@ -108,7 +108,12 @@ pub fn digest(v: &Value) -> String {
 
 fn strip_docs(v: &Value) -> Value {
     match v {
-        Value::Object(m) => Value::Object(m.iter().filter(|(k, _)| !DOC_KEYS.contains(&k.as_str())).map(|(k, v)| (k.clone(), strip_docs(v))).collect()),
+        Value::Object(m) => Value::Object(
+            m.iter()
+                .filter(|(k, _)| !DOC_KEYS.contains(&k.as_str()))
+                .map(|(k, v)| (k.clone(), strip_docs(v)))
+                .collect(),
+        ),
         Value::Array(a) => Value::Array(a.iter().map(strip_docs).collect()),
         other => other.clone(),
     }
@@ -118,7 +123,11 @@ fn strip_docs(v: &Value) -> Value {
 pub fn project_object<T: serde::Serialize>(obj: &T) -> Value {
     let v = serde_json::to_value(obj).expect("serializable model");
     match strip_docs(&v) {
-        Value::Object(m) => Value::Object(m.into_iter().filter(|(k, _)| !TOP_DOC_KEYS.contains(&k.as_str())).collect()),
+        Value::Object(m) => Value::Object(
+            m.into_iter()
+                .filter(|(k, _)| !TOP_DOC_KEYS.contains(&k.as_str()))
+                .collect(),
+        ),
         other => other,
     }
 }
@@ -147,7 +156,11 @@ pub struct LogicalIdentities {
     pub logical_project: String,
 }
 
-pub fn feature_fingerprint(p: &Project, id: &str, memo: &mut BTreeMap<String, String>) -> Option<String> {
+pub fn feature_fingerprint(
+    p: &Project,
+    id: &str,
+    memo: &mut BTreeMap<String, String>,
+) -> Option<String> {
     if let Some(h) = memo.get(id) {
         return Some(h.clone());
     }
@@ -191,37 +204,96 @@ pub fn feature_fingerprint(p: &Project, id: &str, memo: &mut BTreeMap<String, St
 
 pub fn logical_identities(p: &Project) -> LogicalIdentities {
     let mut memo = BTreeMap::new();
-    let features: BTreeMap<String, String> = p.features.iter().filter_map(|f| feature_fingerprint(p, &f.id, &mut memo).map(|h| (format!("{}@{}", f.id, f.version), h))).collect();
+    let features: BTreeMap<String, String> = p
+        .features
+        .iter()
+        .filter_map(|f| {
+            feature_fingerprint(p, &f.id, &mut memo).map(|h| (format!("{}@{}", f.id, f.version), h))
+        })
+        .collect();
     let mut feature_sets = BTreeMap::new();
     for s in &p.feature_sets {
         let mut body = Map::new();
         body.insert("feature_set".into(), project_object(s));
-        let members: Map<String, Value> = s.features.iter().map(|m| (format!("{}@{}", m.id, m.version), Value::String(features.get(&format!("{}@{}", m.id, m.version)).cloned().unwrap_or_default()))).collect();
+        let members: Map<String, Value> = s
+            .features
+            .iter()
+            .map(|m| {
+                (
+                    format!("{}@{}", m.id, m.version),
+                    Value::String(
+                        features
+                            .get(&format!("{}@{}", m.id, m.version))
+                            .cloned()
+                            .unwrap_or_default(),
+                    ),
+                )
+            })
+            .collect();
         body.insert("members".into(), Value::Object(members));
-        feature_sets.insert(format!("{}@{}", s.id, s.version), digest(&envelope("feature_set", body)));
+        feature_sets.insert(
+            format!("{}@{}", s.id, s.version),
+            digest(&envelope("feature_set", body)),
+        );
     }
     let mut consumers = BTreeMap::new();
     for c in &p.consumers {
         let mut body = Map::new();
         body.insert("consumer".into(), project_object(c));
         let key = format!("{}@{}", c.feature_set.feature_set, c.feature_set.version);
-        body.insert("feature_set".into(), Value::String(feature_sets.get(&key).cloned().unwrap_or_default()));
-        consumers.insert(format!("{}@{}", c.id, c.version), digest(&envelope("consumer", body)));
+        body.insert(
+            "feature_set".into(),
+            Value::String(feature_sets.get(&key).cloned().unwrap_or_default()),
+        );
+        consumers.insert(
+            format!("{}@{}", c.id, c.version),
+            digest(&envelope("consumer", body)),
+        );
     }
     let one = |kind: &str, v: Value| {
         let mut body = Map::new();
         body.insert(kind.into(), v);
         digest(&envelope(kind, body))
     };
-    let entities = p.entities.iter().map(|e| (format!("{}@{}", e.id, e.version), one("entity", project_object(e)))).collect();
-    let sources = p.sources.iter().map(|s| (format!("{}@{}", s.id, s.version), one("source", project_object(s)))).collect();
-    let relationships = p.relationships.iter().map(|r| (format!("{}@{}", r.id, r.version), one("relationship", project_object(r)))).collect();
+    let entities = p
+        .entities
+        .iter()
+        .map(|e| {
+            (
+                format!("{}@{}", e.id, e.version),
+                one("entity", project_object(e)),
+            )
+        })
+        .collect();
+    let sources = p
+        .sources
+        .iter()
+        .map(|s| {
+            (
+                format!("{}@{}", s.id, s.version),
+                one("source", project_object(s)),
+            )
+        })
+        .collect();
+    let relationships = p
+        .relationships
+        .iter()
+        .map(|r| {
+            (
+                format!("{}@{}", r.id, r.version),
+                one("relationship", project_object(r)),
+            )
+        })
+        .collect();
     let mut body = Map::new();
     body.insert("spec_version".into(), Value::String(p.spec_version.clone()));
     for (k, v) in [
         ("entities", serde_json::to_value(&entities).unwrap()),
         ("sources", serde_json::to_value(&sources).unwrap()),
-        ("relationships", serde_json::to_value(&relationships).unwrap()),
+        (
+            "relationships",
+            serde_json::to_value(&relationships).unwrap(),
+        ),
         ("features", serde_json::to_value(&features).unwrap()),
         ("feature_sets", serde_json::to_value(&feature_sets).unwrap()),
         ("consumers", serde_json::to_value(&consumers).unwrap()),
@@ -229,7 +301,16 @@ pub fn logical_identities(p: &Project) -> LogicalIdentities {
         body.insert(k.into(), v);
     }
     let logical_project = digest(&envelope("logical_project", body));
-    LogicalIdentities { canon: CANON_VERSION.into(), features, feature_sets, consumers, entities, sources, relationships, logical_project }
+    LogicalIdentities {
+        canon: CANON_VERSION.into(),
+        features,
+        feature_sets,
+        consumers,
+        entities,
+        sources,
+        relationships,
+        logical_project,
+    }
 }
 
 /// Deployment identity: binding-sensitive, documentation excluded.
@@ -243,7 +324,10 @@ pub fn deployment_identity(p: &Project, deployment_id: &str) -> Option<String> {
         .iter()
         .map(|t| {
             let k = format!("{}@{}", t.feature_set, t.version);
-            (k.clone(), Value::String(ids.feature_sets.get(&k).cloned().unwrap_or_default()))
+            (
+                k.clone(),
+                Value::String(ids.feature_sets.get(&k).cloned().unwrap_or_default()),
+            )
         })
         .collect();
     body.insert("feature_sets".into(), Value::Object(sets));
@@ -258,7 +342,13 @@ mod tests {
     #[test]
     fn canonical_form_is_frozen() {
         let v = json!({"b": [1, 1.0, -0.0, 0.1, 1e300], "a": "x\"\n\u{1}é", "c": {"z": null, "y": true}});
-        assert_eq!(canonical_json(&v), r#"{"a":"x\"\n\u0001é","b":[1,1.0,-0.0,0.1,1e300],"c":{"y":true,"z":null}}"#);
-        assert_eq!(sha256(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        assert_eq!(
+            canonical_json(&v),
+            r#"{"a":"x\"\n\u0001é","b":[1,1.0,-0.0,0.1,1e300],"c":{"y":true,"z":null}}"#
+        );
+        assert_eq!(
+            sha256(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 }

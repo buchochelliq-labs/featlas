@@ -60,7 +60,13 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn new(code: &str, stage: Stage, rule: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(
+        code: &str,
+        stage: Stage,
+        rule: &str,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Diagnostic {
             code: code.to_string(),
             severity: Severity::Error,
@@ -95,7 +101,14 @@ impl Diagnostic {
 
 impl std::fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} [{}:{}] {}", self.code, self.stage.as_str(), self.rule, self.path)?;
+        write!(
+            f,
+            "{} [{}:{}] {}",
+            self.code,
+            self.stage.as_str(),
+            self.rule,
+            self.path
+        )?;
         if let Some(loc) = &self.location {
             write!(f, " (line {}, column {})", loc.line, loc.column)?;
         }
@@ -113,10 +126,20 @@ pub struct EvalError {
 
 impl EvalError {
     pub fn new(code: &str, rule: &str, message: impl Into<String>) -> Self {
-        EvalError { code: code.into(), rule: rule.into(), message: message.into() }
+        EvalError {
+            code: code.into(),
+            rule: rule.into(),
+            message: message.into(),
+        }
     }
     pub fn to_diagnostic(&self, path: &str) -> Diagnostic {
-        Diagnostic::new(&self.code, Stage::Data, &self.rule, path, self.message.clone())
+        Diagnostic::new(
+            &self.code,
+            Stage::Data,
+            &self.rule,
+            path,
+            self.message.clone(),
+        )
     }
 }
 

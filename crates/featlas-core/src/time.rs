@@ -52,7 +52,13 @@ fn days_in_month(y: i64, m: i64) -> i64 {
     match m {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
-        2 => if is_leap(y) { 29 } else { 28 },
+        2 => {
+            if is_leap(y) {
+                29
+            } else {
+                28
+            }
+        }
         _ => 0,
     }
 }
@@ -98,7 +104,9 @@ impl Instant {
         let mi = digits(&b[14..16]).ok_or_else(|| format!("invalid minute in {text:?}"))?;
         let s = digits(&b[17..19]).ok_or_else(|| format!("invalid second in {text:?}"))?;
         if h > 23 || mi > 59 || s > 59 {
-            return Err(format!("time of day out of range (leap seconds unsupported): {text:?}"));
+            return Err(format!(
+                "time of day out of range (leap seconds unsupported): {text:?}"
+            ));
         }
         let rest = &b[19..b.len() - 1];
         let frac = if rest.is_empty() {
@@ -113,15 +121,23 @@ impl Instant {
         };
         let days = days_from_civil(y, mo, d);
         let secs = days * 86_400 + h * 3600 + mi * 60 + s;
-        Ok(Instant { micros: secs * MICROS_PER_SECOND + frac })
+        Ok(Instant {
+            micros: secs * MICROS_PER_SECOND + frac,
+        })
     }
 
     pub fn checked_sub_seconds(self, seconds: i64) -> Option<Instant> {
-        seconds.checked_mul(MICROS_PER_SECOND).and_then(|m| self.micros.checked_sub(m)).map(|micros| Instant { micros })
+        seconds
+            .checked_mul(MICROS_PER_SECOND)
+            .and_then(|m| self.micros.checked_sub(m))
+            .map(|micros| Instant { micros })
     }
 
     pub fn checked_add_seconds(self, seconds: i64) -> Option<Instant> {
-        seconds.checked_mul(MICROS_PER_SECOND).and_then(|m| self.micros.checked_add(m)).map(|micros| Instant { micros })
+        seconds
+            .checked_mul(MICROS_PER_SECOND)
+            .and_then(|m| self.micros.checked_add(m))
+            .map(|micros| Instant { micros })
     }
 }
 
@@ -132,7 +148,16 @@ impl fmt::Display for Instant {
         let days = secs.div_euclid(86_400);
         let sod = secs.rem_euclid(86_400);
         let (y, m, d) = civil_from_days(days);
-        write!(f, "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}", y, m, d, sod / 3600, (sod / 60) % 60, sod % 60)?;
+        write!(
+            f,
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}",
+            y,
+            m,
+            d,
+            sod / 3600,
+            (sod / 60) % 60,
+            sod % 60
+        )?;
         if frac != 0 {
             let s = format!("{frac:06}");
             write!(f, ".{}", s.trim_end_matches('0'))?;
@@ -144,7 +169,9 @@ impl fmt::Display for Instant {
 impl Date {
     pub fn parse(text: &str) -> Result<Date, String> {
         let (y, m, d) = parse_ymd(text.as_bytes()).map_err(|e| format!("{e} in {text:?}"))?;
-        Ok(Date { days: days_from_civil(y, m, d) })
+        Ok(Date {
+            days: days_from_civil(y, m, d),
+        })
     }
 }
 

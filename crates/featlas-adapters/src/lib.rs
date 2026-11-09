@@ -18,16 +18,28 @@ pub struct Registry {
 
 impl Default for Registry {
     fn default() -> Self {
-        Registry { adapters: vec![Box::new(local::LocalReference), Box::new(local::MemoryStoreAdapter), Box::new(databricks::Databricks)] }
+        Registry {
+            adapters: vec![
+                Box::new(local::LocalReference),
+                Box::new(local::MemoryStoreAdapter),
+                Box::new(databricks::Databricks),
+            ],
+        }
     }
 }
 
 impl AdapterRegistry for Registry {
     fn get(&self, implementation: &str, version: &str) -> Option<&dyn AdapterDescriptor> {
-        self.adapters.iter().find(|a| a.implementation() == implementation && a.version() == version).map(|a| a.as_ref())
+        self.adapters
+            .iter()
+            .find(|a| a.implementation() == implementation && a.version() == version)
+            .map(|a| a.as_ref())
     }
     fn list(&self) -> Vec<(String, String)> {
-        self.adapters.iter().map(|a| (a.implementation().to_string(), a.version().to_string())).collect()
+        self.adapters
+            .iter()
+            .map(|a| (a.implementation().to_string(), a.version().to_string()))
+            .collect()
     }
 }
 
@@ -39,7 +51,12 @@ pub struct LocalStores {
 
 impl LocalStores {
     pub fn new(clock: impl Fn() -> String + Send + Sync + Clone + 'static) -> Self {
-        LocalStores { memory: local::InMemoryStore::new(Box::new(clock.clone())), files: local::JsonlFileStore { clock: Box::new(clock) } }
+        LocalStores {
+            memory: local::InMemoryStore::new(Box::new(clock.clone())),
+            files: local::JsonlFileStore {
+                clock: Box::new(clock),
+            },
+        }
     }
 }
 

@@ -14,7 +14,13 @@ pub const SCHEMA_BASE: &str = "https://example.org/feature-engineering-spec/0.2.
 
 macro_rules! schema_file {
     ($name:literal) => {
-        ($name, include_str!(concat!("../../../spec/feature-engineering-spec-v0.2.0/schemas/", $name)))
+        (
+            $name,
+            include_str!(concat!(
+                "../../../spec/feature-engineering-spec-v0.2.0/schemas/",
+                $name
+            )),
+        )
     };
 }
 
@@ -37,8 +43,15 @@ pub const SCHEMAS: &[(&str, &str)] = &[
 struct RefuseAll;
 
 impl Retrieve for RefuseAll {
-    fn retrieve(&self, uri: &Uri<String>) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        Err(format!("schema retrieval is disabled; unresolved reference {}", uri.as_str()).into())
+    fn retrieve(
+        &self,
+        uri: &Uri<String>,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+        Err(format!(
+            "schema retrieval is disabled; unresolved reference {}",
+            uri.as_str()
+        )
+        .into())
     }
 }
 
@@ -47,13 +60,22 @@ fn parsed_schemas() -> &'static Vec<(String, Value)> {
     CELL.get_or_init(|| {
         SCHEMAS
             .iter()
-            .map(|(name, text)| (name.to_string(), serde_json::from_str(text).expect("embedded schema is JSON")))
+            .map(|(name, text)| {
+                (
+                    name.to_string(),
+                    serde_json::from_str(text).expect("embedded schema is JSON"),
+                )
+            })
             .collect()
     })
 }
 
 pub fn schema_value(name: &str) -> &'static Value {
-    &parsed_schemas().iter().find(|(n, _)| n == name).expect("known schema").1
+    &parsed_schemas()
+        .iter()
+        .find(|(n, _)| n == name)
+        .expect("known schema")
+        .1
 }
 
 /// Check every embedded schema against the Draft 2020-12 metaschema and for unique `$id`s.
@@ -61,7 +83,10 @@ pub fn check_schemas() -> Result<usize, String> {
     let mut ids = std::collections::BTreeSet::new();
     for (name, schema) in parsed_schemas() {
         jsonschema::meta::validate(schema).map_err(|e| format!("{name}: {e}"))?;
-        let id = schema.get("$id").and_then(Value::as_str).ok_or_else(|| format!("{name} has no $id"))?;
+        let id = schema
+            .get("$id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| format!("{name} has no $id"))?;
         if !ids.insert(id.to_string()) {
             return Err(format!("duplicate $id {id}"));
         }
@@ -73,7 +98,11 @@ pub fn check_schemas() -> Result<usize, String> {
 }
 
 /// Validate an instance against a named embedded schema.
-pub fn validate_against(name: &str, instance: &Value, doc: Option<&ParsedDocument>) -> Vec<Diagnostic> {
+pub fn validate_against(
+    name: &str,
+    instance: &Value,
+    doc: Option<&ParsedDocument>,
+) -> Vec<Diagnostic> {
     let mut registry = Registry::new();
     for (n, schema) in parsed_schemas() {
         registry = match registry.add(format!("{SCHEMA_BASE}{n}"), schema.clone()) {
@@ -100,11 +129,19 @@ pub fn validate_against(name: &str, instance: &Value, doc: Option<&ParsedDocumen
         .map(|e| {
             let path = e.instance_path().to_string();
             let location = doc.and_then(|d| d.locate(&path));
-            Diagnostic::new("SCHEMA_INVALID", Stage::Schema, "SEM-CONF-001", path, format!("{e} (schema {})", e.schema_path()))
-                .at(location)
+            Diagnostic::new(
+                "SCHEMA_INVALID",
+                Stage::Schema,
+                "SEM-CONF-001",
+                path,
+                format!("{e} (schema {})", e.schema_path()),
+            )
+            .at(location)
         })
         .collect();
-    out.sort_by(|a, b| (a.path.clone(), a.message.clone()).cmp(&(b.path.clone(), b.message.clone())));
+    out.sort_by(|a, b| {
+        (a.path.clone(), a.message.clone()).cmp(&(b.path.clone(), b.message.clone()))
+    });
     out.dedup_by(|a, b| a.path == b.path && a.message == b.message);
     out
 }
@@ -114,7 +151,13 @@ pub fn validate_project(doc: &ParsedDocument) -> Vec<Diagnostic> {
 }
 
 fn internal(message: String) -> Diagnostic {
-    Diagnostic::new("SCHEMA_INTERNAL", Stage::Schema, "SEM-CONF-002", "", message)
+    Diagnostic::new(
+        "SCHEMA_INTERNAL",
+        Stage::Schema,
+        "SEM-CONF-002",
+        "",
+        message,
+    )
 }
 
 #[cfg(test)]

@@ -8,20 +8,20 @@
 //! no dispatch on vendor names: adapters are resolved through a registry keyed
 //! by the namespaced implementation string declared in a deployment.
 
+pub mod canon;
+pub mod capability;
+pub mod consumer;
 pub mod diag;
+pub mod eval;
+pub mod expr;
+pub mod fixtures;
+pub mod label;
+pub mod load;
+pub mod migration;
+pub mod model;
 pub mod parse;
+pub mod plan;
 pub mod schema;
 pub mod time;
-pub mod expr;
-pub mod load;
-pub mod model;
 pub mod validate;
 pub mod value;
-pub mod canon;
-pub mod consumer;
-pub mod eval;
-pub mod fixtures;
-pub mod capability;
-pub mod plan;
-pub mod label;
-pub mod migration;

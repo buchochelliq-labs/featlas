@@ -61,7 +61,19 @@ class SnapshotRun:
     coverage: dict
     unavailable_sources: set[str] = field(default_factory=set)
     source_relations: dict[str, str] | None = None
+    population_source: str | None = None
     log: list[dict] = field(default_factory=list)
+    source_versions: dict[str, int] = field(default_factory=dict)
+
+    def _run(self, st: dict, params: dict[str, Any] | None = None, sql: str | None = None):
+        """Execute one generated statement; view statements register their bound SELECT."""
+        df = self._sql(st["name"], sql if sql is not None else st["sql"], params)
+        if st.get("view"):
+            try:
+                df.createOrReplaceTempView(st["view"])
+            except Exception as exc:  # noqa: BLE001
+                raise map_spark_exception(exc) from exc
+        return df
 
     def _sql(self, name: str, sql: str, params: dict[str, Any] | None = None):
         used = set(_PARAM.findall(sql))
@@ -81,39 +93,53 @@ class SnapshotRun:
     def _readable(self, item: dict) -> bool:
         return not (set(item.get("reads", [])) & self.unavailable_sources)
 
+    def _drop_stale_views(self) -> None:
+        """A reused session must never publish a view left over from another as_of."""
+        for t in self.spark.catalog.listTables():
+            if t.isTemporary and t.name.startswith("fl_"):
+                self.spark.catalog.dropTempView(t.name)
+
     def prepare(self) -> None:
         a = self.artifacts
+        if self.population_source and self.population_source in self.unavailable_sources:
+            raise FeatlasError("SOURCE_UNAVAILABLE", f"Population source {self.population_source} is unavailable; the eligible population cannot be reconstructed", "SEM-ENT-001")
+        self._drop_stale_views()
         for st in a["session"]:
             self._sql(st["name"], st["sql"])
-        pop_source = next(iter(self.artifacts["expected_source_schemas"]), None)
-        _ = pop_source
         for st in a["bind_sources"]:
             if not self._readable(st):
                 continue
             sql = st["sql"]
+            source = st["reads"][0]
+            table = a["expected_source_schemas"][source]["table"]
             if self.source_relations:
-                source = st["reads"][0]
-                table = a["expected_source_schemas"][source]["table"]
                 sql = sql.replace(f"FROM {table}", f"FROM {self.source_relations[source]}")
-            self._sql(st["name"], sql)
+            else:
+                # Pin one immutable Delta snapshot per source so assertions, the snapshot and the
+                # MERGE all read the same rows (lazy views otherwise re-scan live tables).
+                version = self._sql(f"version_{source}", f"DESCRIBE HISTORY {table} LIMIT 1").collect()[0]["version"]
+                self.source_versions[source] = int(version)
+                sql = sql.replace(f"FROM {table}", f"FROM {table} VERSION AS OF {int(version)}")
+            self._run(st, sql=sql)
         for st in a["stages"]:
             if self._readable(st):
-                self._sql(st["name"], st["sql"], self._params())
+                self._run(st, self._params())
 
     def compute(self) -> None:
         for f in self.artifacts["features"]:
             cov = self.coverage[f["feature"]]
             if cov["variant"] == "computed":
-                self._sql(f["computed"]["name"], f["computed"]["sql"], self._params())
+                self._run(f["computed"], self._params())
             else:
                 params = dict(self._params(), coverage_state=cov["coverage_state"])
-                self._sql(f["degraded"]["name"], f["degraded"]["sql"], params)
+                self._run(f["degraded"], params)
 
     def assert_contracts(self) -> list[dict]:
         """Run zero-row assertions; any returned row is a contract violation."""
         violations = []
+        degraded = {f for f, cov in self.coverage.items() if cov["variant"] != "computed"}
         for c in self.artifacts["checks"]:
-            if not self._readable(c):
+            if not self._readable(c) or c.get("feature") in degraded:
                 continue
             rows = self._sql(c["name"], c["sql"], self._params()).limit(1).collect()
             if rows:
@@ -124,9 +150,9 @@ class SnapshotRun:
         """Build the snapshot view and materialize feature views to surface runtime errors."""
         params = dict(self._params(), **publication)
         st = self.artifacts["snapshot"]
-        self._sql(st["name"], st["sql"], params)
+        self._run(st, params)
         try:
-            return [r.asDict() for r in self.spark.table(st["name"]).collect()]
+            return [r.asDict() for r in self.spark.table(st["view"]).collect()]
         except Exception as exc:  # noqa: BLE001
             raise map_spark_exception(exc) from exc
 
@@ -151,22 +177,33 @@ class SnapshotRun:
         self.run_to_snapshot(pub)
         if auth.allow_create_table:
             self._sql("create_feature_table", a["create_table"]["sql"])
-        self.spark.conf.set("spark.databricks.delta.commitInfo.userMetadata", auth.materialization_id)
-        try:
-            self._sql("publish_snapshot", a["publish"]["sql"], dict(self._params(), **pub))
-        finally:
-            self.spark.conf.unset("spark.databricks.delta.commitInfo.userMetadata")
+        props = {r["key"]: r["value"] for r in self._sql("table_properties", a["table_properties"]["sql"]).collect()}
+        for k, v in a["expected_table_properties"].items():
+            if props.get(k) != v:
+                raise FeatlasError("TARGET_TABLE_MISMATCH", f"{a['output_table']} property {k}={props.get(k)!r}, expected {v!r}; refusing to publish into another feature-set version")
+        # An earlier attempt of this publication may already have committed (idempotent retry).
+        mc_rows = self._sql("existing_publication", f"SELECT DISTINCT * FROM (SELECT {self._meta('materialization_id')} AS m, {self._meta('published_at')} AS p FROM {a['output_table']} WHERE {self._meta('publication_id')} = :publication_id)", {"publication_id": auth.publication_id}).collect()
+        commit_mid = mc_rows[0]["m"] if mc_rows else auth.materialization_id
+        if not mc_rows:
+            self.spark.conf.set("spark.databricks.delta.commitInfo.userMetadata", auth.materialization_id)
+            try:
+                self._sql("publish_snapshot", a["publish"]["sql"], dict(self._params(), **pub))
+            finally:
+                self.spark.conf.unset("spark.databricks.delta.commitInfo.userMetadata")
         history = self._sql("commit_history", a["evidence"][0]["sql"]).collect()
-        commits = [h.asDict() for h in history if h.asDict().get("userMetadata") == auth.materialization_id]
+        commits = [h.asDict() for h in history if h.asDict().get("userMetadata") == commit_mid and h.asDict().get("operation") == "MERGE"]
         if len(commits) != 1:
-            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"Expected exactly one commit with userMetadata {auth.materialization_id}; found {len(commits)}. published_at stays NULL.")
+            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"Expected exactly one MERGE commit with userMetadata {commit_mid}; found {len(commits)}. published_at stays NULL and replay cannot use this publication.")
         commit = commits[0]
         observed = commit["timestamp"]
         self._sql("record_published_at", a["evidence"][1]["sql"], {"observed_commit_timestamp": observed, "publication_id": auth.publication_id})
+        micros = self.spark.sql("SELECT unix_micros(:t) AS u", args={"t": observed}).collect()[0]["u"]
         return {
             "table": a["output_table"],
             "table_version": commit.get("version"),
-            "commit_timestamp": format_instant(observed),
+            "commit_timestamp": format_instant(datetime.fromtimestamp(micros / 1_000_000, tz=timezone.utc).replace(microsecond=micros % 1_000_000)),
+            "source_versions": self.source_versions,
+            "retry_of_materialization": commit_mid if commit_mid != auth.materialization_id else None,
             "operation": commit.get("operation"),
             "operation_metrics": commit.get("operationMetrics"),
             "publication_id": auth.publication_id,
@@ -176,6 +213,10 @@ class SnapshotRun:
             "environment": auth.environment,
             "statement_log": self.log,
         }
+
+    def _meta(self, name: str) -> str:
+        col = self.artifacts["metadata_columns"][name]
+        return "`" + col.replace("`", "``") + "`"
 
     def preflight_sources(self) -> list[dict]:
         """Compare physical source schemas with the expected mapping (live targets)."""

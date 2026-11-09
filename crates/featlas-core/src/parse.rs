@@ -31,7 +31,11 @@ pub enum Format {
 
 impl Format {
     pub fn from_path(path: &str) -> Format {
-        if path.to_ascii_lowercase().ends_with(".json") { Format::Json } else { Format::Yaml }
+        if path.to_ascii_lowercase().ends_with(".json") {
+            Format::Json
+        } else {
+            Format::Yaml
+        }
     }
 }
 
@@ -69,20 +73,36 @@ static AMBIG_RE: OnceLock<Regex> = OnceLock::new();
 static INTERP_RE: OnceLock<Regex> = OnceLock::new();
 
 fn loc(m: &Marker) -> SourceLocation {
-    SourceLocation { line: m.line(), column: m.col() + 1 }
+    SourceLocation {
+        line: m.line(),
+        column: m.col() + 1,
+    }
 }
 
 fn escape_pointer(segment: &str) -> String {
     segment.replace('~', "~0").replace('/', "~1")
 }
 
-fn perr(code: &str, path: &str, location: Option<SourceLocation>, message: impl Into<String>) -> Diagnostic {
+fn perr(
+    code: &str,
+    path: &str,
+    location: Option<SourceLocation>,
+    message: impl Into<String>,
+) -> Diagnostic {
     Diagnostic::new(code, Stage::Parse, RULE, path, message).at(location)
 }
 
 enum Frame {
-    Seq { path: String, items: Vec<Value> },
-    Map { path: String, map: Map<String, Value>, key: Option<(String, SourceLocation)>, key_locs: HashMap<String, SourceLocation> },
+    Seq {
+        path: String,
+        items: Vec<Value>,
+    },
+    Map {
+        path: String,
+        map: Map<String, Value>,
+        key: Option<(String, SourceLocation)>,
+        key_locs: HashMap<String, SourceLocation>,
+    },
 }
 
 struct Builder {
@@ -108,14 +128,54 @@ fn resolve_plain(text: &str, path: &str, location: &SourceLocation) -> Result<Va
         return text
             .parse::<i64>()
             .map(|i| Value::Number(Number::from(i)))
-            .map_err(|_| perr("PARSE_INTEGER_RANGE", path, at, format!("Integer {text} is outside signed 64-bit range")));
+            .map_err(|_| {
+                perr(
+                    "PARSE_INTEGER_RANGE",
+                    path,
+                    at,
+                    format!("Integer {text} is outside signed 64-bit range"),
+                )
+            });
     }
-    if re(&FLOAT_RE, r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+(?:[eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)$").is_match(text) {
-        let f: f64 = text.parse().map_err(|_| perr("PARSE_NUMBER", path, at.clone(), format!("Invalid number {text}")))?;
+    if re(
+        &FLOAT_RE,
+        r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+(?:[eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)$",
+    )
+    .is_match(text)
+    {
+        let f: f64 = text.parse().map_err(|_| {
+            perr(
+                "PARSE_NUMBER",
+                path,
+                at.clone(),
+                format!("Invalid number {text}"),
+            )
+        })?;
         if !f.is_finite() {
-            return Err(perr("PARSE_NON_FINITE", path, at, format!("Number {text} is not finite")));
+            return Err(perr(
+                "PARSE_NON_FINITE",
+                path,
+                at,
+                format!("Number {text} is not finite"),
+            ));
         }
-        return Number::from_f64(f).map(Value::Number).ok_or_else(|| perr("PARSE_NON_FINITE", path, None, "Non-finite number"));
+        if f == 0.0
+            && text
+                .trim_start_matches('-')
+                .split(['e', 'E'])
+                .next()
+                .is_some_and(|m| m.chars().any(|c| c.is_ascii_digit() && c != '0'))
+        {
+            return Err(perr(
+                "PARSE_NUMBER_RANGE",
+                path,
+                at,
+                format!("Number {text} underflows binary64 to zero"),
+            ));
+        }
+        return Number::from_f64(f)
+            .map(Value::Number)
+            .ok_or_else(|| perr("PARSE_NON_FINITE", path, None, "Non-finite number"));
     }
     if re(&TS_RE, r"^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)?$").is_match(text) {
         return Err(perr("PARSE_IMPLICIT_TIMESTAMP", path, at, format!("Timestamp/date scalar {text} must be quoted")));
@@ -136,7 +196,11 @@ fn resolve_plain(text: &str, path: &str, location: &SourceLocation) -> Result<Va
     Ok(Value::String(text.to_string()))
 }
 
-fn check_interpolation(text: &str, path: &str, location: &SourceLocation) -> Result<(), Diagnostic> {
+fn check_interpolation(
+    text: &str,
+    path: &str,
+    location: &SourceLocation,
+) -> Result<(), Diagnostic> {
     if re(&INTERP_RE, r"\$\{[^}]*\}").is_match(text) {
         return Err(perr(
             "PARSE_INTERPOLATION",
@@ -153,7 +217,11 @@ impl Builder {
         match self.stack.last() {
             None => String::new(),
             Some(Frame::Seq { path, items }) => format!("{path}/{}", items.len()),
-            Some(Frame::Map { path, key: Some((k, _)), .. }) => format!("{path}/{}", escape_pointer(k)),
+            Some(Frame::Map {
+                path,
+                key: Some((k, _)),
+                ..
+            }) => format!("{path}/{}", escape_pointer(k)),
             Some(Frame::Map { path, .. }) => path.clone(),
         }
     }
@@ -183,10 +251,20 @@ impl Builder {
     fn count(&mut self, path: &str, location: &SourceLocation) -> Result<(), Diagnostic> {
         self.nodes += 1;
         if self.nodes > MAX_NODES {
-            return Err(perr("PARSE_LIMIT", path, Some(location.clone()), format!("Document exceeds {MAX_NODES} nodes")));
+            return Err(perr(
+                "PARSE_LIMIT",
+                path,
+                Some(location.clone()),
+                format!("Document exceeds {MAX_NODES} nodes"),
+            ));
         }
         if self.stack.len() > MAX_DEPTH {
-            return Err(perr("PARSE_LIMIT", path, Some(location.clone()), format!("Document nesting exceeds {MAX_DEPTH}")));
+            return Err(perr(
+                "PARSE_LIMIT",
+                path,
+                Some(location.clone()),
+                format!("Document nesting exceeds {MAX_DEPTH}"),
+            ));
         }
         Ok(())
     }
@@ -194,24 +272,46 @@ impl Builder {
     fn event(&mut self, event: Event, mark: Marker) -> Result<(), Diagnostic> {
         let l = loc(&mark);
         match event {
-            Event::Alias(_) => Err(perr("PARSE_ALIAS", &self.current_path(), Some(l), "YAML aliases are not permitted")),
+            Event::Alias(_) => Err(perr(
+                "PARSE_ALIAS",
+                &self.current_path(),
+                Some(l),
+                "YAML aliases are not permitted",
+            )),
             Event::Scalar(text, style, anchor, tag) => {
                 let key_position = self.expecting_key();
                 let parent_path = match self.stack.last() {
-                    Some(Frame::Map { path, .. }) if key_position => format!("{path}/{}", escape_pointer(&text)),
+                    Some(Frame::Map { path, .. }) if key_position => {
+                        format!("{path}/{}", escape_pointer(&text))
+                    }
                     _ => self.current_path(),
                 };
                 if anchor != 0 {
-                    return Err(perr("PARSE_ANCHOR", &parent_path, Some(l), "YAML anchors are not permitted"));
+                    return Err(perr(
+                        "PARSE_ANCHOR",
+                        &parent_path,
+                        Some(l),
+                        "YAML anchors are not permitted",
+                    ));
                 }
                 if tag.is_some() {
-                    return Err(perr("PARSE_TAG", &parent_path, Some(l), "Explicit or custom YAML tags are not permitted"));
+                    return Err(perr(
+                        "PARSE_TAG",
+                        &parent_path,
+                        Some(l),
+                        "Explicit or custom YAML tags are not permitted",
+                    ));
                 }
                 check_interpolation(&text, &parent_path, &l)?;
                 if key_position {
                     if style == TScalarStyle::Plain {
                         if text == "<<" {
-                            return Err(perr("PARSE_MERGE_KEY", &parent_path, Some(l), "YAML merge keys are not permitted"));
+                            return Err(perr(
+                                "PARSE_MERGE_KEY",
+                                &parent_path,
+                                Some(l),
+                                "YAML merge keys are not permitted",
+                            ));
                         }
                         match resolve_plain(&text, &parent_path, &l)? {
                             Value::String(_) => {}
@@ -225,10 +325,26 @@ impl Builder {
                             }
                         }
                     }
-                    if let Some(Frame::Map { map, key, key_locs, .. }) = self.stack.last_mut() {
+                    if let Some(Frame::Map {
+                        map, key, key_locs, ..
+                    }) = self.stack.last_mut()
+                    {
                         if map.contains_key(&text) {
-                            let first = key_locs.get(&text).map(|f| format!(" (first defined at line {}, column {})", f.line, f.column)).unwrap_or_default();
-                            return Err(perr("PARSE_DUPLICATE_KEY", &parent_path, Some(l), format!("Duplicate mapping key {text:?}{first}")));
+                            let first = key_locs
+                                .get(&text)
+                                .map(|f| {
+                                    format!(
+                                        " (first defined at line {}, column {})",
+                                        f.line, f.column
+                                    )
+                                })
+                                .unwrap_or_default();
+                            return Err(perr(
+                                "PARSE_DUPLICATE_KEY",
+                                &parent_path,
+                                Some(l),
+                                format!("Duplicate mapping key {text:?}{first}"),
+                            ));
                         }
                         key_locs.insert(text.clone(), l.clone());
                         *key = Some((text, l.clone()));
@@ -237,38 +353,77 @@ impl Builder {
                     return Ok(());
                 }
                 self.count(&parent_path, &l)?;
-                let value = if style == TScalarStyle::Plain { resolve_plain(&text, &parent_path, &l)? } else { Value::String(text) };
+                let value = if style == TScalarStyle::Plain {
+                    resolve_plain(&text, &parent_path, &l)?
+                } else {
+                    Value::String(text)
+                };
                 self.locations.insert(parent_path, l);
                 self.push_value(value)
             }
-            Event::SequenceStart(anchor, tag) | Event::MappingStart(anchor, tag) if self.expecting_key() => {
+            Event::SequenceStart(anchor, tag) | Event::MappingStart(anchor, tag)
+                if self.expecting_key() =>
+            {
                 let _ = (anchor, tag);
-                Err(perr("PARSE_NON_STRING_KEY", &self.current_path(), Some(l), "Mapping keys must be scalar strings"))
+                Err(perr(
+                    "PARSE_NON_STRING_KEY",
+                    &self.current_path(),
+                    Some(l),
+                    "Mapping keys must be scalar strings",
+                ))
             }
             Event::SequenceStart(anchor, tag) => {
                 let path = self.current_path();
                 if anchor != 0 {
-                    return Err(perr("PARSE_ANCHOR", &path, Some(l), "YAML anchors are not permitted"));
+                    return Err(perr(
+                        "PARSE_ANCHOR",
+                        &path,
+                        Some(l),
+                        "YAML anchors are not permitted",
+                    ));
                 }
                 if tag.is_some() {
-                    return Err(perr("PARSE_TAG", &path, Some(l), "Explicit or custom YAML tags are not permitted"));
+                    return Err(perr(
+                        "PARSE_TAG",
+                        &path,
+                        Some(l),
+                        "Explicit or custom YAML tags are not permitted",
+                    ));
                 }
                 self.count(&path, &l)?;
                 self.locations.insert(path.clone(), l);
-                self.stack.push(Frame::Seq { path, items: Vec::new() });
+                self.stack.push(Frame::Seq {
+                    path,
+                    items: Vec::new(),
+                });
                 Ok(())
             }
             Event::MappingStart(anchor, tag) => {
                 let path = self.current_path();
                 if anchor != 0 {
-                    return Err(perr("PARSE_ANCHOR", &path, Some(l), "YAML anchors are not permitted"));
+                    return Err(perr(
+                        "PARSE_ANCHOR",
+                        &path,
+                        Some(l),
+                        "YAML anchors are not permitted",
+                    ));
                 }
                 if tag.is_some() {
-                    return Err(perr("PARSE_TAG", &path, Some(l), "Explicit or custom YAML tags are not permitted"));
+                    return Err(perr(
+                        "PARSE_TAG",
+                        &path,
+                        Some(l),
+                        "Explicit or custom YAML tags are not permitted",
+                    ));
                 }
                 self.count(&path, &l)?;
                 self.locations.insert(path.clone(), l);
-                self.stack.push(Frame::Map { path, map: Map::new(), key: None, key_locs: HashMap::new() });
+                self.stack.push(Frame::Map {
+                    path,
+                    map: Map::new(),
+                    key: None,
+                    key_locs: HashMap::new(),
+                });
                 Ok(())
             }
             Event::SequenceEnd => {
@@ -293,34 +448,77 @@ impl Builder {
 /// Parse bytes under the restricted profile. Returns parse-stage diagnostics on failure.
 pub fn parse_bytes(bytes: &[u8], format: Format) -> Result<ParsedDocument, Vec<Diagnostic>> {
     if bytes.len() > MAX_DOCUMENT_BYTES {
-        return Err(vec![perr("PARSE_LIMIT", "", None, format!("Document exceeds the {MAX_DOCUMENT_BYTES}-byte limit"))]);
+        return Err(vec![perr(
+            "PARSE_LIMIT",
+            "",
+            None,
+            format!("Document exceeds the {MAX_DOCUMENT_BYTES}-byte limit"),
+        )]);
     }
-    let text = std::str::from_utf8(bytes).map_err(|e| vec![perr("PARSE_ENCODING", "", None, format!("Document is not UTF-8: {e}"))])?;
+    let text = std::str::from_utf8(bytes).map_err(|e| {
+        vec![perr(
+            "PARSE_ENCODING",
+            "",
+            None,
+            format!("Document is not UTF-8: {e}"),
+        )]
+    })?;
     if text.starts_with('\u{feff}') {
-        return Err(vec![perr("PARSE_ENCODING", "", None, "Byte-order marks are not permitted")]);
+        return Err(vec![perr(
+            "PARSE_ENCODING",
+            "",
+            None,
+            "Byte-order marks are not permitted",
+        )]);
+    }
+    if text.lines().any(|l| l.starts_with('%')) {
+        return Err(vec![perr(
+            "PARSE_DIRECTIVE",
+            "",
+            None,
+            "YAML directives (%YAML, %TAG) are not permitted",
+        )]);
     }
     if text.contains('\0') {
-        return Err(vec![perr("PARSE_ENCODING", "", None, "NUL characters are not permitted")]);
+        return Err(vec![perr(
+            "PARSE_ENCODING",
+            "",
+            None,
+            "NUL characters are not permitted",
+        )]);
     }
     if format == Format::Json {
         if let Err(e) = serde_json::from_str::<serde::de::IgnoredAny>(text) {
             return Err(vec![perr(
                 "PARSE_SYNTAX",
                 "",
-                Some(SourceLocation { line: e.line(), column: e.column() }),
+                Some(SourceLocation {
+                    line: e.line(),
+                    column: e.column(),
+                }),
                 format!("Invalid JSON: {e}"),
             )]);
         }
     }
     let mut parser = Parser::new_from_str(text);
-    let mut builder = Builder { stack: Vec::new(), root: None, locations: HashMap::new(), nodes: 0 };
+    let mut builder = Builder {
+        stack: Vec::new(),
+        root: None,
+        locations: HashMap::new(),
+        nodes: 0,
+    };
     let mut documents = 0usize;
     loop {
         let (event, mark) = match parser.next_token() {
             Ok(x) => x,
             Err(e) => {
                 let m = e.marker();
-                return Err(vec![perr("PARSE_SYNTAX", &builder.current_path(), Some(loc(m)), format!("YAML syntax error: {}", e.info()))]);
+                return Err(vec![perr(
+                    "PARSE_SYNTAX",
+                    &builder.current_path(),
+                    Some(loc(m)),
+                    format!("YAML syntax error: {}", e.info()),
+                )]);
             }
         };
         match event {
@@ -328,15 +526,28 @@ pub fn parse_bytes(bytes: &[u8], format: Format) -> Result<ParsedDocument, Vec<D
             Event::DocumentStart => {
                 documents += 1;
                 if documents > 1 {
-                    return Err(vec![perr("PARSE_MULTIPLE_DOCUMENTS", "", Some(loc(&mark)), "Exactly one YAML document is permitted")]);
+                    return Err(vec![perr(
+                        "PARSE_MULTIPLE_DOCUMENTS",
+                        "",
+                        Some(loc(&mark)),
+                        "Exactly one YAML document is permitted",
+                    )]);
                 }
             }
             other => builder.event(other, mark).map_err(|d| vec![d])?,
         }
     }
     match builder.root {
-        Some(value @ Value::Object(_)) => Ok(ParsedDocument { value, locations: builder.locations }),
-        Some(_) => Err(vec![perr("PARSE_ROOT", "", None, "The document root must be a mapping")]),
+        Some(value @ Value::Object(_)) => Ok(ParsedDocument {
+            value,
+            locations: builder.locations,
+        }),
+        Some(_) => Err(vec![perr(
+            "PARSE_ROOT",
+            "",
+            None,
+            "The document root must be a mapping",
+        )]),
         None => Err(vec![perr("PARSE_EMPTY", "", None, "The document is empty")]),
     }
 }
@@ -358,7 +569,11 @@ mod tests {
 
     #[test]
     fn accepts_json_compatible_yaml() {
-        let doc = parse_str("a: 1\nb: -2.5\nc: true\nd: null\ne: '2026-01-01T00:00:00Z'\nf: [x, \"y\"]\n", Format::Yaml).unwrap();
+        let doc = parse_str(
+            "a: 1\nb: -2.5\nc: true\nd: null\ne: '2026-01-01T00:00:00Z'\nf: [x, \"y\"]\n",
+            Format::Yaml,
+        )
+        .unwrap();
         assert_eq!(doc.value["a"], 1);
         assert_eq!(doc.value["b"], -2.5);
         assert_eq!(doc.value["e"], "2026-01-01T00:00:00Z");
@@ -376,7 +591,10 @@ mod tests {
         assert_eq!(code("1: a\n"), "PARSE_NON_STRING_KEY");
         assert_eq!(code("true: a\n"), "PARSE_NON_STRING_KEY");
         assert_eq!(code("? [a]\n: b\n"), "PARSE_NON_STRING_KEY");
-        assert_eq!(code("a: 2026-01-01T00:00:00Z\n"), "PARSE_IMPLICIT_TIMESTAMP");
+        assert_eq!(
+            code("a: 2026-01-01T00:00:00Z\n"),
+            "PARSE_IMPLICIT_TIMESTAMP"
+        );
         assert_eq!(code("a: 2026-01-01\n"), "PARSE_IMPLICIT_TIMESTAMP");
         assert_eq!(code("a: .inf\n"), "PARSE_AMBIGUOUS_SCALAR");
         assert_eq!(code("a: .nan\n"), "PARSE_AMBIGUOUS_SCALAR");

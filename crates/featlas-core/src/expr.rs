@@ -19,9 +19,15 @@ pub struct Ty {
 
 impl Ty {
     pub fn of(ty: LogicalType, nullable: bool) -> Ty {
-        Ty { ty: Some(ty), nullable }
+        Ty {
+            ty: Some(ty),
+            nullable,
+        }
     }
-    pub const NULL: Ty = Ty { ty: None, nullable: true };
+    pub const NULL: Ty = Ty {
+        ty: None,
+        nullable: true,
+    };
 }
 
 /// Resolves references while type checking.
@@ -38,7 +44,11 @@ pub struct TypeError {
 }
 
 fn terr(code: &str, path: &str, message: impl Into<String>) -> TypeError {
-    TypeError { code: code.into(), path: path.into(), message: message.into() }
+    TypeError {
+        code: code.into(),
+        path: path.into(),
+        message: message.into(),
+    }
 }
 
 /// Unify result types for coalesce/if_else branches with numeric widening.
@@ -50,16 +60,35 @@ fn unify(types: &[Ty], path: &str, what: &str) -> Result<Ty, TypeError> {
                 None => Some(ty),
                 Some(r) if r == ty => Some(r),
                 Some(r) if r.is_numeric() && ty.is_numeric() => Some(LogicalType::Number),
-                Some(r) => return Err(terr("TYPE_MISMATCH", path, format!("{what} have incompatible types {} and {}", r.as_str(), ty.as_str()))),
+                Some(r) => {
+                    return Err(terr(
+                        "TYPE_MISMATCH",
+                        path,
+                        format!(
+                            "{what} have incompatible types {} and {}",
+                            r.as_str(),
+                            ty.as_str()
+                        ),
+                    ))
+                }
             };
         }
     }
-    Ok(Ty { ty: result, nullable: types.iter().any(|t| t.nullable) })
+    Ok(Ty {
+        ty: result,
+        nullable: types.iter().any(|t| t.nullable),
+    })
 }
 
 pub fn literal_value(ty: &str, value: &serde_json::Value) -> Result<V, String> {
     let logical = match ty {
-        "null" => return if value.is_null() { Ok(V::Null) } else { Err("null literal must have value null".into()) },
+        "null" => {
+            return if value.is_null() {
+                Ok(V::Null)
+            } else {
+                Err("null literal must have value null".into())
+            }
+        }
         "integer" => LogicalType::Integer,
         "number" => LogicalType::Number,
         "boolean" => LogicalType::Boolean,
@@ -75,7 +104,12 @@ pub fn literal_value(ty: &str, value: &serde_json::Value) -> Result<V, String> {
 }
 
 /// Type-check an expression, collecting every error found.
-pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeError>) -> Option<Ty> {
+pub fn check(
+    expr: &Expr,
+    env: &dyn TypeEnv,
+    path: &str,
+    errors: &mut Vec<TypeError>,
+) -> Option<Ty> {
     match expr {
         Expr::Literal { ty, value } => match literal_value(ty, value) {
             Ok(V::Null) => Some(Ty::NULL),
@@ -92,7 +126,11 @@ pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeEr
                 false,
             )),
             Err(m) => {
-                errors.push(terr("TYPE_MISMATCH", path, format!("Literal value and declared type disagree: {m}")));
+                errors.push(terr(
+                    "TYPE_MISMATCH",
+                    path,
+                    format!("Literal value and declared type disagree: {m}"),
+                ));
                 None
             }
         },
@@ -111,7 +149,11 @@ pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeEr
             }
         },
         Expr::Call { operator, args } => {
-            let types: Vec<Option<Ty>> = args.iter().enumerate().map(|(i, a)| check(a, env, &format!("{path}/args/{i}"), errors)).collect();
+            let types: Vec<Option<Ty>> = args
+                .iter()
+                .enumerate()
+                .map(|(i, a)| check(a, env, &format!("{path}/args/{i}"), errors))
+                .collect();
             let op = *operator;
             let arity_ok = match op {
                 Operator::Absolute | Operator::Not | Operator::IsNull => args.len() == 1,
@@ -120,7 +162,15 @@ pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeEr
                 _ => args.len() == 2,
             };
             if !arity_ok {
-                errors.push(terr("OPERATOR_ARITY", path, format!("{} has wrong number of arguments ({})", op.as_str(), args.len())));
+                errors.push(terr(
+                    "OPERATOR_ARITY",
+                    path,
+                    format!(
+                        "{} has wrong number of arguments ({})",
+                        op.as_str(),
+                        args.len()
+                    ),
+                ));
                 return None;
             }
             if types.iter().any(Option::is_none) {
@@ -132,7 +182,14 @@ pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeEr
             let result = match op {
                 Operator::Add | Operator::Subtract | Operator::Multiply => {
                     if !t.iter().all(numeric) {
-                        return push(errors, terr("TYPE_MISMATCH", path, format!("{} requires numeric operands", op.as_str())));
+                        return push(
+                            errors,
+                            terr(
+                                "TYPE_MISMATCH",
+                                path,
+                                format!("{} requires numeric operands", op.as_str()),
+                            ),
+                        );
                     }
                     let ty = if t.iter().any(|x| x.ty == Some(LogicalType::Number)) {
                         Some(LogicalType::Number)
@@ -145,40 +202,98 @@ pub fn check(expr: &Expr, env: &dyn TypeEnv, path: &str, errors: &mut Vec<TypeEr
                 }
                 Operator::Divide | Operator::SafeDivide => {
                     if !t.iter().all(numeric) {
-                        return push(errors, terr("TYPE_MISMATCH", path, format!("{} requires numeric operands", op.as_str())));
+                        return push(
+                            errors,
+                            terr(
+                                "TYPE_MISMATCH",
+                                path,
+                                format!("{} requires numeric operands", op.as_str()),
+                            ),
+                        );
                     }
-                    Ty { ty: Some(LogicalType::Number), nullable: nullable || op == Operator::SafeDivide }
+                    Ty {
+                        ty: Some(LogicalType::Number),
+                        nullable: nullable || op == Operator::SafeDivide,
+                    }
                 }
                 Operator::Absolute => {
                     if !numeric(&t[0]) {
-                        return push(errors, terr("TYPE_MISMATCH", path, "absolute requires a numeric operand"));
+                        return push(
+                            errors,
+                            terr("TYPE_MISMATCH", path, "absolute requires a numeric operand"),
+                        );
                     }
                     t[0]
                 }
-                Operator::Equal | Operator::NotEqual | Operator::LessThan | Operator::LessOrEqual | Operator::GreaterThan | Operator::GreaterOrEqual => {
+                Operator::Equal
+                | Operator::NotEqual
+                | Operator::LessThan
+                | Operator::LessOrEqual
+                | Operator::GreaterThan
+                | Operator::GreaterOrEqual => {
                     if let (Some(a), Some(b)) = (t[0].ty, t[1].ty) {
                         if a != b && !(a.is_numeric() && b.is_numeric()) {
-                            return push(errors, terr("TYPE_MISMATCH", path, format!("Comparison operands have incompatible types {} and {}", a.as_str(), b.as_str())));
+                            return push(
+                                errors,
+                                terr(
+                                    "TYPE_MISMATCH",
+                                    path,
+                                    format!(
+                                        "Comparison operands have incompatible types {} and {}",
+                                        a.as_str(),
+                                        b.as_str()
+                                    ),
+                                ),
+                            );
                         }
                     }
-                    Ty { ty: Some(LogicalType::Boolean), nullable }
+                    Ty {
+                        ty: Some(LogicalType::Boolean),
+                        nullable,
+                    }
                 }
                 Operator::And | Operator::Or | Operator::Not => {
-                    if !t.iter().all(|x| x.ty.is_none_or(|y| y == LogicalType::Boolean)) {
-                        return push(errors, terr("TYPE_MISMATCH", path, format!("{} requires boolean operands", op.as_str())));
+                    if !t
+                        .iter()
+                        .all(|x| x.ty.is_none_or(|y| y == LogicalType::Boolean))
+                    {
+                        return push(
+                            errors,
+                            terr(
+                                "TYPE_MISMATCH",
+                                path,
+                                format!("{} requires boolean operands", op.as_str()),
+                            ),
+                        );
                     }
-                    Ty { ty: Some(LogicalType::Boolean), nullable }
+                    Ty {
+                        ty: Some(LogicalType::Boolean),
+                        nullable,
+                    }
                 }
-                Operator::IsNull => Ty { ty: Some(LogicalType::Boolean), nullable: false },
+                Operator::IsNull => Ty {
+                    ty: Some(LogicalType::Boolean),
+                    nullable: false,
+                },
                 Operator::Coalesce => {
-                    let u = unify(&t, path, "coalesce arguments").map_err(|e| errors.push(e)).ok()?;
-                    Ty { ty: u.ty, nullable: t.iter().all(|x| x.nullable) }
+                    let u = unify(&t, path, "coalesce arguments")
+                        .map_err(|e| errors.push(e))
+                        .ok()?;
+                    Ty {
+                        ty: u.ty,
+                        nullable: t.iter().all(|x| x.nullable),
+                    }
                 }
                 Operator::IfElse => {
                     if t[0].ty.is_some_and(|y| y != LogicalType::Boolean) {
-                        return push(errors, terr("TYPE_MISMATCH", path, "if_else condition must be boolean"));
+                        return push(
+                            errors,
+                            terr("TYPE_MISMATCH", path, "if_else condition must be boolean"),
+                        );
                     }
-                    unify(&t[1..], path, "if_else branches").map_err(|e| errors.push(e)).ok()?
+                    unify(&t[1..], path, "if_else branches")
+                        .map_err(|e| errors.push(e))
+                        .ok()?
                 }
             };
             Some(result)
@@ -195,17 +310,30 @@ fn push(errors: &mut Vec<TypeError>, e: TypeError) -> Option<Ty> {
 pub trait ValueEnv {
     fn column(&self, input: &str, column: &str) -> Result<V, EvalError>;
     fn feature(&self, feature: &str, version: &str) -> Result<V, EvalError>;
+    /// Static result type of a sub-expression, used to widen integer values to number where the
+    /// type checker unified to number (coalesce, if_else, mixed arithmetic).
+    fn static_type(&self, _e: &Expr) -> Option<LogicalType> {
+        None
+    }
 }
 
 fn overflow(op: Operator) -> EvalError {
-    EvalError::new("NUMERIC_OVERFLOW", "SEM-TRANS-006", format!("Signed 64-bit integer overflow in {}", op.as_str()))
+    EvalError::new(
+        "NUMERIC_OVERFLOW",
+        "SEM-TRANS-006",
+        format!("Signed 64-bit integer overflow in {}", op.as_str()),
+    )
 }
 
 fn finite(f: f64, op: Operator) -> Result<V, EvalError> {
     if f.is_finite() {
         Ok(V::Num(f))
     } else {
-        Err(EvalError::new("NON_FINITE_RESULT", "SEM-TRANS-006", format!("{} produced a non-finite number", op.as_str())))
+        Err(EvalError::new(
+            "NON_FINITE_RESULT",
+            "SEM-TRANS-006",
+            format!("{} produced a non-finite number", op.as_str()),
+        ))
     }
 }
 
@@ -218,12 +346,17 @@ fn as_f64(v: &V) -> f64 {
 }
 
 fn mismatch(op: Operator, v: &V) -> EvalError {
-    EvalError::new("TYPE_MISMATCH", "SEM-TRANS-002", format!("{} received {}", op.as_str(), v.type_name()))
+    EvalError::new(
+        "TYPE_MISMATCH",
+        "SEM-TRANS-002",
+        format!("{} received {}", op.as_str(), v.type_name()),
+    )
 }
 
 pub fn eval(expr: &Expr, env: &dyn ValueEnv) -> Result<V, EvalError> {
     match expr {
-        Expr::Literal { ty, value } => literal_value(ty, value).map_err(|m| EvalError::new("TYPE_MISMATCH", "SEM-TRANS-002", m)),
+        Expr::Literal { ty, value } => literal_value(ty, value)
+            .map_err(|m| EvalError::new("TYPE_MISMATCH", "SEM-TRANS-002", m)),
         Expr::Column { input, column } => env.column(input, column),
         Expr::Feature { feature, version } => env.feature(feature, version),
         Expr::Call { operator, args } => {
@@ -231,17 +364,18 @@ pub fn eval(expr: &Expr, env: &dyn ValueEnv) -> Result<V, EvalError> {
             match op {
                 Operator::IfElse => {
                     let c = eval(&args[0], env)?;
-                    match c {
-                        V::Bool(true) => eval(&args[1], env),
-                        V::Bool(false) | V::Null => eval(&args[2], env),
-                        other => Err(mismatch(op, &other)),
-                    }
+                    let v = match c {
+                        V::Bool(true) => eval(&args[1], env)?,
+                        V::Bool(false) | V::Null => eval(&args[2], env)?,
+                        other => return Err(mismatch(op, &other)),
+                    };
+                    Ok(conform(v, env.static_type(expr)))
                 }
                 Operator::Coalesce => {
                     for a in args {
                         let v = eval(a, env)?;
                         if !v.is_null() {
-                            return Ok(v);
+                            return Ok(conform(v, env.static_type(expr)));
                         }
                     }
                     Ok(V::Null)
@@ -257,7 +391,11 @@ pub fn eval(expr: &Expr, env: &dyn ValueEnv) -> Result<V, EvalError> {
                             other => return Err(mismatch(op, &other)),
                         }
                     }
-                    Ok(if unknown { V::Null } else { V::Bool(op == Operator::And) })
+                    Ok(if unknown {
+                        V::Null
+                    } else {
+                        V::Bool(op == Operator::And)
+                    })
                 }
                 Operator::IsNull => Ok(V::Bool(eval(&args[0], env)?.is_null())),
                 Operator::Not => match eval(&args[0], env)? {
@@ -265,13 +403,28 @@ pub fn eval(expr: &Expr, env: &dyn ValueEnv) -> Result<V, EvalError> {
                     V::Null => Ok(V::Null),
                     other => Err(mismatch(op, &other)),
                 },
-                Operator::Equal | Operator::NotEqual | Operator::LessThan | Operator::LessOrEqual | Operator::GreaterThan | Operator::GreaterOrEqual => {
+                Operator::Equal
+                | Operator::NotEqual
+                | Operator::LessThan
+                | Operator::LessOrEqual
+                | Operator::GreaterThan
+                | Operator::GreaterOrEqual => {
+                    // Null-intolerant: a null left operand yields null without evaluating the right one.
                     let a = eval(&args[0], env)?;
-                    let b = eval(&args[1], env)?;
-                    if a.is_null() || b.is_null() {
+                    if a.is_null() {
                         return Ok(V::Null);
                     }
-                    let ord = compare(&a, &b).ok_or_else(|| EvalError::new("TYPE_MISMATCH", "SEM-TRANS-002", format!("Cannot compare {} with {}", a.type_name(), b.type_name())))?;
+                    let b = eval(&args[1], env)?;
+                    if b.is_null() {
+                        return Ok(V::Null);
+                    }
+                    let ord = compare(&a, &b).ok_or_else(|| {
+                        EvalError::new(
+                            "TYPE_MISMATCH",
+                            "SEM-TRANS-002",
+                            format!("Cannot compare {} with {}", a.type_name(), b.type_name()),
+                        )
+                    })?;
                     Ok(V::Bool(match op {
                         Operator::Equal => ord == Ordering::Equal,
                         Operator::NotEqual => ord != Ordering::Equal,
@@ -287,24 +440,46 @@ pub fn eval(expr: &Expr, env: &dyn ValueEnv) -> Result<V, EvalError> {
                     V::Num(f) => finite(f.abs(), op),
                     other => Err(mismatch(op, &other)),
                 },
-                Operator::Add | Operator::Subtract | Operator::Multiply | Operator::Divide | Operator::SafeDivide => {
+                Operator::Add
+                | Operator::Subtract
+                | Operator::Multiply
+                | Operator::Divide
+                | Operator::SafeDivide => {
+                    // Null-intolerant and left-to-right: a null left operand short-circuits.
                     let a = eval(&args[0], env)?;
-                    let b = eval(&args[1], env)?;
-                    for v in [&a, &b] {
-                        if !matches!(v, V::Null | V::Int(_) | V::Num(_)) {
-                            return Err(mismatch(op, v));
-                        }
+                    if !matches!(a, V::Null | V::Int(_) | V::Num(_)) {
+                        return Err(mismatch(op, &a));
                     }
-                    if a.is_null() || b.is_null() {
+                    if a.is_null() {
                         return Ok(V::Null);
                     }
+                    let b = eval(&args[1], env)?;
+                    if !matches!(b, V::Null | V::Int(_) | V::Num(_)) {
+                        return Err(mismatch(op, &b));
+                    }
+                    if b.is_null() {
+                        return Ok(V::Null);
+                    }
+                    let widen = env.static_type(expr) == Some(LogicalType::Number);
+                    let (a, b) = if widen {
+                        (
+                            conform(a, Some(LogicalType::Number)),
+                            conform(b, Some(LogicalType::Number)),
+                        )
+                    } else {
+                        (a, b)
+                    };
                     match op {
                         Operator::Divide | Operator::SafeDivide => {
                             if as_f64(&b) == 0.0 {
                                 return if op == Operator::SafeDivide {
                                     Ok(V::Null)
                                 } else {
-                                    Err(EvalError::new("DIVISION_BY_ZERO", "SEM-TRANS-006", "Division by zero"))
+                                    Err(EvalError::new(
+                                        "DIVISION_BY_ZERO",
+                                        "SEM-TRANS-006",
+                                        "Division by zero",
+                                    ))
                                 };
                             }
                             finite(as_f64(&a) / as_f64(&b), op)
@@ -383,23 +558,74 @@ mod tests {
 
     #[test]
     fn three_valued_logic() {
-        assert_eq!(eval(&e(call("and", vec![col("f"), col("n")])), &Env).unwrap(), V::Bool(false));
-        assert_eq!(eval(&e(call("and", vec![col("t"), col("n")])), &Env).unwrap(), V::Null);
-        assert_eq!(eval(&e(call("or", vec![col("t"), col("n")])), &Env).unwrap(), V::Bool(true));
-        assert_eq!(eval(&e(call("or", vec![col("f"), col("n")])), &Env).unwrap(), V::Null);
-        assert_eq!(eval(&e(call("not", vec![col("n")])), &Env).unwrap(), V::Null);
-        assert_eq!(eval(&e(call("equal", vec![col("n"), col("n")])), &Env).unwrap(), V::Null);
-        assert_eq!(eval(&e(call("is_null", vec![col("n")])), &Env).unwrap(), V::Bool(true));
+        assert_eq!(
+            eval(&e(call("and", vec![col("f"), col("n")])), &Env).unwrap(),
+            V::Bool(false)
+        );
+        assert_eq!(
+            eval(&e(call("and", vec![col("t"), col("n")])), &Env).unwrap(),
+            V::Null
+        );
+        assert_eq!(
+            eval(&e(call("or", vec![col("t"), col("n")])), &Env).unwrap(),
+            V::Bool(true)
+        );
+        assert_eq!(
+            eval(&e(call("or", vec![col("f"), col("n")])), &Env).unwrap(),
+            V::Null
+        );
+        assert_eq!(
+            eval(&e(call("not", vec![col("n")])), &Env).unwrap(),
+            V::Null
+        );
+        assert_eq!(
+            eval(&e(call("equal", vec![col("n"), col("n")])), &Env).unwrap(),
+            V::Null
+        );
+        assert_eq!(
+            eval(&e(call("is_null", vec![col("n")])), &Env).unwrap(),
+            V::Bool(true)
+        );
     }
 
     #[test]
     fn laziness_prevents_irrelevant_errors() {
         let div0 = call("divide", vec![col("one"), col("zero")]);
-        assert_eq!(eval(&e(call("if_else", vec![col("t"), col("one"), div0.clone()])), &Env).unwrap(), V::Int(1));
-        assert_eq!(eval(&e(call("if_else", vec![col("n"), div0.clone(), col("one")])), &Env).unwrap(), V::Int(1));
-        assert_eq!(eval(&e(call("coalesce", vec![col("one"), div0.clone()])), &Env).unwrap(), V::Int(1));
-        assert_eq!(eval(&e(call("and", vec![col("f"), call("equal", vec![div0.clone(), col("one")])])), &Env).unwrap(), V::Bool(false));
-        assert_eq!(eval(&e(div0), &Env).map_err(|x| x.code), Err("DIVISION_BY_ZERO".into()));
+        assert_eq!(
+            eval(
+                &e(call("if_else", vec![col("t"), col("one"), div0.clone()])),
+                &Env
+            )
+            .unwrap(),
+            V::Int(1)
+        );
+        assert_eq!(
+            eval(
+                &e(call("if_else", vec![col("n"), div0.clone(), col("one")])),
+                &Env
+            )
+            .unwrap(),
+            V::Int(1)
+        );
+        assert_eq!(
+            eval(&e(call("coalesce", vec![col("one"), div0.clone()])), &Env).unwrap(),
+            V::Int(1)
+        );
+        assert_eq!(
+            eval(
+                &e(call(
+                    "and",
+                    vec![col("f"), call("equal", vec![div0.clone(), col("one")])]
+                )),
+                &Env
+            )
+            .unwrap(),
+            V::Bool(false)
+        );
+        assert_eq!(
+            eval(&e(div0), &Env).map_err(|x| x.code),
+            Err("DIVISION_BY_ZERO".into())
+        );
     }
 
     fn eval1(v: serde_json::Value) -> Result<V, String> {
@@ -408,15 +634,78 @@ mod tests {
 
     #[test]
     fn numeric_rules() {
-        assert_eq!(eval1(call("safe_divide", vec![col("one"), col("zero")])), Ok(V::Null));
-        assert_eq!(eval1(call("divide", vec![col("one"), col("one")])), Ok(V::Num(1.0)));
-        assert_eq!(eval1(call("add", vec![col("max"), col("one")])), Err("NUMERIC_OVERFLOW".into()));
-        assert_eq!(eval1(call("add", vec![col("n"), col("one")])), Ok(V::Null));
-        assert_eq!(eval1(call("absolute", vec![json!({"kind":"literal","type":"integer","value":i64::MIN})])), Err("NUMERIC_OVERFLOW".into()));
         assert_eq!(
-            eval1(call("multiply", vec![json!({"kind":"literal","type":"number","value":1e308}), json!({"kind":"literal","type":"number","value":10.0})])),
+            eval1(call("safe_divide", vec![col("one"), col("zero")])),
+            Ok(V::Null)
+        );
+        assert_eq!(
+            eval1(call("divide", vec![col("one"), col("one")])),
+            Ok(V::Num(1.0))
+        );
+        assert_eq!(
+            eval1(call("add", vec![col("max"), col("one")])),
+            Err("NUMERIC_OVERFLOW".into())
+        );
+        assert_eq!(eval1(call("add", vec![col("n"), col("one")])), Ok(V::Null));
+        assert_eq!(
+            eval1(call(
+                "absolute",
+                vec![json!({"kind":"literal","type":"integer","value":i64::MIN})]
+            )),
+            Err("NUMERIC_OVERFLOW".into())
+        );
+        assert_eq!(
+            eval1(call(
+                "multiply",
+                vec![
+                    json!({"kind":"literal","type":"number","value":1e308}),
+                    json!({"kind":"literal","type":"number","value":10.0})
+                ]
+            )),
             Err("NON_FINITE_RESULT".into())
         );
-        assert_eq!(eval1(call("add", vec![col("one"), json!({"kind":"literal","type":"number","value":0.5})])), Ok(V::Num(1.5)));
+        assert_eq!(
+            eval1(call(
+                "add",
+                vec![
+                    col("one"),
+                    json!({"kind":"literal","type":"number","value":0.5})
+                ]
+            )),
+            Ok(V::Num(1.5))
+        );
+    }
+}
+
+#[cfg(test)]
+mod widening_tests {
+    use super::*;
+    use serde_json::json;
+
+    struct Mixed;
+    impl ValueEnv for Mixed {
+        fn column(&self, _: &str, c: &str) -> Result<V, EvalError> {
+            Ok(if c == "i" { V::Int(1) } else { V::Null })
+        }
+        fn feature(&self, _: &str, _: &str) -> Result<V, EvalError> {
+            Ok(V::Null)
+        }
+        fn static_type(&self, e: &Expr) -> Option<LogicalType> {
+            match e {
+                Expr::Call {
+                    operator: Operator::Coalesce | Operator::Add,
+                    ..
+                } => Some(LogicalType::Number),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn coalesce_and_arithmetic_widen_to_unified_number_type() {
+        let co: Expr = serde_json::from_value(json!({"kind":"call","operator":"coalesce","args":[{"kind":"column","input":"a","column":"i"},{"kind":"column","input":"a","column":"n"}]})).unwrap();
+        assert_eq!(eval(&co, &Mixed).unwrap(), V::Num(1.0));
+        let add: Expr = serde_json::from_value(json!({"kind":"call","operator":"add","args":[{"kind":"column","input":"a","column":"i"},{"kind":"literal","type":"integer","value":i64::MAX}]})).unwrap();
+        assert!(matches!(eval(&add, &Mixed).unwrap(), V::Num(_)));
     }
 }

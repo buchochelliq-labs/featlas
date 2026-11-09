@@ -39,7 +39,12 @@ pub struct Limits {
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits { max_input_rows: 1_000_000, max_output_rows: 1_000_000, max_join_pairs: 20_000_000, deadline: None }
+        Limits {
+            max_input_rows: 1_000_000,
+            max_output_rows: 1_000_000,
+            max_join_pairs: 20_000_000,
+            deadline: None,
+        }
     }
 }
 
@@ -97,24 +102,41 @@ struct FeatureOutput {
 
 impl<'a> Evaluator<'a> {
     fn note(&mut self, feature: &str, stage: &str, detail: String) {
-        self.trace.push(TraceStep { feature: feature.into(), stage: stage.into(), detail });
+        self.trace.push(TraceStep {
+            feature: feature.into(),
+            stage: stage.into(),
+            detail,
+        });
     }
 
     fn tick(&mut self, n: usize) -> Result<(), EvalError> {
         self.work += n;
         if self.work > self.limits.max_join_pairs {
-            return Err(err("RESOURCE_LIMIT_EXCEEDED", "SEM-BUDGET-001", format!("Evaluation exceeded {} work units; no sampling or truncation is performed", self.limits.max_join_pairs)));
+            return Err(err(
+                "RESOURCE_LIMIT_EXCEEDED",
+                "SEM-BUDGET-001",
+                format!(
+                    "Evaluation exceeded {} work units; no sampling or truncation is performed",
+                    self.limits.max_join_pairs
+                ),
+            ));
         }
         if let Some(d) = self.limits.deadline {
             if std::time::Instant::now() > d {
-                return Err(err("RESOURCE_LIMIT_EXCEEDED", "SEM-BUDGET-001", "Evaluation exceeded its time limit"));
+                return Err(err(
+                    "RESOURCE_LIMIT_EXCEEDED",
+                    "SEM-BUDGET-001",
+                    "Evaluation exceeded its time limit",
+                ));
             }
         }
         Ok(())
     }
 
     fn source(&self, id: &str) -> Result<&'a Source, EvalError> {
-        self.p.source(id).ok_or_else(|| err("UNKNOWN_SOURCE", "SEM-ID-002", id.to_string()))
+        self.p
+            .source(id)
+            .ok_or_else(|| err("UNKNOWN_SOURCE", "SEM-ID-002", id.to_string()))
     }
 
     fn status(&self, id: &str) -> Result<&'a SourceStatus, EvalError> {
@@ -122,7 +144,15 @@ impl<'a> Evaluator<'a> {
             .source_status
             .iter()
             .find(|s| s.source() == id)
-            .ok_or_else(|| err("MISSING_SOURCE_STATUS", "SEM-MISS-003", format!("No source status evidence for {id}; absent rows never prove completeness")))
+            .ok_or_else(|| {
+                err(
+                    "MISSING_SOURCE_STATUS",
+                    "SEM-MISS-003",
+                    format!(
+                        "No source status evidence for {id}; absent rows never prove completeness"
+                    ),
+                )
+            })
     }
 
     /// Stage 1: type-validate every supplied row of a source.
@@ -135,24 +165,73 @@ impl<'a> Evaluator<'a> {
             .req
             .source_rows
             .get(sid)
-            .ok_or_else(|| err("MISSING_SOURCE_ROWS", "SEM-TEST-001", format!("No rows (not even an explicit empty list) supplied for {sid}")))?
+            .ok_or_else(|| {
+                err(
+                    "MISSING_SOURCE_ROWS",
+                    "SEM-TEST-001",
+                    format!("No rows (not even an explicit empty list) supplied for {sid}"),
+                )
+            })?
             .as_array()
-            .ok_or_else(|| err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid} rows must be a list")))?;
+            .ok_or_else(|| {
+                err(
+                    "INVALID_SOURCE_ROW",
+                    "SEM-SRC-001",
+                    format!("{sid} rows must be a list"),
+                )
+            })?;
         if rows.len() > self.limits.max_input_rows {
-            return Err(err("RESOURCE_LIMIT_EXCEEDED", "SEM-BUDGET-001", format!("{sid} has {} rows; limit {}", rows.len(), self.limits.max_input_rows)));
+            return Err(err(
+                "RESOURCE_LIMIT_EXCEEDED",
+                "SEM-BUDGET-001",
+                format!(
+                    "{sid} has {} rows; limit {}",
+                    rows.len(),
+                    self.limits.max_input_rows
+                ),
+            ));
         }
         let mut out = Vec::with_capacity(rows.len());
         for (i, row) in rows.iter().enumerate() {
-            let obj = row.as_object().ok_or_else(|| err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid}[{i}] is not an object")))?;
+            let obj = row.as_object().ok_or_else(|| {
+                err(
+                    "INVALID_SOURCE_ROW",
+                    "SEM-SRC-001",
+                    format!("{sid}[{i}] is not an object"),
+                )
+            })?;
             if obj.len() != s.columns.len() || obj.keys().any(|k| s.column(k).is_none()) {
-                return Err(err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid}[{i}] columns differ from the source contract")));
+                return Err(err(
+                    "INVALID_SOURCE_ROW",
+                    "SEM-SRC-001",
+                    format!("{sid}[{i}] columns differ from the source contract"),
+                ));
             }
             let mut t = TRow::new();
             for c in &s.columns {
-                let raw = obj.get(&c.name).ok_or_else(|| err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid}[{i}] lacks {}", c.name)))?;
-                let v = V::from_json(raw, c.ty).map_err(|m| err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid}[{i}].{}: {m}", c.name)))?;
+                let raw = obj.get(&c.name).ok_or_else(|| {
+                    err(
+                        "INVALID_SOURCE_ROW",
+                        "SEM-SRC-001",
+                        format!("{sid}[{i}] lacks {}", c.name),
+                    )
+                })?;
+                let v = V::from_json(raw, c.ty).map_err(|m| {
+                    err(
+                        "INVALID_SOURCE_ROW",
+                        "SEM-SRC-001",
+                        format!("{sid}[{i}].{}: {m}", c.name),
+                    )
+                })?;
                 if v.is_null() && !c.nullable {
-                    return Err(err("INVALID_SOURCE_ROW", "SEM-SRC-001", format!("{sid}[{i}].{} is null but not nullable (invalid_row_policy: reject)", c.name)));
+                    return Err(err(
+                        "INVALID_SOURCE_ROW",
+                        "SEM-SRC-001",
+                        format!(
+                            "{sid}[{i}].{} is null but not nullable (invalid_row_policy: reject)",
+                            c.name
+                        ),
+                    ));
                 }
                 t.insert(c.name.clone(), v);
             }
@@ -165,7 +244,12 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Stages 2–5 for one source at one cutoff.
-    fn reconstruct(&mut self, feature: &str, sid: &str, upper: Boundary) -> Result<Vec<TRow>, EvalError> {
+    fn reconstruct(
+        &mut self,
+        feature: &str,
+        sid: &str,
+        upper: Boundary,
+    ) -> Result<Vec<TRow>, EvalError> {
         self.validate_rows(sid)?;
         let s = self.source(sid)?;
         let cutoff = self.req.as_of;
@@ -174,7 +258,13 @@ impl<'a> Evaluator<'a> {
         let available: Vec<TRow> = all
             .into_iter()
             .filter(|r| match r.get(&s.time.available_time) {
-                Some(V::Ts(t)) => if upper == Boundary::Inclusive { *t <= cutoff } else { *t < cutoff },
+                Some(V::Ts(t)) => {
+                    if upper == Boundary::Inclusive {
+                        *t <= cutoff
+                    } else {
+                        *t < cutoff
+                    }
+                }
                 _ => false,
             })
             .collect();
@@ -202,7 +292,12 @@ impl<'a> Evaluator<'a> {
         // Logical key partition and revision selection.
         let mut by_lk: BTreeMap<String, Vec<TRow>> = BTreeMap::new();
         for r in deduped {
-            let k: Vec<V> = s.record_semantics.logical_key().iter().map(|c| r[c].clone()).collect();
+            let k: Vec<V> = s
+                .record_semantics
+                .logical_key()
+                .iter()
+                .map(|c| r[c].clone())
+                .collect();
             by_lk.entry(key_string(&k)).or_default().push(r);
         }
         let mut selected = Vec::new();
@@ -211,16 +306,27 @@ impl<'a> Evaluator<'a> {
             match &s.record_semantics {
                 RecordSemantics::AppendOnly { .. } => {
                     if group.iter().skip(1).any(|r| !rows_identical(r, &group[0])) {
-                        return Err(err("DUPLICATE_CONFLICT", "SEM-REV-002", format!("{sid}: an immutable logical event has conflicting physical rows")));
+                        return Err(err(
+                            "DUPLICATE_CONFLICT",
+                            "SEM-REV-002",
+                            format!(
+                                "{sid}: an immutable logical event has conflicting physical rows"
+                            ),
+                        ));
                     }
                     selected.push(group.swap_remove(0));
                 }
                 RecordSemantics::Versioned { revision, .. } => {
                     let order = |a: &TRow, b: &TRow| -> Ordering {
                         for o in &revision.order_by {
-                            let ord = compare(&a[&o.column], &b[&o.column]).unwrap_or(Ordering::Equal);
+                            let ord =
+                                compare(&a[&o.column], &b[&o.column]).unwrap_or(Ordering::Equal);
                             if ord != Ordering::Equal {
-                                return if o.direction == "desc" { ord.reverse() } else { ord };
+                                return if o.direction == "desc" {
+                                    ord.reverse()
+                                } else {
+                                    ord
+                                };
                             }
                         }
                         Ordering::Equal
@@ -228,18 +334,30 @@ impl<'a> Evaluator<'a> {
                     // Every eligible revision-key tie with differing payload is contradictory.
                     let mut seen: BTreeMap<String, &TRow> = BTreeMap::new();
                     for r in &group {
-                        let rk: Vec<V> = revision.order_by.iter().map(|o| r[&o.column].clone()).collect();
+                        let rk: Vec<V> = revision
+                            .order_by
+                            .iter()
+                            .map(|o| r[&o.column].clone())
+                            .collect();
                         let key = key_string(&rk);
                         if let Some(prev) = seen.get(&key) {
                             if policy == DuplicatePolicy::Reject || !rows_identical(prev, r) {
-                                return Err(err("DUPLICATE_CONFLICT", "SEM-REV-001", format!("{sid}: contradictory revisions share ordering key {key:?}")));
+                                return Err(err(
+                                    "DUPLICATE_CONFLICT",
+                                    "SEM-REV-001",
+                                    format!(
+                                        "{sid}: contradictory revisions share ordering key {key:?}"
+                                    ),
+                                ));
                             }
                         }
                         seen.insert(key, r);
                     }
                     group.sort_by(order);
                     let top = group.swap_remove(0);
-                    if let (Some(col), Some(val)) = (&revision.tombstone_column, revision.tombstone_value) {
+                    if let (Some(col), Some(val)) =
+                        (&revision.tombstone_column, revision.tombstone_value)
+                    {
                         if top.get(col) == Some(&V::Bool(val)) {
                             tombstoned += 1;
                             continue;
@@ -267,15 +385,29 @@ impl<'a> Evaluator<'a> {
         let mut seen = BTreeSet::new();
         for r in rows {
             let ok = match &r[&s.time.event_time] {
-                V::Ts(e) => if pop.event_time_upper == Boundary::Inclusive { *e <= t } else { *e < t },
+                V::Ts(e) => {
+                    if pop.event_time_upper == Boundary::Inclusive {
+                        *e <= t
+                    } else {
+                        *e < t
+                    }
+                }
                 _ => false,
             };
             if !ok {
                 continue;
             }
-            let k: Vec<V> = entity.keys.iter().map(|k| r[&k.source_column].clone()).collect();
+            let k: Vec<V> = entity
+                .keys
+                .iter()
+                .map(|k| r[&k.source_column].clone())
+                .collect();
             if !seen.insert(key_string(&k)) {
-                return Err(err("DUPLICATE_POPULATION", "SEM-ENT-001", "Population source produces duplicate entity keys at T"));
+                return Err(err(
+                    "DUPLICATE_POPULATION",
+                    "SEM-ENT-001",
+                    "Population source produces duplicate entity keys at T",
+                ));
             }
             keys.push(k);
         }
@@ -284,8 +416,17 @@ impl<'a> Evaluator<'a> {
             for row in expected {
                 let mut k = Vec::new();
                 for ek in &entity.keys {
-                    let raw = row.get(&ek.name).ok_or_else(|| err("POPULATION_MISMATCH", "SEM-ENT-001", format!("Fixture population row lacks {}", ek.name)))?;
-                    k.push(V::from_json(raw, ek.ty).map_err(|m| err("POPULATION_MISMATCH", "SEM-ENT-001", m))?);
+                    let raw = row.get(&ek.name).ok_or_else(|| {
+                        err(
+                            "POPULATION_MISMATCH",
+                            "SEM-ENT-001",
+                            format!("Fixture population row lacks {}", ek.name),
+                        )
+                    })?;
+                    k.push(
+                        V::from_json(raw, ek.ty)
+                            .map_err(|m| err("POPULATION_MISMATCH", "SEM-ENT-001", m))?,
+                    );
                 }
                 want.insert(key_string(&k));
             }
@@ -294,7 +435,11 @@ impl<'a> Evaluator<'a> {
             }
         }
         keys.sort_by_key(|k| key_string(k));
-        self.note("", "population", format!("{}: {} eligible entities", entity.id, keys.len()));
+        self.note(
+            "",
+            "population",
+            format!("{}: {} eligible entities", entity.id, keys.len()),
+        );
         Ok(keys)
     }
 
@@ -303,11 +448,22 @@ impl<'a> Evaluator<'a> {
     }
 
     fn feature_by_id(&self, id: &str) -> Result<&'a Feature, EvalError> {
-        self.p.feature(id).ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", id.to_string()))
+        self.p
+            .feature(id)
+            .ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", id.to_string()))
     }
 
-    fn compute(&mut self, f: &'a Feature, population: &[Vec<V>], deps: &HashMap<String, FeatureOutput>, entity: &Entity) -> Result<FeatureOutput, EvalError> {
-        if matches!(f.transform, Transform::Learned { .. } | Transform::Custom { .. }) {
+    fn compute(
+        &mut self,
+        f: &'a Feature,
+        population: &[Vec<V>],
+        deps: &HashMap<String, FeatureOutput>,
+        entity: &Entity,
+    ) -> Result<FeatureOutput, EvalError> {
+        if matches!(
+            f.transform,
+            Transform::Learned { .. } | Transform::Custom { .. }
+        ) {
             return Err(err(
                 "UNSUPPORTED_CAPABILITY",
                 "SEM-CUSTOM-002",
@@ -315,7 +471,14 @@ impl<'a> Evaluator<'a> {
             ));
         }
         let coverage = self.coverage(f)?;
-        self.note(&f.id, "coverage", format!("{}", coverage.unwrap_or("complete for the required interval")));
+        self.note(
+            &f.id,
+            "coverage",
+            format!(
+                "{}",
+                coverage.unwrap_or("complete for the required interval")
+            ),
+        );
         let mut values: Vec<(V, String)> = Vec::with_capacity(population.len());
         let static_ty = transform_type(self.p, f).and_then(|t| t.ty);
         if coverage == Some("source_unavailable") {
@@ -336,7 +499,11 @@ impl<'a> Evaluator<'a> {
                     for d in &f.dependencies {
                         let st = &deps[&d.feature].values[i].1;
                         if st == "source_unavailable" || st == "insufficient_history" {
-                            inherited = Some(if st == "source_unavailable" { "source_unavailable" } else { "insufficient_history" });
+                            inherited = Some(if st == "source_unavailable" {
+                                "source_unavailable"
+                            } else {
+                                "insufficient_history"
+                            });
                             if st == "source_unavailable" {
                                 break;
                             }
@@ -347,8 +514,26 @@ impl<'a> Evaluator<'a> {
                         continue;
                     }
                     let env = DepEnv { deps, index: i };
-                    let v = expr::eval(expression, &env)?;
+                    let v = expr::eval(
+                        expression,
+                        &Typed {
+                            inner: &env,
+                            p: self.p,
+                            f,
+                        },
+                    )?;
                     values.push((expr::conform(v, static_ty), "ok".into()));
+                }
+            }
+            _ if coverage.is_some() => {
+                // Coverage not established: sources are still validated and reconstructed (data
+                // contract violations surface), but windows/joins/predicates/transforms are skipped.
+                let state = coverage.unwrap();
+                for inp in &f.inputs {
+                    self.reconstruct(&f.id, &inp.source, f.time.availability.upper)?;
+                }
+                for _ in population {
+                    values.push(missing(f, state)?);
                 }
             }
             _ => {
@@ -358,7 +543,10 @@ impl<'a> Evaluator<'a> {
                         values.push(missing(f, state)?);
                         continue;
                     }
-                    let rows = groups.get(&key_string(key)).map(Vec::as_slice).unwrap_or(&[]);
+                    let rows = groups
+                        .get(&key_string(key))
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]);
                     values.push(self.reduce(f, rows, static_ty)?);
                 }
             }
@@ -367,38 +555,96 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Stage 7: window, joins, predicate and grouping for a row-level transform.
-    fn row_environments(&mut self, f: &'a Feature, entity: &Entity) -> Result<HashMap<String, Vec<Env>>, EvalError> {
+    fn row_environments(
+        &mut self,
+        f: &'a Feature,
+        entity: &Entity,
+    ) -> Result<HashMap<String, Vec<Env>>, EvalError> {
         let (input, joins, group_by, filter) = f.transform.row_shape().unwrap();
-        let primary = f.input(input).ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", input.to_string()))?;
+        let primary = f
+            .input(input)
+            .ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", input.to_string()))?;
         let ps = self.source(&primary.source)?;
         let avail = f.time.availability.upper;
         let rows = self.reconstruct(&f.id, &ps.id, avail)?;
         let w = &f.time.window;
         let t = self.req.as_of;
-        let start = t.checked_sub_seconds(w.lookback_seconds).ok_or_else(|| err("NUMERIC_OVERFLOW", "SEM-TIME-001", "Window underflows"))?;
+        let start = t
+            .checked_sub_seconds(w.lookback_seconds)
+            .ok_or_else(|| err("NUMERIC_OVERFLOW", "SEM-TIME-001", "Window underflows"))?;
         let before = rows.len();
         let windowed: Vec<TRow> = rows
             .into_iter()
             .filter(|r| match &r[&ps.time.event_time] {
                 V::Ts(e) => {
-                    (if w.lower == Boundary::Inclusive { *e >= start } else { *e > start }) && (if w.upper == Boundary::Inclusive { *e <= t } else { *e < t })
+                    (if w.lower == Boundary::Inclusive {
+                        *e >= start
+                    } else {
+                        *e > start
+                    }) && (if w.upper == Boundary::Inclusive {
+                        *e <= t
+                    } else {
+                        *e < t
+                    })
                 }
                 _ => false,
             })
             .collect();
-        self.note(&f.id, "event_window", format!("{}: {before} → {} rows in {}{start}, {t}{}", ps.id, windowed.len(), if w.lower == Boundary::Inclusive { "[" } else { "(" }, if w.upper == Boundary::Inclusive { "]" } else { ")" }));
-        let mut envs: Vec<Env> = windowed.into_iter().map(|r| Env { rows: BTreeMap::from([(input.to_string(), Some(r))]) }).collect();
+        self.note(
+            &f.id,
+            "event_window",
+            format!(
+                "{}: {before} → {} rows in {}{start}, {t}{}",
+                ps.id,
+                windowed.len(),
+                if w.lower == Boundary::Inclusive {
+                    "["
+                } else {
+                    "("
+                },
+                if w.upper == Boundary::Inclusive {
+                    "]"
+                } else {
+                    ")"
+                }
+            ),
+        );
+        let mut envs: Vec<Env> = windowed
+            .into_iter()
+            .map(|r| Env {
+                rows: BTreeMap::from([(input.to_string(), Some(r))]),
+            })
+            .collect();
         for j in joins {
-            let r = self.p.relationship(&j.relationship).ok_or_else(|| err("UNKNOWN_RELATIONSHIP", "SEM-ID-002", j.relationship.clone()))?;
-            let right_input = f.input(&j.right_alias).ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", j.right_alias.clone()))?;
-            let left_input = f.input(&j.left_alias).ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", j.left_alias.clone()))?;
+            let r = self
+                .p
+                .relationship(&j.relationship)
+                .ok_or_else(|| err("UNKNOWN_RELATIONSHIP", "SEM-ID-002", j.relationship.clone()))?;
+            let right_input = f
+                .input(&j.right_alias)
+                .ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", j.right_alias.clone()))?;
+            let left_input = f
+                .input(&j.left_alias)
+                .ok_or_else(|| err("UNKNOWN_INPUT", "SEM-REL-001", j.left_alias.clone()))?;
             let left_source = self.source(&left_input.source)?;
             let candidates = self.reconstruct(&f.id, &right_input.source, avail)?;
-            if let RelationshipTemporal::AsOf { valid_from, valid_to, .. } = &r.temporal {
+            if let RelationshipTemporal::AsOf {
+                valid_from,
+                valid_to,
+                ..
+            } = &r.temporal
+            {
                 for c in &candidates {
                     if let (V::Ts(a), V::Ts(b)) = (&c[valid_from], &c[valid_to]) {
                         if b <= a {
-                            return Err(err("INVALID_INTERVAL", "SEM-REV-003", format!("{}: selected revision has valid_to <= valid_from", right_input.source)));
+                            return Err(err(
+                                "INVALID_INTERVAL",
+                                "SEM-REV-003",
+                                format!(
+                                    "{}: selected revision has valid_to <= valid_from",
+                                    right_input.source
+                                ),
+                            ));
                         }
                     }
                 }
@@ -422,18 +668,47 @@ impl<'a> Evaluator<'a> {
                 };
                 let has_null = key.iter().any(V::is_null);
                 if has_null && r.null_keys == NullKeys::Error {
-                    return Err(err("NULL_JOIN_KEY", "SEM-REL-003", format!("{}: null join key with null_keys: error", r.id)));
+                    return Err(err(
+                        "NULL_JOIN_KEY",
+                        "SEM-REL-003",
+                        format!("{}: null join key with null_keys: error", r.id),
+                    ));
                 }
-                if r.cardinality == Cardinality::OneToOne && !has_null && !seen_left.insert(key_string(&key)) {
-                    return Err(err("CARDINALITY_VIOLATION", "SEM-REL-002", format!("{}: repeated eligible left key for a one-to-one relationship", r.id)));
+                if r.cardinality == Cardinality::OneToOne
+                    && !has_null
+                    && !seen_left.insert(key_string(&key))
+                {
+                    return Err(err(
+                        "CARDINALITY_VIOLATION",
+                        "SEM-REL-002",
+                        format!(
+                            "{}: repeated eligible left key for a one-to-one relationship",
+                            r.id
+                        ),
+                    ));
                 }
                 let mut matches = Vec::new();
                 if !has_null {
-                    for &ci in index.get(&key_string(&key)).map(Vec::as_slice).unwrap_or(&[]) {
+                    for &ci in index
+                        .get(&key_string(&key))
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[])
+                    {
                         self.tick(1)?;
                         let c = &candidates[ci];
-                        if let RelationshipTemporal::AsOf { valid_from, valid_to, lower, upper, .. } = &r.temporal {
-                            let Some(V::Ts(ev)) = left.as_ref().map(|l| &l[&left_source.time.event_time]) else { continue };
+                        if let RelationshipTemporal::AsOf {
+                            valid_from,
+                            valid_to,
+                            lower,
+                            upper,
+                            ..
+                        } = &r.temporal
+                        {
+                            let Some(V::Ts(ev)) =
+                                left.as_ref().map(|l| &l[&left_source.time.event_time])
+                            else {
+                                continue;
+                            };
                             let from_ok = match (&c[valid_from], lower) {
                                 (V::Ts(a), Boundary::Inclusive) => ev >= a,
                                 (V::Ts(a), Boundary::Exclusive) => ev > a,
@@ -458,12 +733,19 @@ impl<'a> Evaluator<'a> {
                 let mut env = env;
                 if let Some(ci) = matches.first() {
                     matched += 1;
-                    env.rows.insert(j.right_alias.clone(), Some(candidates[*ci].clone()));
+                    env.rows
+                        .insert(j.right_alias.clone(), Some(candidates[*ci].clone()));
                     out.push(env);
                 } else {
                     unmatched += 1;
                     match r.unmatched {
-                        Unmatched::Error => return Err(err("UNMATCHED_JOIN", "SEM-REL-003", format!("{}: unmatched left row with unmatched: error", r.id))),
+                        Unmatched::Error => {
+                            return Err(err(
+                                "UNMATCHED_JOIN",
+                                "SEM-REL-003",
+                                format!("{}: unmatched left row with unmatched: error", r.id),
+                            ))
+                        }
                         Unmatched::PreserveNull => {
                             env.rows.insert(j.right_alias.clone(), None);
                             out.push(env);
@@ -472,26 +754,51 @@ impl<'a> Evaluator<'a> {
                     }
                 }
             }
-            self.note(&f.id, "join", format!("{} ({:?}, {:?}): {matched} matched, {unmatched} unmatched", r.id, r.cardinality, r.temporal.temporal_mode()));
+            self.note(
+                &f.id,
+                "join",
+                format!(
+                    "{} ({:?}, {:?}): {matched} matched, {unmatched} unmatched",
+                    r.id,
+                    r.cardinality,
+                    r.temporal.temporal_mode()
+                ),
+            );
             envs = out;
         }
         if let Some(fl) = filter {
             let before = envs.len();
             let mut kept = Vec::new();
             for e in envs {
-                if expr::passes(&expr::eval(fl, &e)?) {
+                if expr::passes(&expr::eval(
+                    fl,
+                    &Typed {
+                        inner: &e,
+                        p: self.p,
+                        f,
+                    },
+                )?) {
                     kept.push(e);
                 }
             }
             envs = kept;
-            self.note(&f.id, "predicate", format!("{before} → {} rows (only true passes)", envs.len()));
+            self.note(
+                &f.id,
+                "predicate",
+                format!("{before} → {} rows (only true passes)", envs.len()),
+            );
         }
         let mut groups: HashMap<String, Vec<Env>> = HashMap::new();
         for e in envs {
             let mut key = Vec::new();
             let mut ok = true;
             for k in &entity.keys {
-                let g = group_by.iter().find(|g| g.entity_key == k.name).ok_or_else(|| err("ENTITY_MAPPING_INCOMPLETE", "SEM-ENT-002", k.name.clone()))?;
+                let g = group_by
+                    .iter()
+                    .find(|g| g.entity_key == k.name)
+                    .ok_or_else(|| {
+                        err("ENTITY_MAPPING_INCOMPLETE", "SEM-ENT-002", k.name.clone())
+                    })?;
                 match e.rows.get(&g.input).cloned().flatten() {
                     Some(r) if !r[&g.column].is_null() => key.push(r[&g.column].clone()),
                     _ => ok = false,
@@ -501,14 +808,38 @@ impl<'a> Evaluator<'a> {
                 groups.entry(key_string(&key)).or_default().push(e);
             }
         }
-        self.note(&f.id, "group", format!("{} entity groups on complete keys ({})", groups.len(), entity.keys.iter().map(|k| k.name.as_str()).collect::<Vec<_>>().join(", ")));
+        self.note(
+            &f.id,
+            "group",
+            format!(
+                "{} entity groups on complete keys ({})",
+                groups.len(),
+                entity
+                    .keys
+                    .iter()
+                    .map(|k| k.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        );
         Ok(groups)
     }
 
     /// Stage 8 for one entity's eligible rows.
-    fn reduce(&mut self, f: &Feature, rows: &[Env], static_ty: Option<LogicalType>) -> Result<(V, String), EvalError> {
+    fn reduce(
+        &mut self,
+        f: &Feature,
+        rows: &[Env],
+        static_ty: Option<LogicalType>,
+    ) -> Result<(V, String), EvalError> {
         match &f.transform {
-            Transform::Aggregate { operation, value, distinct_by, nulls, .. } => {
+            Transform::Aggregate {
+                operation,
+                value,
+                distinct_by,
+                nulls,
+                ..
+            } => {
                 if rows.is_empty() {
                     return empty(f);
                 }
@@ -518,10 +849,34 @@ impl<'a> Evaluator<'a> {
                     AggregateOp::CountDistinct => {
                         let mut set = BTreeSet::new();
                         for e in rows {
-                            let tuple: Vec<V> = distinct_by.iter().map(|d| expr::eval(d, e)).collect::<Result<_, _>>()?;
+                            let tuple: Vec<V> = distinct_by
+                                .iter()
+                                .map(|d| {
+                                    expr::eval(
+                                        d,
+                                        &Typed {
+                                            inner: e,
+                                            p: self.p,
+                                            f,
+                                        },
+                                    )
+                                    .map(|v| {
+                                        expr::conform(
+                                            v,
+                                            crate::validate::expr_static_type(self.p, f, d),
+                                        )
+                                    })
+                                })
+                                .collect::<Result<_, _>>()?;
                             if tuple.iter().any(V::is_null) {
                                 match nulls {
-                                    NullPolicy::Error => return Err(err("NULL_INPUT", "SEM-TRANS-004", "Null distinct_by component with nulls: error")),
+                                    NullPolicy::Error => {
+                                        return Err(err(
+                                            "NULL_INPUT",
+                                            "SEM-TRANS-004",
+                                            "Null distinct_by component with nulls: error",
+                                        ))
+                                    }
                                     NullPolicy::Propagate => return Ok((V::Null, "ok".into())),
                                     NullPolicy::Ignore => continue,
                                 }
@@ -531,13 +886,35 @@ impl<'a> Evaluator<'a> {
                         ok(V::Int(set.len() as i64))
                     }
                     op => {
-                        let expr = value.as_ref().ok_or_else(|| err("TYPE_MISMATCH", "SEM-TRANS-004", "Aggregate requires a value expression"))?;
+                        let expr = value.as_ref().ok_or_else(|| {
+                            err(
+                                "TYPE_MISMATCH",
+                                "SEM-TRANS-004",
+                                "Aggregate requires a value expression",
+                            )
+                        })?;
                         let mut vals = Vec::new();
                         for e in rows {
-                            let v = expr::eval(expr, e)?;
+                            let v = expr::conform(
+                                expr::eval(
+                                    expr,
+                                    &Typed {
+                                        inner: e,
+                                        p: self.p,
+                                        f,
+                                    },
+                                )?,
+                                static_ty,
+                            );
                             if v.is_null() {
                                 match nulls {
-                                    NullPolicy::Error => return Err(err("NULL_INPUT", "SEM-TRANS-004", "Null aggregate input with nulls: error")),
+                                    NullPolicy::Error => {
+                                        return Err(err(
+                                            "NULL_INPUT",
+                                            "SEM-TRANS-004",
+                                            "Null aggregate input with nulls: error",
+                                        ))
+                                    }
                                     NullPolicy::Propagate => return Ok((V::Null, "ok".into())),
                                     NullPolicy::Ignore => continue,
                                 }
@@ -552,25 +929,50 @@ impl<'a> Evaluator<'a> {
                     }
                 }
             }
-            Transform::Recency { input, event_time, .. } => {
+            Transform::Recency {
+                input, event_time, ..
+            } => {
                 if rows.is_empty() {
                     return empty(f);
                 }
                 let latest = rows
                     .iter()
-                    .filter_map(|e| match e.rows.get(input).cloned().flatten().map(|r| r[event_time].clone()) {
-                        Some(V::Ts(t)) => Some(t),
-                        _ => None,
+                    .filter_map(|e| {
+                        match e
+                            .rows
+                            .get(input)
+                            .cloned()
+                            .flatten()
+                            .map(|r| r[event_time].clone())
+                        {
+                            Some(V::Ts(t)) => Some(t),
+                            _ => None,
+                        }
                     })
                     .max()
-                    .ok_or_else(|| err("TYPE_MISMATCH", "SEM-TRANS-005", "Recency rows lack event time"))?;
+                    .ok_or_else(|| {
+                        err(
+                            "TYPE_MISMATCH",
+                            "SEM-TRANS-005",
+                            "Recency rows lack event time",
+                        )
+                    })?;
                 let elapsed = self.req.as_of.micros - latest.micros;
                 if elapsed < 0 {
-                    return Err(err("NEGATIVE_RECENCY", "SEM-TRANS-005", "Latest eligible event is after as_of"));
+                    return Err(err(
+                        "NEGATIVE_RECENCY",
+                        "SEM-TRANS-005",
+                        "Latest eligible event is after as_of",
+                    ));
                 }
-                Ok((expr::conform(V::Int(elapsed.div_euclid(MICROS_PER_SECOND)), static_ty), "ok".into()))
+                Ok((
+                    expr::conform(V::Int(elapsed.div_euclid(MICROS_PER_SECOND)), static_ty),
+                    "ok".into(),
+                ))
             }
-            Transform::Lookup { value, order_by, .. } => {
+            Transform::Lookup {
+                value, order_by, ..
+            } => {
                 if rows.is_empty() {
                     return empty(f);
                 }
@@ -578,21 +980,38 @@ impl<'a> Evaluator<'a> {
                     order_by
                         .iter()
                         .map(|o| {
-                            let v = e.rows.get(&o.input).cloned().flatten().map(|r| r[&o.column].clone()).unwrap_or(V::Null);
+                            let v = e
+                                .rows
+                                .get(&o.input)
+                                .cloned()
+                                .flatten()
+                                .map(|r| r[&o.column].clone())
+                                .unwrap_or(V::Null);
                             if v.is_null() {
-                                Err(err("NULL_ORDER_KEY", "SEM-TRANS-005", format!("Lookup ordering key {}.{} is null", o.input, o.column)))
+                                Err(err(
+                                    "NULL_ORDER_KEY",
+                                    "SEM-TRANS-005",
+                                    format!("Lookup ordering key {}.{} is null", o.input, o.column),
+                                ))
                             } else {
                                 Ok(v)
                             }
                         })
                         .collect()
                 };
-                let mut keyed: Vec<(Vec<V>, &Env)> = rows.iter().map(|e| key_of(e).map(|k| (k, e))).collect::<Result<_, _>>()?;
+                let mut keyed: Vec<(Vec<V>, &Env)> = rows
+                    .iter()
+                    .map(|e| key_of(e).map(|k| (k, e)))
+                    .collect::<Result<_, _>>()?;
                 let cmp = |a: &Vec<V>, b: &Vec<V>| -> Ordering {
                     for (i, o) in order_by.iter().enumerate() {
                         let ord = compare(&a[i], &b[i]).unwrap_or(Ordering::Equal);
                         if ord != Ordering::Equal {
-                            return if o.direction == "desc" { ord.reverse() } else { ord };
+                            return if o.direction == "desc" {
+                                ord.reverse()
+                            } else {
+                                ord
+                            };
                         }
                     }
                     Ordering::Equal
@@ -601,10 +1020,21 @@ impl<'a> Evaluator<'a> {
                 if keyed.len() > 1 && cmp(&keyed[0].0, &keyed[1].0) == Ordering::Equal {
                     return Err(err("LOOKUP_TIE", "SEM-TRANS-005", "Lookup ordering is tied for the first row; ties are diagnosed even when values are equal"));
                 }
-                let v = expr::eval(value, keyed[0].1)?;
+                let v = expr::eval(
+                    value,
+                    &Typed {
+                        inner: keyed[0].1,
+                        p: self.p,
+                        f,
+                    },
+                )?;
                 Ok((expr::conform(v, static_ty), "ok".into()))
             }
-            _ => Err(err("UNSUPPORTED_CAPABILITY", "SEM-CUSTOM-002", f.transform.kind().to_string())),
+            _ => Err(err(
+                "UNSUPPORTED_CAPABILITY",
+                "SEM-CUSTOM-002",
+                f.transform.kind().to_string(),
+            )),
         }
     }
 }
@@ -619,23 +1049,51 @@ impl RelationshipTemporal {
 }
 
 /// Coverage/outage state for a feature over all transitive sources (SEM-MISS-002/003).
-pub fn coverage_state(p: &Project, f: &Feature, as_of: Instant, statuses: &[SourceStatus]) -> Result<Option<&'static str>, EvalError> {
+pub fn coverage_state(
+    p: &Project,
+    f: &Feature,
+    as_of: Instant,
+    statuses: &[SourceStatus],
+) -> Result<Option<&'static str>, EvalError> {
     let t = as_of;
     let sources = feature_sources(p, &f.id);
     let mut unavailable = false;
     let mut insufficient = false;
-    let earliest = Instant::parse(&f.history.earliest_as_of).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+    let earliest = Instant::parse(&f.history.earliest_as_of)
+        .map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
     if t < earliest {
         insufficient = true;
     }
-    let start = t.checked_sub_seconds(f.history.required_seconds).ok_or_else(|| err("NUMERIC_OVERFLOW", "SEM-TIME-001", "History interval underflows"))?;
+    let start = t
+        .checked_sub_seconds(f.history.required_seconds)
+        .ok_or_else(|| {
+            err(
+                "NUMERIC_OVERFLOW",
+                "SEM-TIME-001",
+                "History interval underflows",
+            )
+        })?;
     for sid in &sources {
-        let s = p.source(sid).ok_or_else(|| err("UNKNOWN_SOURCE", "SEM-ID-002", sid.clone()))?;
-        match statuses.iter().find(|x| x.source() == sid).ok_or_else(|| err("MISSING_SOURCE_STATUS", "SEM-MISS-003", format!("No source status evidence for {sid}")))? {
+        let s = p
+            .source(sid)
+            .ok_or_else(|| err("UNKNOWN_SOURCE", "SEM-ID-002", sid.clone()))?;
+        match statuses.iter().find(|x| x.source() == sid).ok_or_else(|| {
+            err(
+                "MISSING_SOURCE_STATUS",
+                "SEM-MISS-003",
+                format!("No source status evidence for {sid}"),
+            )
+        })? {
             SourceStatus::Unavailable { .. } => unavailable = true,
-            SourceStatus::Available { coverage_start, coverage_end, .. } => {
-                let cs = Instant::parse(coverage_start).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
-                let ce = Instant::parse(coverage_end).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+            SourceStatus::Available {
+                coverage_start,
+                coverage_end,
+                ..
+            } => {
+                let cs = Instant::parse(coverage_start)
+                    .map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+                let ce = Instant::parse(coverage_end)
+                    .map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
                 let end_ok = match f.time.window.upper {
                     Boundary::Inclusive => ce > t,
                     Boundary::Exclusive => ce >= t,
@@ -645,7 +1103,8 @@ pub fn coverage_state(p: &Project, f: &Feature, as_of: Instant, statuses: &[Sour
                 }
             }
         }
-        let reproducible = Instant::parse(&s.retention.earliest_reproducible_at).map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
+        let reproducible = Instant::parse(&s.retention.earliest_reproducible_at)
+            .map_err(|m| err("INVALID_TIMESTAMP", "SEM-TIME-003", m))?;
         if t < reproducible {
             insufficient = true;
         }
@@ -659,9 +1118,10 @@ pub fn coverage_state(p: &Project, f: &Feature, as_of: Instant, statuses: &[Sour
     })
 }
 
-
 fn rows_identical(a: &TRow, b: &TRow) -> bool {
-    a.len() == b.len() && a.iter().all(|(k, v)| b.get(k).is_some_and(|w| identical(v, w)))
+    a.len() == b.len()
+        && a.iter()
+            .all(|(k, v)| b.get(k).is_some_and(|w| identical(v, w)))
 }
 
 #[derive(Clone)]
@@ -672,13 +1132,46 @@ struct Env {
 impl ValueEnv for Env {
     fn column(&self, input: &str, column: &str) -> Result<V, EvalError> {
         match self.rows.get(input) {
-            None => Err(err("UNKNOWN_INPUT", "SEM-REL-001", format!("Alias {input} is not reachable"))),
+            None => Err(err(
+                "UNKNOWN_INPUT",
+                "SEM-REL-001",
+                format!("Alias {input} is not reachable"),
+            )),
             Some(None) => Ok(V::Null), // Unmatched side of a left join.
-            Some(Some(r)) => r.get(column).cloned().ok_or_else(|| err("UNKNOWN_COLUMN", "SEM-TRANS-001", format!("{input}.{column}"))),
+            Some(Some(r)) => r.get(column).cloned().ok_or_else(|| {
+                err(
+                    "UNKNOWN_COLUMN",
+                    "SEM-TRANS-001",
+                    format!("{input}.{column}"),
+                )
+            }),
         }
     }
     fn feature(&self, feature: &str, _: &str) -> Result<V, EvalError> {
-        Err(err("UNSUPPORTED_ROW_LEVEL_DEPENDENCY", "SEM-ID-003", feature.to_string()))
+        Err(err(
+            "UNSUPPORTED_ROW_LEVEL_DEPENDENCY",
+            "SEM-ID-003",
+            feature.to_string(),
+        ))
+    }
+}
+
+/// Adds the core's static typing to a value environment (for integer→number widening).
+struct Typed<'a, E: ValueEnv> {
+    inner: &'a E,
+    p: &'a Project,
+    f: &'a Feature,
+}
+
+impl<E: ValueEnv> ValueEnv for Typed<'_, E> {
+    fn column(&self, input: &str, column: &str) -> Result<V, EvalError> {
+        self.inner.column(input, column)
+    }
+    fn feature(&self, feature: &str, version: &str) -> Result<V, EvalError> {
+        self.inner.feature(feature, version)
+    }
+    fn static_type(&self, e: &Expr) -> Option<LogicalType> {
+        crate::validate::expr_static_type(self.p, self.f, e)
     }
 }
 
@@ -689,25 +1182,48 @@ struct DepEnv<'a> {
 
 impl ValueEnv for DepEnv<'_> {
     fn column(&self, input: &str, column: &str) -> Result<V, EvalError> {
-        Err(err("EXPRESSION_SOURCE_INPUT", "SEM-TRANS-001", format!("{input}.{column}")))
+        Err(err(
+            "EXPRESSION_SOURCE_INPUT",
+            "SEM-TRANS-001",
+            format!("{input}.{column}"),
+        ))
     }
     fn feature(&self, feature: &str, _: &str) -> Result<V, EvalError> {
-        self.deps.get(feature).map(|o| o.values[self.index].0.clone()).ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-003", feature.to_string()))
+        self.deps
+            .get(feature)
+            .map(|o| o.values[self.index].0.clone())
+            .ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-003", feature.to_string()))
     }
 }
 
 fn empty(f: &Feature) -> Result<(V, String), EvalError> {
     match &f.missingness.empty {
-        EmptyPolicy::Error => Err(err("EMPTY_FEATURE", "SEM-MISS-002", format!("{}: no eligible rows and empty action error", f.id))),
+        EmptyPolicy::Error => Err(err(
+            "EMPTY_FEATURE",
+            "SEM-MISS-002",
+            format!("{}: no eligible rows and empty action error", f.id),
+        )),
         EmptyPolicy::Null => Ok((V::Null, "empty".into())),
-        EmptyPolicy::Value { value } => Ok((V::from_json(value, f.output.ty).map_err(|m| err("TYPE_MISMATCH", "SEM-MISS-002", m))?, "empty".into())),
+        EmptyPolicy::Value { value } => Ok((
+            V::from_json(value, f.output.ty)
+                .map_err(|m| err("TYPE_MISMATCH", "SEM-MISS-002", m))?,
+            "empty".into(),
+        )),
     }
 }
 
 fn missing(f: &Feature, state: &str) -> Result<(V, String), EvalError> {
-    let policy = if state == "source_unavailable" { f.missingness.source_unavailable } else { f.missingness.insufficient_history };
+    let policy = if state == "source_unavailable" {
+        f.missingness.source_unavailable
+    } else {
+        f.missingness.insufficient_history
+    };
     match policy {
-        NullOrError::Error => Err(err(&state.to_ascii_uppercase(), "SEM-MISS-001", format!("{}: {} with policy error", f.id, state.replace('_', " ")))),
+        NullOrError::Error => Err(err(
+            &state.to_ascii_uppercase(),
+            "SEM-MISS-001",
+            format!("{}: {} with policy error", f.id, state.replace('_', " ")),
+        )),
         NullOrError::Null => Ok((V::Null, state.into())),
     }
 }
@@ -770,19 +1286,41 @@ fn aggregate(op: AggregateOp, vals: &[V]) -> Result<V, EvalError> {
         V::Num(f) => *f,
         _ => f64::NAN,
     };
-    let check = |f: f64| if f.is_finite() { Ok(V::Num(f)) } else { Err(err("NON_FINITE_RESULT", "SEM-TRANS-006", "Aggregate produced a non-finite number")) };
+    let check = |f: f64| {
+        if f.is_finite() {
+            Ok(V::Num(f))
+        } else {
+            Err(err(
+                "NON_FINITE_RESULT",
+                "SEM-TRANS-006",
+                "Aggregate produced a non-finite number",
+            ))
+        }
+    };
     match op {
         AggregateOp::Sum => {
             if all_int {
-                let s: i128 = vals.iter().map(|v| if let V::Int(i) = v { i128::from(*i) } else { 0 }).sum();
-                i64::try_from(s).map(V::Int).map_err(|_| err("NUMERIC_OVERFLOW", "SEM-TRANS-006", "Aggregate signed 64-bit overflow"))
+                let s: i128 = vals
+                    .iter()
+                    .map(|v| if let V::Int(i) = v { i128::from(*i) } else { 0 })
+                    .sum();
+                i64::try_from(s).map(V::Int).map_err(|_| {
+                    err(
+                        "NUMERIC_OVERFLOW",
+                        "SEM-TRANS-006",
+                        "Aggregate signed 64-bit overflow",
+                    )
+                })
             } else {
                 check(fsum(&vals.iter().map(as_f).collect::<Vec<_>>()))
             }
         }
         AggregateOp::Mean => {
             if all_int {
-                let s: i128 = vals.iter().map(|v| if let V::Int(i) = v { i128::from(*i) } else { 0 }).sum();
+                let s: i128 = vals
+                    .iter()
+                    .map(|v| if let V::Int(i) = v { i128::from(*i) } else { 0 })
+                    .sum();
                 check(s as f64 / vals.len() as f64)
             } else {
                 check(fsum(&vals.iter().map(as_f).collect::<Vec<_>>()) / vals.len() as f64)
@@ -791,14 +1329,26 @@ fn aggregate(op: AggregateOp, vals: &[V]) -> Result<V, EvalError> {
         AggregateOp::Min | AggregateOp::Max => {
             let mut best = vals[0].clone();
             for v in &vals[1..] {
-                let ord = compare(v, &best).ok_or_else(|| err("TYPE_MISMATCH", "SEM-TRANS-004", "Incomparable aggregate values"))?;
-                if (op == AggregateOp::Min && ord == Ordering::Less) || (op == AggregateOp::Max && ord == Ordering::Greater) {
+                let ord = compare(v, &best).ok_or_else(|| {
+                    err(
+                        "TYPE_MISMATCH",
+                        "SEM-TRANS-004",
+                        "Incomparable aggregate values",
+                    )
+                })?;
+                if (op == AggregateOp::Min && ord == Ordering::Less)
+                    || (op == AggregateOp::Max && ord == Ordering::Greater)
+                {
                     best = v.clone();
                 }
             }
             Ok(best)
         }
-        _ => Err(err("UNSUPPORTED_CAPABILITY", "SEM-TRANS-004", format!("{op:?}"))),
+        _ => Err(err(
+            "UNSUPPORTED_CAPABILITY",
+            "SEM-TRANS-004",
+            format!("{op:?}"),
+        )),
     }
 }
 
@@ -815,56 +1365,122 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
         V::Date(_) => o.ty == LogicalType::Date,
     };
     if !type_ok {
-        return Err(err("OUTPUT_TYPE_MISMATCH", "SEM-OUT-001", format!("{}: {} value violates output type/nullability {}{}", f.id, v.type_name(), o.ty.as_str(), if o.nullable { "?" } else { "" })));
+        return Err(err(
+            "OUTPUT_TYPE_MISMATCH",
+            "SEM-OUT-001",
+            format!(
+                "{}: {} value violates output type/nullability {}{}",
+                f.id,
+                v.type_name(),
+                o.ty.as_str(),
+                if o.nullable { "?" } else { "" }
+            ),
+        ));
     }
     let num = match v {
         V::Int(i) => Some(*i as f64),
         V::Num(x) => Some(*x),
         _ => None,
     };
-    if let Some(x) = num {
-        if o.constraints.minimum.is_some_and(|m| x < m) {
-            return Err(err("QUALITY_VIOLATION", "SEM-OUT-001", format!("{}: output below minimum", f.id)));
-        }
-        if o.constraints.maximum.is_some_and(|m| x > m) {
-            return Err(err("QUALITY_VIOLATION", "SEM-OUT-001", format!("{}: output above maximum", f.id)));
-        }
+    // Exact comparison against binary64 bounds (no lossy i64→f64 cast).
+    let below = |m: f64| match v {
+        V::Int(i) => crate::value::cmp_int_num(*i, m) == Ordering::Less,
+        V::Num(x) => *x < m,
+        _ => false,
+    };
+    let above = |m: f64| match v {
+        V::Int(i) => crate::value::cmp_int_num(*i, m) == Ordering::Greater,
+        V::Num(x) => *x > m,
+        _ => false,
+    };
+    if o.constraints.minimum.is_some_and(below) {
+        return Err(err(
+            "QUALITY_VIOLATION",
+            "SEM-OUT-001",
+            format!("{}: output below minimum", f.id),
+        ));
+    }
+    if o.constraints.maximum.is_some_and(above) {
+        return Err(err(
+            "QUALITY_VIOLATION",
+            "SEM-OUT-001",
+            format!("{}: output above maximum", f.id),
+        ));
     }
     if let Some(allowed) = &o.constraints.enumeration {
-        if !v.is_null() && !allowed.iter().any(|a| V::from_json(a, o.ty).is_ok_and(|a| identical(&a, v))) {
-            return Err(err("QUALITY_VIOLATION", "SEM-OUT-001", format!("{}: output outside enum", f.id)));
+        if !v.is_null()
+            && !allowed
+                .iter()
+                .any(|a| V::from_json(a, o.ty).is_ok_and(|a| identical(&a, v)))
+        {
+            return Err(err(
+                "QUALITY_VIOLATION",
+                "SEM-OUT-001",
+                format!("{}: output outside enum", f.id),
+            ));
         }
     }
     for q in &f.quality.checks {
         let violated = match q {
             QualityCheck::NotNull { .. } => (state == "ok" || state == "empty") && v.is_null(),
-            QualityCheck::Range { minimum, maximum, .. } => num.is_some_and(|x| minimum.is_some_and(|m| x < m) || maximum.is_some_and(|m| x > m)),
-            QualityCheck::Finite { .. } => matches!(v, V::Num(x) if !x.is_finite()) || (!v.is_null() && num.is_none()),
+            QualityCheck::Range {
+                minimum, maximum, ..
+            } => minimum.is_some_and(below) || maximum.is_some_and(above),
+            QualityCheck::Finite { .. } => {
+                matches!(v, V::Num(x) if !x.is_finite()) || (!v.is_null() && num.is_none())
+            }
         };
         if violated {
             if q.severity() == "warn" || f.quality.on_violation == "quarantine" {
                 return Err(err("UNSUPPORTED_CAPABILITY", "SEM-QUAL-001", "Warning/quarantine quality outcomes require an artifact sink this evaluator does not provide"));
             }
-            return Err(err("QUALITY_VIOLATION", "SEM-QUAL-001", format!("{}: declared quality check failed", f.id)));
+            return Err(err(
+                "QUALITY_VIOLATION",
+                "SEM-QUAL-001",
+                format!("{}: declared quality check failed", f.id),
+            ));
         }
     }
     Ok(())
 }
 
 fn key_row(entity: &Entity, key: &[V]) -> Map<String, Json> {
-    entity.keys.iter().zip(key).map(|(k, v)| (k.name.clone(), v.to_json())).collect()
+    entity
+        .keys
+        .iter()
+        .zip(key)
+        .map(|(k, v)| (k.name.clone(), v.to_json()))
+        .collect()
 }
 
 /// Evaluate one feature for one request (source-as-known or replay).
-pub fn evaluate(p: &Project, feature_id: &str, req: &Request, limits: &Limits) -> Result<Evaluation, EvalError> {
-    let mut ev = Evaluator { p, req, limits, trace: Vec::new(), validated: BTreeMap::new(), work: 0 };
+pub fn evaluate(
+    p: &Project,
+    feature_id: &str,
+    req: &Request,
+    limits: &Limits,
+) -> Result<Evaluation, EvalError> {
+    let mut ev = Evaluator {
+        p,
+        req,
+        limits,
+        trace: Vec::new(),
+        validated: BTreeMap::new(),
+        work: 0,
+    };
     let target = ev.feature_by_id(feature_id)?;
-    let entity = p.entity(&target.entity).ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", target.entity.clone()))?;
+    let entity = p
+        .entity(&target.entity)
+        .ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", target.entity.clone()))?;
     // Stage 1 for every direct, transitive and population source.
     for sid in feature_sources(p, feature_id) {
         ev.status(&sid)?;
         if !req.source_rows.contains_key(&sid) {
-            return Err(err("MISSING_SOURCE_ROWS", "SEM-TEST-001", format!("No rows (not even an explicit empty list) supplied for {sid}")));
+            return Err(err(
+                "MISSING_SOURCE_ROWS",
+                "SEM-TEST-001",
+                format!("No rows (not even an explicit empty list) supplied for {sid}"),
+            ));
         }
         if !matches!(ev.status(&sid)?, SourceStatus::Unavailable { .. }) {
             ev.validate_rows(&sid)?;
@@ -872,18 +1488,44 @@ pub fn evaluate(p: &Project, feature_id: &str, req: &Request, limits: &Limits) -
     }
     let population = ev.population(entity)?;
     if population.len() > limits.max_output_rows {
-        return Err(err("RESOURCE_LIMIT_EXCEEDED", "SEM-BUDGET-001", "Population exceeds the output-row limit"));
+        return Err(err(
+            "RESOURCE_LIMIT_EXCEEDED",
+            "SEM-BUDGET-001",
+            "Population exceeds the output-row limit",
+        ));
     }
     if req.mode == SelectionMode::HistoricalServingReplay {
         let rows = replay(p, target, entity, &population, req)?;
-        ev.note(&target.id, "replay", format!("{} entities selected from observed publications", rows.len()));
-        return Ok(Evaluation { rows, trace: ev.trace });
+        ev.note(
+            &target.id,
+            "replay",
+            format!(
+                "{} entities selected from observed publications",
+                rows.len()
+            ),
+        );
+        return Ok(Evaluation {
+            rows,
+            trace: ev.trace,
+        });
     }
     let mut outputs: HashMap<String, FeatureOutput> = HashMap::new();
     for fid in dependency_order(p, &[feature_id.to_string()]) {
         let f = ev.feature_by_id(&fid)?;
-        let deps: HashMap<String, FeatureOutput> = f.dependencies.iter().filter_map(|d| outputs.get(&d.feature).map(|o| (d.feature.clone(), o.clone()))).collect();
-        let out = ev.compute(f, &population, &deps, entity)?;
+        let deps: HashMap<String, FeatureOutput> = f
+            .dependencies
+            .iter()
+            .filter_map(|d| {
+                outputs
+                    .get(&d.feature)
+                    .map(|o| (d.feature.clone(), o.clone()))
+            })
+            .collect();
+        let mut out = ev.compute(f, &population, &deps, entity)?;
+        // Integer results declared as number outputs widen (SEM-TRANS-006).
+        for (v, _) in out.values.iter_mut() {
+            *v = expr::conform(std::mem::replace(v, V::Null), Some(f.output.ty));
+        }
         for (v, state) in &out.values {
             check_output(f, v, state)?;
         }
@@ -892,23 +1534,60 @@ pub fn evaluate(p: &Project, feature_id: &str, req: &Request, limits: &Limits) -
     let rows = population
         .iter()
         .zip(&outputs[feature_id].values)
-        .map(|(k, (v, s))| OutputRow { entity_keys: key_row(entity, k), value: v.to_json(), state: s.clone() })
+        .map(|(k, (v, s))| OutputRow {
+            entity_keys: key_row(entity, k),
+            value: v.to_json(),
+            state: s.clone(),
+        })
         .collect();
-    Ok(Evaluation { rows, trace: ev.trace })
+    Ok(Evaluation {
+        rows,
+        trace: ev.trace,
+    })
 }
 
 /// Historical-serving replay from observed publications (SEM-REPLAY-001/002).
-fn replay(p: &Project, f: &Feature, entity: &Entity, population: &[Vec<V>], req: &Request) -> Result<Vec<OutputRow>, EvalError> {
-    let (Some(published), Some(requested), Some(cid)) = (req.published_values, req.requested_at, req.consumer) else {
+fn replay(
+    p: &Project,
+    f: &Feature,
+    entity: &Entity,
+    population: &[Vec<V>],
+    req: &Request,
+) -> Result<Vec<OutputRow>, EvalError> {
+    let (Some(published), Some(requested), Some(cid)) =
+        (req.published_values, req.requested_at, req.consumer)
+    else {
         return Err(err("REPLAY_CONTEXT_REQUIRED", "SEM-REPLAY-001", "Replay requires observed publications, requested_at and a consumer; recomputation is not proof of historical serving"));
     };
-    let consumer = p.consumer(cid).ok_or_else(|| err("UNKNOWN_CONSUMER", "SEM-ID-002", cid.to_string()))?;
+    let consumer = p
+        .consumer(cid)
+        .ok_or_else(|| err("UNKNOWN_CONSUMER", "SEM-ID-002", cid.to_string()))?;
     if consumer.selection.mode != SelectionMode::HistoricalServingReplay {
-        return Err(err("CONSUMER_MODE_MISMATCH", "SEM-REPLAY-001", "Selected consumer does not permit replay"));
+        return Err(err(
+            "CONSUMER_MODE_MISMATCH",
+            "SEM-REPLAY-001",
+            "Selected consumer does not permit replay",
+        ));
     }
-    let fs = p.feature_set(&consumer.feature_set.feature_set).ok_or_else(|| err("UNKNOWN_FEATURE_SET", "SEM-ID-002", consumer.feature_set.feature_set.clone()))?;
-    if !fs.features.iter().any(|m| m.id == f.id && m.version == f.version) {
-        return Err(err("CONSUMER_FEATURE_MISMATCH", "SEM-REPLAY-002", "Feature is not a pinned member of the consumer feature set"));
+    let fs = p
+        .feature_set(&consumer.feature_set.feature_set)
+        .ok_or_else(|| {
+            err(
+                "UNKNOWN_FEATURE_SET",
+                "SEM-ID-002",
+                consumer.feature_set.feature_set.clone(),
+            )
+        })?;
+    if !fs
+        .features
+        .iter()
+        .any(|m| m.id == f.id && m.version == f.version)
+    {
+        return Err(err(
+            "CONSUMER_FEATURE_MISMATCH",
+            "SEM-REPLAY-002",
+            "Feature is not a pinned member of the consumer feature set",
+        ));
     }
     let records: Vec<crate::consumer::PublicationRecord> = published
         .iter()
@@ -917,15 +1596,31 @@ fn replay(p: &Project, f: &Feature, entity: &Entity, population: &[Vec<V>], req:
         .collect::<Result<_, _>>()?;
     let mut out = Vec::new();
     for key in population {
-        let sel = crate::consumer::select_replay(&records, key, req.as_of, requested, consumer.max_staleness_seconds)?;
+        let sel = crate::consumer::select_replay(
+            &records,
+            key,
+            req.as_of,
+            requested,
+            consumer.max_staleness_seconds,
+        )?;
         let (value, state) = match sel {
             None => (V::Null, "not_published".to_string()),
             Some(r) => (r.value.clone(), r.state.clone()),
         };
         if value.is_null() && consumer.missing_value_policy == MissingValuePolicy::Reject {
-            return Err(err("MISSING_FEATURE_VALUE", "SEM-FRESH-002", format!("Consumer rejects the selected null ({state}); no fallback to an older value")));
+            return Err(err(
+                "MISSING_FEATURE_VALUE",
+                "SEM-FRESH-002",
+                format!(
+                    "Consumer rejects the selected null ({state}); no fallback to an older value"
+                ),
+            ));
         }
-        out.push(OutputRow { entity_keys: key_row(entity, key), value: value.to_json(), state });
+        out.push(OutputRow {
+            entity_keys: key_row(entity, key),
+            value: value.to_json(),
+            state,
+        });
     }
     Ok(out)
 }
@@ -944,8 +1639,32 @@ mod tests {
 
 /// Reconstruct one source as known at `cutoff` (stages 1–5), for reuse by
 /// label construction and other bounded local paths.
-pub fn reconstruct_rows(p: &Project, source_id: &str, source_rows: &Map<String, Json>, cutoff: Instant, upper: Boundary, limits: &Limits) -> Result<Vec<TRow>, EvalError> {
-    let req = Request { as_of: cutoff, source_rows, source_status: &[], expected_population: None, mode: SelectionMode::SourceAsKnown, requested_at: None, published_values: None, consumer: None, capabilities: &[] };
-    let mut ev = Evaluator { p, req: &req, limits, trace: Vec::new(), validated: BTreeMap::new(), work: 0 };
+pub fn reconstruct_rows(
+    p: &Project,
+    source_id: &str,
+    source_rows: &Map<String, Json>,
+    cutoff: Instant,
+    upper: Boundary,
+    limits: &Limits,
+) -> Result<Vec<TRow>, EvalError> {
+    let req = Request {
+        as_of: cutoff,
+        source_rows,
+        source_status: &[],
+        expected_population: None,
+        mode: SelectionMode::SourceAsKnown,
+        requested_at: None,
+        published_values: None,
+        consumer: None,
+        capabilities: &[],
+    };
+    let mut ev = Evaluator {
+        p,
+        req: &req,
+        limits,
+        trace: Vec::new(),
+        validated: BTreeMap::new(),
+        work: 0,
+    };
     ev.reconstruct("", source_id, upper)
 }

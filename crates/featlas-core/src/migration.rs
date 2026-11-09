@@ -40,26 +40,58 @@ pub struct MigrationPlan {
 fn target_map(t: &OutputTarget, entity: &Entity) -> Vec<(String, &'static str, String)> {
     let mut v = Vec::new();
     for k in &entity.keys {
-        v.push((k.name.clone(), "entity_key", t.entity_key_mapping.get(&k.name).and_then(Value::as_str).unwrap_or("").to_string()));
+        v.push((
+            k.name.clone(),
+            "entity_key",
+            t.entity_key_mapping
+                .get(&k.name)
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string(),
+        ));
     }
     for f in &t.feature_mapping {
-        v.push((format!("{}@{}", f.feature, f.version), "value", f.column.clone()));
-        v.push((format!("{}@{}", f.feature, f.version), "state", f.state_column.clone()));
+        v.push((
+            format!("{}@{}", f.feature, f.version),
+            "value",
+            f.column.clone(),
+        ));
+        v.push((
+            format!("{}@{}", f.feature, f.version),
+            "state",
+            f.state_column.clone(),
+        ));
     }
     let m = &t.metadata_columns;
-    for (name, col) in [("as_of", &m.as_of), ("published_at", &m.published_at), ("publication_sequence", &m.publication_sequence), ("publication_id", &m.publication_id), ("materialization_id", &m.materialization_id)] {
+    for (name, col) in [
+        ("as_of", &m.as_of),
+        ("published_at", &m.published_at),
+        ("publication_sequence", &m.publication_sequence),
+        ("publication_id", &m.publication_id),
+        ("materialization_id", &m.materialization_id),
+    ] {
         v.push((name.to_string(), "publication_metadata", col.clone()));
     }
     v
 }
 
-pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, registry: &dyn AdapterRegistry) -> Result<MigrationPlan, String> {
-    let a = p.deployment(from).ok_or(format!("Unknown deployment {from}"))?;
+pub fn migration_plan(
+    p: &Project,
+    file_sha256: &str,
+    from: &str,
+    to: &str,
+    registry: &dyn AdapterRegistry,
+) -> Result<MigrationPlan, String> {
+    let a = p
+        .deployment(from)
+        .ok_or(format!("Unknown deployment {from}"))?;
     let b = p.deployment(to).ok_or(format!("Unknown deployment {to}"))?;
     let ids = logical_identities(p);
     let mut blockers = Vec::new();
     let mut review = Vec::new();
-    let pin = |d: &Deployment| d.adapters.iter().map(|x| json!({"id": x.id, "implementation": x.implementation, "version": x.version, "roles": x.roles})).collect::<Vec<_>>();
+    let pin = |d: &Deployment| {
+        d.adapters.iter().map(|x| json!({"id": x.id, "implementation": x.implementation, "version": x.version, "roles": x.roles})).collect::<Vec<_>>()
+    };
     let identity = json!({
         "project": {"id": p.metadata.id, "version": p.metadata.version, "file_sha256": file_sha256, "logical_digest": ids.logical_project},
         "source": {"deployment": a.id, "version": a.version, "identity": deployment_identity(p, from), "adapters": pin(a)},
@@ -70,10 +102,16 @@ pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, regi
     // Consumers.
     let mut consumers = Vec::new();
     for cb in &a.consumer_bindings {
-        let dest = b.consumer_bindings.iter().find(|x| x.consumer == cb.consumer && x.version == cb.version);
+        let dest = b
+            .consumer_bindings
+            .iter()
+            .find(|x| x.consumer == cb.consumer && x.version == cb.version);
         let c = p.consumer(&cb.consumer);
         if dest.is_none() {
-            blockers.push(format!("Consumer {}@{} is bound in {from} but not in {to}", cb.consumer, cb.version));
+            blockers.push(format!(
+                "Consumer {}@{} is bound in {from} but not in {to}",
+                cb.consumer, cb.version
+            ));
         }
         consumers.push(json!({
             "consumer": cb.consumer, "version": cb.version,
@@ -93,7 +131,14 @@ pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, regi
     let src = plan_deployment(p, file_sha256, from, registry, &ctx);
     for c in &dest.checks {
         if !c.status.supported() {
-            blockers.push(format!("Destination {}/{}/{} is {} ({})", c.adapter, c.role.as_str(), c.capability, c.status.as_str(), c.evidence_scope.as_str()));
+            blockers.push(format!(
+                "Destination {}/{}/{} is {} ({})",
+                c.adapter,
+                c.role.as_str(),
+                c.capability,
+                c.status.as_str(),
+                c.evidence_scope.as_str()
+            ));
         }
     }
     for d in dest.diagnostics.iter().filter(|d| d.is_error()) {
@@ -133,20 +178,40 @@ pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, regi
     // Mapping in both directions.
     let mut mapping = Vec::new();
     for tb in &b.output_targets {
-        let Some(fs) = p.feature_set(&tb.feature_set) else { continue };
-        let Some(e) = p.entity(&fs.entity) else { continue };
-        let ta = a.output_targets.iter().find(|x| x.feature_set == tb.feature_set && x.version == tb.version && x.role == tb.role);
+        let Some(fs) = p.feature_set(&tb.feature_set) else {
+            continue;
+        };
+        let Some(e) = p.entity(&fs.entity) else {
+            continue;
+        };
+        let ta = a.output_targets.iter().find(|x| {
+            x.feature_set == tb.feature_set && x.version == tb.version && x.role == tb.role
+        });
         let new = target_map(tb, e);
         let old = ta.map(|t| target_map(t, e)).unwrap_or_default();
         let changes: Vec<FieldChange> = new
             .iter()
             .filter_map(|(l, kind, to)| {
-                let from = old.iter().find(|(ol, ok, _)| ol == l && ok == kind).map(|x| x.2.clone()).unwrap_or_default();
-                (from != *to).then(|| FieldChange { logical: l.clone(), kind, from, to: to.clone() })
+                let from = old
+                    .iter()
+                    .find(|(ol, ok, _)| ol == l && ok == kind)
+                    .map(|x| x.2.clone())
+                    .unwrap_or_default();
+                (from != *to).then(|| FieldChange {
+                    logical: l.clone(),
+                    kind,
+                    from,
+                    to: to.clone(),
+                })
             })
             .collect();
         if ta.is_none() {
-            blockers.push(format!("{}@{} has no {} target in {from} to migrate from", tb.feature_set, tb.version, tb.role.as_str()));
+            blockers.push(format!(
+                "{}@{} has no {} target in {from} to migrate from",
+                tb.feature_set,
+                tb.version,
+                tb.role.as_str()
+            ));
         }
         mapping.push(json!({
             "feature_set": tb.feature_set, "version": tb.version, "role": tb.role,
@@ -160,7 +225,9 @@ pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, regi
     if b.output_retention_seconds < a.output_retention_seconds {
         review.push(format!("Destination output retention {}s is shorter than the source's {}s; replay over the difference becomes unsupported", b.output_retention_seconds, a.output_retention_seconds));
     }
-    if a.publication.atomicity != b.publication.atomicity || a.publication.visibility != b.publication.visibility {
+    if a.publication.atomicity != b.publication.atomicity
+        || a.publication.visibility != b.publication.visibility
+    {
         review.push("Publication atomicity/visibility semantics differ".into());
     }
     let publication_history = json!({
@@ -202,5 +269,19 @@ pub fn migration_plan(p: &Project, file_sha256: &str, from: &str, to: &str, regi
         "This is a plan. No data was transferred, backfilled, compared on live stores or cut over.".to_string(),
         "A local alternate-store round trip establishes boundary separation only, not a migration (SEM-PORT-010).".to_string(),
     ];
-    Ok(MigrationPlan { plan_version: "featlas.migration-plan/v1", identity, consumers, capabilities, data, mapping, publication_history, execution, verification, cutover, semantic_review: review, blockers, limitations })
+    Ok(MigrationPlan {
+        plan_version: "featlas.migration-plan/v1",
+        identity,
+        consumers,
+        capabilities,
+        data,
+        mapping,
+        publication_history,
+        execution,
+        verification,
+        cutover,
+        semantic_review: review,
+        blockers,
+        limitations,
+    })
 }

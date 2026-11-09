@@ -48,7 +48,13 @@ pub struct CaseResult {
     pub trace: Vec<TraceStep>,
 }
 
-pub fn run_case(p: &Project, suite: &AcceptanceSuite, case: &AcceptanceCase, limits: &Limits, with_trace: bool) -> CaseResult {
+pub fn run_case(
+    p: &Project,
+    suite: &AcceptanceSuite,
+    case: &AcceptanceCase,
+    limits: &Limits,
+    with_trace: bool,
+) -> CaseResult {
     let mut result = CaseResult {
         suite: suite.id.clone(),
         case: case.id.clone(),
@@ -62,15 +68,29 @@ pub fn run_case(p: &Project, suite: &AcceptanceSuite, case: &AcceptanceCase, lim
         trace: Vec::new(),
     };
     if suite.runner == Runner::AdapterRequired {
-        result.reason = "Suite runner is adapter_required; the local reference evaluator does not execute it".into();
+        result.reason =
+            "Suite runner is adapter_required; the local reference evaluator does not execute it"
+                .into();
         return result;
     }
-    let missing: Vec<&String> = case.context.capabilities.iter().filter(|c| !LOCAL_CAPABILITIES.contains(&c.as_str())).collect();
+    let missing: Vec<&String> = case
+        .context
+        .capabilities
+        .iter()
+        .filter(|c| !LOCAL_CAPABILITIES.contains(&c.as_str()))
+        .collect();
     if !missing.is_empty() {
         result.reason = format!("Case requires capabilities not implemented locally: {missing:?}");
         return result;
     }
-    let (as_of, requested_at) = match (Instant::parse(&case.as_of), case.context.requested_at.as_deref().map(Instant::parse).transpose()) {
+    let (as_of, requested_at) = match (
+        Instant::parse(&case.as_of),
+        case.context
+            .requested_at
+            .as_deref()
+            .map(Instant::parse)
+            .transpose(),
+    ) {
         (Ok(a), Ok(r)) => (a, r),
         _ => {
             result.status = CaseStatus::Failed;
@@ -96,7 +116,9 @@ pub fn run_case(p: &Project, suite: &AcceptanceSuite, case: &AcceptanceCase, lim
             if with_trace {
                 result.trace = ev.trace.clone();
             }
-            let cmp = feature.map(|f| compare_rows(f, &ev.rows, rows)).unwrap_or(Err("Unknown feature".into()));
+            let cmp = feature
+                .map(|f| compare_rows(f, &ev.rows, rows))
+                .unwrap_or(Err("Unknown feature".into()));
             result.actual_rows = Some(ev.rows);
             match cmp {
                 Ok(()) => result.status = CaseStatus::Passed,
@@ -108,49 +130,87 @@ pub fn run_case(p: &Project, suite: &AcceptanceSuite, case: &AcceptanceCase, lim
         }
         (Ok(ev), Expectation::Diagnostic { diagnostic }) => {
             result.status = CaseStatus::Failed;
-            result.reason = format!("Expected diagnostic {} but evaluation produced rows", diagnostic.code);
+            result.reason = format!(
+                "Expected diagnostic {} but evaluation produced rows",
+                diagnostic.code
+            );
             result.actual_rows = Some(ev.rows);
         }
         (Err(e), Expectation::Diagnostic { diagnostic }) => {
-            result.actual_diagnostic = Some(serde_json::json!({"code": e.code, "rule": e.rule, "message": e.message}));
-            let msg_ok = diagnostic.message_contains.as_ref().is_none_or(|m| e.message.contains(m.as_str()));
+            result.actual_diagnostic =
+                Some(serde_json::json!({"code": e.code, "rule": e.rule, "message": e.message}));
+            let msg_ok = diagnostic
+                .message_contains
+                .as_ref()
+                .is_none_or(|m| e.message.contains(m.as_str()));
             if e.code == diagnostic.code && msg_ok {
                 result.status = CaseStatus::Passed;
             } else {
                 result.status = CaseStatus::Failed;
-                result.reason = format!("Expected diagnostic {}, got {}: {}", diagnostic.code, e.code, e.message);
+                result.reason = format!(
+                    "Expected diagnostic {}, got {}: {}",
+                    diagnostic.code, e.code, e.message
+                );
             }
         }
         (Err(e), Expectation::Rows { .. }) => {
             result.status = CaseStatus::Failed;
             result.reason = format!("Unexpected diagnostic {}: {}", e.code, e.message);
-            result.actual_diagnostic = Some(serde_json::json!({"code": e.code, "rule": e.rule, "message": e.message}));
+            result.actual_diagnostic =
+                Some(serde_json::json!({"code": e.code, "rule": e.rule, "message": e.message}));
         }
     }
     result
 }
 
 /// Compare complete keys, states and values (with the feature's tolerance).
-pub fn compare_rows(f: &Feature, actual: &[OutputRow], expected: &[ExpectedRow]) -> Result<(), String> {
+pub fn compare_rows(
+    f: &Feature,
+    actual: &[OutputRow],
+    expected: &[ExpectedRow],
+) -> Result<(), String> {
     if actual.len() != expected.len() {
-        return Err(format!("Expected {} rows, got {}", expected.len(), actual.len()));
+        return Err(format!(
+            "Expected {} rows, got {}",
+            expected.len(),
+            actual.len()
+        ));
     }
-    let entity_key = |m: &serde_json::Map<String, Json>| crate::canon::canonical_json(&Json::Object(m.clone()));
+    let entity_key =
+        |m: &serde_json::Map<String, Json>| crate::canon::canonical_json(&Json::Object(m.clone()));
     let mut a: Vec<&OutputRow> = actual.iter().collect();
     let mut e: Vec<&ExpectedRow> = expected.iter().collect();
     a.sort_by_key(|r| entity_key(&r.entity_keys));
     e.sort_by_key(|r| entity_key(&r.entity_keys));
-    let (abs, rel) = f.output.numeric_tolerance.as_ref().map(|t| (t.absolute, t.relative)).unwrap_or((0.0, 0.0));
+    let (abs, rel) = f
+        .output
+        .numeric_tolerance
+        .as_ref()
+        .map(|t| (t.absolute, t.relative))
+        .unwrap_or((0.0, 0.0));
     for (got, want) in a.iter().zip(e.iter()) {
         if entity_key(&got.entity_keys) != entity_key(&want.entity_keys) {
-            return Err(format!("Entity keys differ: expected {:?}, got {:?}", want.entity_keys, got.entity_keys));
+            return Err(format!(
+                "Entity keys differ: expected {:?}, got {:?}",
+                want.entity_keys, got.entity_keys
+            ));
         }
         if got.state != want.state {
-            return Err(format!("State differs for {:?}: expected {}, got {}", want.entity_keys, want.state, got.state));
+            return Err(format!(
+                "State differs for {:?}: expected {}, got {}",
+                want.entity_keys, want.state, got.state
+            ));
         }
-        let ty = if V::from_json(&want.value, f.output.ty).is_ok() { f.output.ty } else { LogicalType::String };
+        let ty = if V::from_json(&want.value, f.output.ty).is_ok() {
+            f.output.ty
+        } else {
+            LogicalType::String
+        };
         if !equal_with_tolerance(&got.value, &want.value, ty, abs, rel) {
-            return Err(format!("Value differs for {:?}: expected {}, got {}", want.entity_keys, want.value, got.value));
+            return Err(format!(
+                "Value differs for {:?}: expected {}, got {}",
+                want.entity_keys, want.value, got.value
+            ));
         }
     }
     Ok(())
@@ -165,7 +225,12 @@ pub struct SuiteSummary {
     pub cases: Vec<CaseResult>,
 }
 
-pub fn run_suites(p: &Project, suite_filter: Option<&str>, limits: &Limits, with_trace: bool) -> SuiteSummary {
+pub fn run_suites(
+    p: &Project,
+    suite_filter: Option<&str>,
+    limits: &Limits,
+    with_trace: bool,
+) -> SuiteSummary {
     let mut cases = Vec::new();
     for s in &p.acceptance_suites {
         if suite_filter.is_some_and(|f| f != s.id) {
@@ -176,5 +241,11 @@ pub fn run_suites(p: &Project, suite_filter: Option<&str>, limits: &Limits, with
         }
     }
     let count = |st: CaseStatus| cases.iter().filter(|c| c.status == st).count();
-    SuiteSummary { executed: count(CaseStatus::Passed) + count(CaseStatus::Failed), passed: count(CaseStatus::Passed), failed: count(CaseStatus::Failed), not_executed: count(CaseStatus::NotExecuted), cases }
+    SuiteSummary {
+        executed: count(CaseStatus::Passed) + count(CaseStatus::Failed),
+        passed: count(CaseStatus::Passed),
+        failed: count(CaseStatus::Failed),
+        not_executed: count(CaseStatus::NotExecuted),
+        cases,
+    }
 }

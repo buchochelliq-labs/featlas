@@ -83,7 +83,7 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
         code = "SOURCE_UNAVAILABLE"
         return _diag_outcome(outcome, expected, code, "population source unavailable")
     coverage = core.coverage(project, deployment, fs_id, case["as_of"], statuses)
-    run = SnapshotRun(spark, art, case["as_of"], coverage, unavailable, relations)
+    run = SnapshotRun(spark, art, case["as_of"], coverage, unavailable, relations, population_source=pop_source)
     try:
         run.prepare()
         run.compute()
@@ -94,7 +94,7 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
         want_pop = sorted(tuple(row.values()) for row in case["population_rows"])
         if sorted(pop) != want_pop:
             return _diag_outcome(outcome, expected, "POPULATION_MISMATCH", "population differs from fixture population_rows")
-        view = next(f["view"] for f in art["features"] if f["feature"] == feature)
+        view = next(f["computed"]["view"] for f in art["features"] if f["feature"] == feature)
         rows = [r.asDict() for r in spark.table(view).collect()]
     except FeatlasError as e:
         return _diag_outcome(outcome, expected, e.code, str(e))

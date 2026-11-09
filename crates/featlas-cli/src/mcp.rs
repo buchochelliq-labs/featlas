@@ -66,7 +66,11 @@ pub fn tools() -> Vec<Value> {
 }
 
 fn load(args: &Value) -> Result<LoadedProject, Value> {
-    let format = if args["format"] == "json" { Format::Json } else { Format::Yaml };
+    let format = if args["format"] == "json" {
+        Format::Json
+    } else {
+        Format::Yaml
+    };
     let text = args["document"].as_str().unwrap_or("");
     let (loaded, report) = load_project(text.as_bytes(), format);
     match loaded {
@@ -84,8 +88,13 @@ fn call(name: &str, args: &Value) -> Value {
         v
     };
     if name == "validate_v1" {
-        let format = if args["format"] == "json" { Format::Json } else { Format::Yaml };
-        let (loaded, report) = load_project(args["document"].as_str().unwrap_or("").as_bytes(), format);
+        let format = if args["format"] == "json" {
+            Format::Json
+        } else {
+            Format::Yaml
+        };
+        let (loaded, report) =
+            load_project(args["document"].as_str().unwrap_or("").as_bytes(), format);
         let passed = loaded.is_some() && report.passed();
         return wrap(json!({"report": report}), passed);
     }
@@ -95,14 +104,21 @@ fn call(name: &str, args: &Value) -> Value {
     };
     let p = &l.project;
     match name {
-        "hash_v1" => wrap(json!({"project_file_sha256": l.file_sha256, "logical": logical_identities(p)}), true),
+        "hash_v1" => wrap(
+            json!({"project_file_sha256": l.file_sha256, "logical": logical_identities(p)}),
+            true,
+        ),
         "explain_v1" => match p.feature(args["feature"].as_str().unwrap_or("")) {
-            Some(f) => wrap(json!({"feature": f, "fingerprint": logical_identities(p).features.get(&format!("{}@{}", f.id, f.version))}), true),
+            Some(f) => wrap(
+                json!({"feature": f, "fingerprint": logical_identities(p).features.get(&format!("{}@{}", f.id, f.version))}),
+                true,
+            ),
             None => wrap(json!({"error": "UNKNOWN_FEATURE"}), false),
         },
         "plan_v1" | "capabilities_v1" | "generate_v1" => {
             let d = args["deployment"].as_str().unwrap_or("");
-            let outcome = plan_deployment(p, &l.file_sha256, d, &reg, &AssessmentContext::default());
+            let outcome =
+                plan_deployment(p, &l.file_sha256, d, &reg, &AssessmentContext::default());
             if name == "plan_v1" {
                 let ok = outcome.plannable;
                 return wrap(serde_json::to_value(&outcome).unwrap(), ok);
@@ -117,8 +133,15 @@ fn call(name: &str, args: &Value) -> Value {
             if !outcome.plannable {
                 return wrap(json!({"diagnostics": outcome.diagnostics}), false);
             }
-            match databricks::lower(outcome.plan.as_ref().unwrap(), args["feature_set"].as_str().unwrap_or(""), p) {
-                Ok(a) => wrap(json!({"script": databricks::render_script(&a), "artifacts": a, "statement": "Not executed."}), true),
+            match databricks::lower(
+                outcome.plan.as_ref().unwrap(),
+                args["feature_set"].as_str().unwrap_or(""),
+                p,
+            ) {
+                Ok(a) => wrap(
+                    json!({"script": databricks::render_script(&a), "artifacts": a, "statement": "Not executed."}),
+                    true,
+                ),
                 Err(e) => wrap(json!({"error": e}), false),
             }
         }
@@ -129,7 +152,11 @@ fn call(name: &str, args: &Value) -> Value {
         }
         "evaluate_fixture_v1" => {
             let id = args["case"].as_str().unwrap_or("");
-            match p.acceptance_suites.iter().find_map(|s| s.cases.iter().find(|c| c.id == id).map(|c| (s, c))) {
+            match p
+                .acceptance_suites
+                .iter()
+                .find_map(|s| s.cases.iter().find(|c| c.id == id).map(|c| (s, c)))
+            {
                 Some((s, c)) => {
                     let r = run_case(p, s, c, &limits(), true);
                     let ok = r.status != featlas_core::fixtures::CaseStatus::Failed;
@@ -144,15 +171,26 @@ fn call(name: &str, args: &Value) -> Value {
 
 fn validate_args(tool: &Value, args: &Value) -> Result<(), String> {
     let v = jsonschema::validator_for(&tool["inputSchema"]).map_err(|e| e.to_string())?;
-    let errs: Vec<String> = v.iter_errors(args).map(|e| format!("{} {}", e.instance_path(), e)).collect();
-    if errs.is_empty() { Ok(()) } else { Err(errs.join("; ")) }
+    let errs: Vec<String> = v
+        .iter_errors(args)
+        .map(|e| format!("{} {}", e.instance_path(), e))
+        .collect();
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs.join("; "))
+    }
 }
 
 pub fn handle(msg: &Value) -> Option<Value> {
     let id = msg.get("id").cloned();
     let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
     let reply = |result: Value| Some(json!({"jsonrpc": "2.0", "id": id.clone(), "result": result}));
-    let error = |code: i64, message: String| Some(json!({"jsonrpc": "2.0", "id": id.clone(), "error": {"code": code, "message": message}}));
+    let error = |code: i64, message: String| {
+        Some(
+            json!({"jsonrpc": "2.0", "id": id.clone(), "error": {"code": code, "message": message}}),
+        )
+    };
     if id.is_none() {
         return None; // Notifications (e.g. notifications/initialized) need no response.
     }
@@ -178,11 +216,15 @@ pub fn handle(msg: &Value) -> Option<Value> {
             let out = call(name, &args);
             let text = serde_json::to_string(&out).unwrap();
             if text.len() > MAX_OUTPUT {
-                return reply(json!({"isError": true, "content": [{"type": "text", "text": format!("RESPONSE_TOO_LARGE: {} bytes exceeds {MAX_OUTPUT}; narrow the request (results are never truncated)", text.len())}]}));
+                return reply(
+                    json!({"isError": true, "content": [{"type": "text", "text": format!("RESPONSE_TOO_LARGE: {} bytes exceeds {MAX_OUTPUT}; narrow the request (results are never truncated)", text.len())}]}),
+                );
             }
             let is_error = out["ok"] != json!(true);
             let _ = started;
-            reply(json!({"content": [{"type": "text", "text": text}], "structuredContent": out, "isError": is_error}))
+            reply(
+                json!({"content": [{"type": "text", "text": text}], "structuredContent": out, "isError": is_error}),
+            )
         }
         _ => error(-32601, format!("Method not found: {method}")),
     }
@@ -195,7 +237,9 @@ pub fn serve() -> Result<ExitCode, String> {
     let mut buf = Vec::new();
     loop {
         buf.clear();
-        let n = std::io::Read::take(&mut reader, (MAX_LINE + 1) as u64).read_until(b'\n', &mut buf).map_err(|e| e.to_string())?;
+        let n = std::io::Read::take(&mut reader, (MAX_LINE + 1) as u64)
+            .read_until(b'\n', &mut buf)
+            .map_err(|e| e.to_string())?;
         if n == 0 {
             break;
         }
@@ -204,7 +248,9 @@ pub fn serve() -> Result<ExitCode, String> {
             writeln!(stdout, "{resp}").map_err(|e| e.to_string())?;
             // Drain the rest of the oversized line.
             let mut sink = Vec::new();
-            reader.read_until(b'\n', &mut sink).map_err(|e| e.to_string())?;
+            reader
+                .read_until(b'\n', &mut sink)
+                .map_err(|e| e.to_string())?;
             continue;
         }
         let line = String::from_utf8_lossy(&buf);
@@ -213,7 +259,9 @@ pub fn serve() -> Result<ExitCode, String> {
         }
         let resp = match serde_json::from_str::<Value>(&line) {
             Ok(msg) => handle(&msg),
-            Err(e) => Some(json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("Parse error: {e}")}})),
+            Err(e) => Some(
+                json!({"jsonrpc": "2.0", "id": null, "error": {"code": -32700, "message": format!("Parse error: {e}")}}),
+            ),
         };
         if let Some(r) = resp {
             writeln!(stdout, "{r}").map_err(|e| e.to_string())?;

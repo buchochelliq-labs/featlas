@@ -2,7 +2,9 @@ use featlas_core::load::load_path;
 use std::path::PathBuf;
 
 pub fn example(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spec/feature-engineering-spec-v0.2.0/examples").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../spec/feature-engineering-spec-v0.2.0/examples")
+        .join(name)
 }
 
 pub const EXAMPLES: &[&str] = &[
@@ -41,12 +43,21 @@ fn reference_fixtures_match_goldens() {
         for c in &s.cases {
             match c.status {
                 CaseStatus::Passed => passed += 1,
-                CaseStatus::NotExecuted => { skipped += 1; println!("{name} {} NOT EXECUTED: {}", c.case, c.reason) }
-                CaseStatus::Failed => { println!("{name} {} FAILED: {}", c.case, c.reason); failed.push(format!("{name}:{}", c.case)) }
+                CaseStatus::NotExecuted => {
+                    skipped += 1;
+                    println!("{name} {} NOT EXECUTED: {}", c.case, c.reason)
+                }
+                CaseStatus::Failed => {
+                    println!("{name} {} FAILED: {}", c.case, c.reason);
+                    failed.push(format!("{name}:{}", c.case))
+                }
             }
         }
     }
-    println!("passed={passed} not_executed={skipped} failed={}", failed.len());
+    println!(
+        "passed={passed} not_executed={skipped} failed={}",
+        failed.len()
+    );
     assert!(failed.is_empty(), "{failed:?}");
     assert_eq!(passed, 50);
     assert_eq!(skipped, 3);

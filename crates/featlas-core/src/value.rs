@@ -31,7 +31,10 @@ impl V {
         match (value, ty) {
             (Json::Null, _) => Ok(V::Null),
             (Json::Bool(b), LogicalType::Boolean) => Ok(V::Bool(*b)),
-            (Json::Number(n), LogicalType::Integer) => n.as_i64().map(V::Int).ok_or_else(|| format!("{n} is not a signed 64-bit integer")),
+            (Json::Number(n), LogicalType::Integer) => n
+                .as_i64()
+                .map(V::Int)
+                .ok_or_else(|| format!("{n} is not a signed 64-bit integer")),
             (Json::Number(n), LogicalType::Number) => match n.as_f64() {
                 Some(f) if f.is_finite() => Ok(V::Num(f)),
                 _ => Err(format!("{n} is not a finite number")),
@@ -118,7 +121,11 @@ pub fn key_string(values: &[V]) -> String {
             V::Bool(b) => format!("b{b}"),
             V::Int(i) => format!("i{i}"),
             V::Num(f) => {
-                if *f == 0.0 { "f0".to_string() } else { format!("f{:x}", f.to_bits()) }
+                if *f == 0.0 {
+                    "f0".to_string()
+                } else {
+                    format!("f{:x}", f.to_bits())
+                }
             }
             V::Str(s) => format!("s{}", serde_json::to_string(s).unwrap()),
             V::Ts(t) => format!("t{}", t.micros),
@@ -132,18 +139,28 @@ pub fn key_string(values: &[V]) -> String {
 
 /// Tolerance comparison: `abs(a - e) <= max(absolute, relative * abs(e))`.
 /// Non-numeric values and nulls compare by type-aware exact equality.
-pub fn equal_with_tolerance(actual: &Json, expected: &Json, ty: LogicalType, absolute: f64, relative: f64) -> bool {
+pub fn equal_with_tolerance(
+    actual: &Json,
+    expected: &Json,
+    ty: LogicalType,
+    absolute: f64,
+    relative: f64,
+) -> bool {
     match (actual, expected) {
         (Json::Null, Json::Null) => true,
         (Json::Null, _) | (_, Json::Null) => false,
-        (Json::Number(a), Json::Number(e)) if ty == LogicalType::Integer => match (a.as_i64(), e.as_i64()) {
-            (Some(x), Some(y)) => x == y,
-            _ => false,
-        },
-        (Json::Number(a), Json::Number(e)) if ty == LogicalType::Number => match (a.as_f64(), e.as_f64()) {
-            (Some(x), Some(y)) => (x - y).abs() <= absolute.max(relative * y.abs()),
-            _ => false,
-        },
+        (Json::Number(a), Json::Number(e)) if ty == LogicalType::Integer => {
+            match (a.as_i64(), e.as_i64()) {
+                (Some(x), Some(y)) => x == y,
+                _ => false,
+            }
+        }
+        (Json::Number(a), Json::Number(e)) if ty == LogicalType::Number => {
+            match (a.as_f64(), e.as_f64()) {
+                (Some(x), Some(y)) => (x - y).abs() <= absolute.max(relative * y.abs()),
+                _ => false,
+            }
+        }
         (Json::Number(_), _) | (_, Json::Number(_)) => false,
         (a, e) => match (V::from_json(a, ty), V::from_json(e, ty)) {
             (Ok(x), Ok(y)) => identical(&x, &y),
@@ -158,7 +175,10 @@ mod tests {
 
     #[test]
     fn exact_int_number_comparison() {
-        assert_eq!(cmp_int_num(9_007_199_254_740_993, 9_007_199_254_740_992.0), Ordering::Greater);
+        assert_eq!(
+            cmp_int_num(9_007_199_254_740_993, 9_007_199_254_740_992.0),
+            Ordering::Greater
+        );
         assert_eq!(cmp_int_num(1, 1.0), Ordering::Equal);
         assert_eq!(cmp_int_num(1, 1.5), Ordering::Less);
         assert_eq!(cmp_int_num(-2, -1.5), Ordering::Less);
@@ -167,18 +187,54 @@ mod tests {
 
     #[test]
     fn strings_use_code_point_order() {
-        assert_eq!(compare(&V::Str("Z".into()), &V::Str("a".into())), Some(Ordering::Less));
-        assert_eq!(compare(&V::Str("é".into()), &V::Str("z".into())), Some(Ordering::Greater));
+        assert_eq!(
+            compare(&V::Str("Z".into()), &V::Str("a".into())),
+            Some(Ordering::Less)
+        );
+        assert_eq!(
+            compare(&V::Str("é".into()), &V::Str("z".into())),
+            Some(Ordering::Greater)
+        );
         assert_eq!(compare(&V::Str("1".into()), &V::Int(1)), None);
     }
 
     #[test]
     fn tolerance_rules() {
         use serde_json::json;
-        assert!(equal_with_tolerance(&json!(0.25), &json!(0.25), LogicalType::Number, 0.0, 0.0));
-        assert!(!equal_with_tolerance(&json!(null), &json!(0), LogicalType::Integer, 0.0, 0.0));
-        assert!(!equal_with_tolerance(&json!(false), &json!(null), LogicalType::Boolean, 0.0, 0.0));
-        assert!(equal_with_tolerance(&json!(1.0000001), &json!(1.0), LogicalType::Number, 1e-6, 0.0));
-        assert!(!equal_with_tolerance(&json!(1.0), &json!(1), LogicalType::Integer, 0.0, 0.0));
+        assert!(equal_with_tolerance(
+            &json!(0.25),
+            &json!(0.25),
+            LogicalType::Number,
+            0.0,
+            0.0
+        ));
+        assert!(!equal_with_tolerance(
+            &json!(null),
+            &json!(0),
+            LogicalType::Integer,
+            0.0,
+            0.0
+        ));
+        assert!(!equal_with_tolerance(
+            &json!(false),
+            &json!(null),
+            LogicalType::Boolean,
+            0.0,
+            0.0
+        ));
+        assert!(equal_with_tolerance(
+            &json!(1.0000001),
+            &json!(1.0),
+            LogicalType::Number,
+            1e-6,
+            0.0
+        ));
+        assert!(!equal_with_tolerance(
+            &json!(1.0),
+            &json!(1),
+            LogicalType::Integer,
+            0.0,
+            0.0
+        ));
     }
 }

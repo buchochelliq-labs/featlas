@@ -50,8 +50,18 @@ pub struct ColumnNode {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "step", rename_all = "snake_case")]
 pub enum Step {
-    Reconstruct { alias: String, source: String, availability_upper: Boundary },
-    EventWindow { alias: String, column: String, lookback_seconds: i64, lower: Boundary, upper: Boundary },
+    Reconstruct {
+        alias: String,
+        source: String,
+        availability_upper: Boundary,
+    },
+    EventWindow {
+        alias: String,
+        column: String,
+        lookback_seconds: i64,
+        lower: Boundary,
+        upper: Boundary,
+    },
     Join {
         relationship: String,
         version: String,
@@ -65,13 +75,36 @@ pub enum Step {
         temporal: RelationshipTemporal,
         left_event_time: String,
     },
-    Filter { predicate: Expr },
-    Group { keys: Vec<GroupKey> },
-    Aggregate { operation: AggregateOp, value: Option<Expr>, distinct_by: Vec<Expr>, nulls: NullPolicy },
-    Recency { alias: String, column: String, rounding: String },
-    Lookup { value: Expr, order_by: Vec<OrderKey> },
-    Expression { expression: Expr, dependencies: Vec<String> },
-    RequiresCapability { kind: String, capabilities: Vec<String>, reason: String },
+    Filter {
+        predicate: Expr,
+    },
+    Group {
+        keys: Vec<GroupKey>,
+    },
+    Aggregate {
+        operation: AggregateOp,
+        value: Option<Expr>,
+        distinct_by: Vec<Expr>,
+        nulls: NullPolicy,
+    },
+    Recency {
+        alias: String,
+        column: String,
+        rounding: String,
+    },
+    Lookup {
+        value: Expr,
+        order_by: Vec<OrderKey>,
+    },
+    Expression {
+        expression: Expr,
+        dependencies: Vec<String>,
+    },
+    RequiresCapability {
+        kind: String,
+        capabilities: Vec<String>,
+        reason: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -141,6 +174,9 @@ pub struct Requirement {
     pub reasons: Vec<String>,
     pub declared: bool,
     pub derived: bool,
+    /// Operations this requirement gates: `materialize` (compute/publish snapshots),
+    /// `serve` (consumer reads/replay), `label_dataset`, `schedule`, or `declared`.
+    pub operations: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,7 +228,15 @@ fn source_node(p: &Project, s: &Source, fp: &str) -> SourceNode {
             RecordSemantics::AppendOnly { .. } => "append_only".into(),
             RecordSemantics::Versioned { .. } => "versioned".into(),
         },
-        columns: s.columns.iter().map(|c| ColumnNode { name: c.name.clone(), ty: c.ty, nullable: c.nullable }).collect(),
+        columns: s
+            .columns
+            .iter()
+            .map(|c| ColumnNode {
+                name: c.name.clone(),
+                ty: c.ty,
+                nullable: c.nullable,
+            })
+            .collect(),
         event_time: s.time.event_time.clone(),
         available_time: s.time.available_time.clone(),
         primary_key: s.primary_key.clone(),
@@ -201,7 +245,15 @@ fn source_node(p: &Project, s: &Source, fp: &str) -> SourceNode {
         revision_order: rev.map(|r| r.order_by.clone()).unwrap_or_default(),
         tombstone: rev.and_then(|r| r.tombstone_column.clone().zip(r.tombstone_value)),
         earliest_reproducible_at: s.retention.earliest_reproducible_at.clone(),
-        stages: vec!["validate_rows", "availability_cutoff", "primary_key_duplicates", "logical_key_partition", "revision_select_latest", "reject_contradictory_ties", "apply_tombstones"],
+        stages: vec![
+            "validate_rows",
+            "availability_cutoff",
+            "primary_key_duplicates",
+            "logical_key_partition",
+            "revision_select_latest",
+            "reject_contradictory_ties",
+            "apply_tombstones",
+        ],
     }
 }
 
@@ -282,10 +334,27 @@ fn feature_plan(p: &Project, f: &Feature, fp: &str) -> FeaturePlan {
 
 /// Requirements derived from actual operations (SEM-PORT-006), merged with declared ones.
 pub fn derive_requirements(p: &Project, d: &Deployment) -> Vec<Requirement> {
-    let mut map: BTreeMap<(String, Role, String), (BTreeSet<String>, bool, bool)> = BTreeMap::new();
+    let mut map: BTreeMap<
+        (String, Role, String),
+        (BTreeSet<String>, bool, bool, BTreeSet<&'static str>),
+    > = BTreeMap::new();
     let mut add = |adapter: &str, role: Role, cap: &str, reason: String, declared: bool| {
-        let e = map.entry((adapter.to_string(), role, cap.to_string())).or_insert((BTreeSet::new(), false, false));
+        let op: &'static str = if declared {
+            "declared"
+        } else if cap == "core.label_construction" {
+            "label_dataset"
+        } else if cap == "core.serving_replay" {
+            "serve"
+        } else if cap == "core.scheduling" {
+            "schedule"
+        } else {
+            "materialize"
+        };
+        let e = map
+            .entry((adapter.to_string(), role, cap.to_string()))
+            .or_insert((BTreeSet::new(), false, false, BTreeSet::new()));
         e.0.insert(reason);
+        e.3.insert(op);
         if declared {
             e.1 = true;
         } else {
@@ -296,10 +365,22 @@ pub fn derive_requirements(p: &Project, d: &Deployment) -> Vec<Requirement> {
     let mut features = Vec::new();
     for t in &d.output_targets {
         if let Some(fs) = p.feature_set(&t.feature_set) {
-            features.extend(dependency_order(p, &fs.features.iter().map(|m| m.id.clone()).collect::<Vec<_>>()));
+            features.extend(dependency_order(
+                p,
+                &fs.features.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
+            ));
             add(&t.adapter, t.role, "core.atomic_publication", format!("Publish {}@{} as an atomic feature-set snapshot with observed visibility evidence", fs.id, fs.version), false);
             if t.role == Role::OnlineStore {
-                add(&t.adapter, t.role, "core.online_publication", format!("Online publication of {}@{} with observed online visibility", fs.id, fs.version), false);
+                add(
+                    &t.adapter,
+                    t.role,
+                    "core.online_publication",
+                    format!(
+                        "Online publication of {}@{} with observed online visibility",
+                        fs.id, fs.version
+                    ),
+                    false,
+                );
             }
         }
     }
@@ -310,27 +391,94 @@ pub fn derive_requirements(p: &Project, d: &Deployment) -> Vec<Requirement> {
         let Some(f) = p.feature(fid) else { continue };
         let why = |op: &str| format!("{op} required by {}@{}", f.id, f.version);
         match &f.transform {
-            Transform::Aggregate { .. } => add(compute, Role::Compute, "core.aggregate", why("Exact aggregate"), false),
-            Transform::Recency { .. } => add(compute, Role::Compute, "core.recency", why("Floor-rounded recency"), false),
-            Transform::Lookup { .. } => add(compute, Role::Compute, "core.lookup", why("Deterministic lookup"), false),
-            Transform::Expression { .. } => add(compute, Role::Compute, "core.expression", why("Typed derived expression"), false),
-            Transform::Learned { required_capabilities, .. } | Transform::Custom { required_capabilities, .. } => {
+            Transform::Aggregate { .. } => add(
+                compute,
+                Role::Compute,
+                "core.aggregate",
+                why("Exact aggregate"),
+                false,
+            ),
+            Transform::Recency { .. } => add(
+                compute,
+                Role::Compute,
+                "core.recency",
+                why("Floor-rounded recency"),
+                false,
+            ),
+            Transform::Lookup { .. } => add(
+                compute,
+                Role::Compute,
+                "core.lookup",
+                why("Deterministic lookup"),
+                false,
+            ),
+            Transform::Expression { .. } => add(
+                compute,
+                Role::Compute,
+                "core.expression",
+                why("Typed derived expression"),
+                false,
+            ),
+            Transform::Learned {
+                required_capabilities,
+                ..
+            }
+            | Transform::Custom {
+                required_capabilities,
+                ..
+            } => {
                 for c in required_capabilities {
-                    add(compute, Role::Compute, c, why(&format!("{} transform", f.transform.kind())), false);
+                    add(
+                        compute,
+                        Role::Compute,
+                        c,
+                        why(&format!("{} transform", f.transform.kind())),
+                        false,
+                    );
                 }
             }
         }
         if let Some((_, joins, _, filter)) = f.transform.row_shape() {
-            add(compute, Role::Compute, "core.revision_reconstruction", why("Availability-first revision reconstruction"), false);
-            add(compute, Role::Compute, "core.source_as_known", why("Source-as-known recomputation"), false);
+            add(
+                compute,
+                Role::Compute,
+                "core.revision_reconstruction",
+                why("Availability-first revision reconstruction"),
+                false,
+            );
+            add(
+                compute,
+                Role::Compute,
+                "core.source_as_known",
+                why("Source-as-known recomputation"),
+                false,
+            );
             if filter.is_some() {
-                add(compute, Role::Compute, "core.expression", why("Typed predicate"), false);
+                add(
+                    compute,
+                    Role::Compute,
+                    "core.expression",
+                    why("Typed predicate"),
+                    false,
+                );
             }
             for j in joins {
                 if let Some(r) = p.relationship(&j.relationship) {
                     match r.temporal {
-                        RelationshipTemporal::AsOf { .. } => add(compute, Role::Compute, "core.as_of_join", why(&format!("Availability-aware valid-time join {}", r.id)), false),
-                        RelationshipTemporal::None => add(compute, Role::Compute, "core.relationship_join", why(&format!("Cardinality-checked join {}", r.id)), false),
+                        RelationshipTemporal::AsOf { .. } => add(
+                            compute,
+                            Role::Compute,
+                            "core.as_of_join",
+                            why(&format!("Availability-aware valid-time join {}", r.id)),
+                            false,
+                        ),
+                        RelationshipTemporal::None => add(
+                            compute,
+                            Role::Compute,
+                            "core.relationship_join",
+                            why(&format!("Cardinality-checked join {}", r.id)),
+                            false,
+                        ),
                     }
                 }
             }
@@ -345,26 +493,69 @@ pub fn derive_requirements(p: &Project, d: &Deployment) -> Vec<Requirement> {
     for b in &d.consumer_bindings {
         if let Some(c) = p.consumer(&b.consumer) {
             if c.selection.mode == SelectionMode::HistoricalServingReplay {
-                add(&b.adapter, b.role, "core.serving_replay", format!("Consumer {}@{} replays observed publications", c.id, c.version), false);
+                add(
+                    &b.adapter,
+                    b.role,
+                    "core.serving_replay",
+                    format!(
+                        "Consumer {}@{} replays observed publications",
+                        c.id, c.version
+                    ),
+                    false,
+                );
             }
             if c.label.is_some() {
-                add(compute, Role::Compute, "core.label_construction", format!("Consumer {}@{} builds forward-horizon labels", c.id, c.version), false);
+                add(
+                    compute,
+                    Role::Compute,
+                    "core.label_construction",
+                    format!(
+                        "Consumer {}@{} builds forward-horizon labels",
+                        c.id, c.version
+                    ),
+                    false,
+                );
             }
         }
     }
     for n in &d.portability.native_bindings {
         for cap in &n.required_capabilities {
-            add(&n.adapter, n.role, cap, format!("Native implementation of {}@{}", n.feature.id, n.feature.version), false);
+            add(
+                &n.adapter,
+                n.role,
+                cap,
+                format!(
+                    "Native implementation of {}@{}",
+                    n.feature.id, n.feature.version
+                ),
+                false,
+            );
         }
     }
     if let (Some(o), Schedule::Interval { .. }) = (&d.execution.orchestrator, &d.schedule) {
-        add(o, Role::Orchestrator, "core.scheduling", "Interval schedule with bounded, idempotent runs".into(), false);
+        add(
+            o,
+            Role::Orchestrator,
+            "core.scheduling",
+            "Interval schedule with bounded, idempotent runs".into(),
+            false,
+        );
     }
     for r in &d.runtime.required_capabilities {
         add(&r.adapter, r.role, &r.capability, r.reason.clone(), true);
     }
     map.into_iter()
-        .map(|((adapter, role, capability), (reasons, declared, derived))| Requirement { adapter, role, capability, reasons: reasons.into_iter().collect(), declared, derived })
+        .map(
+            |((adapter, role, capability), (reasons, declared, derived, ops))| Requirement {
+                adapter,
+                role,
+                capability,
+                reasons: reasons.into_iter().collect(),
+                declared,
+                derived,
+                operations: ops.into_iter().map(String::from).collect(),
+            },
+        )
         .collect()
 }
 
@@ -374,27 +565,49 @@ pub fn build_plan(p: &Project, file_sha256: &str, deployment_id: &str) -> Option
     let mut sources = BTreeMap::new();
     let mut feature_sets = Vec::new();
     for t in &d.output_targets {
-        let Some(fs) = p.feature_set(&t.feature_set) else { continue };
+        let Some(fs) = p.feature_set(&t.feature_set) else {
+            continue;
+        };
         if feature_sets.iter().any(|x: &FeatureSetPlan| x.id == fs.id) {
             continue;
         }
         let e = p.entity(&fs.entity)?;
-        let order = dependency_order(p, &fs.features.iter().map(|m| m.id.clone()).collect::<Vec<_>>());
+        let order = dependency_order(
+            p,
+            &fs.features.iter().map(|m| m.id.clone()).collect::<Vec<_>>(),
+        );
         let mut features = Vec::new();
         for fid in &order {
             let f = p.feature(fid)?;
             for sid in feature_sources(p, fid) {
                 if let Some(s) = p.source(&sid) {
                     let key = format!("{}@{}", s.id, s.version);
-                    sources.entry(s.id.clone()).or_insert_with(|| source_node(p, s, ids.sources.get(&key).map(String::as_str).unwrap_or("")));
+                    sources.entry(s.id.clone()).or_insert_with(|| {
+                        source_node(
+                            p,
+                            s,
+                            ids.sources.get(&key).map(String::as_str).unwrap_or(""),
+                        )
+                    });
                 }
             }
-            features.push(feature_plan(p, f, ids.features.get(&format!("{}@{}", f.id, f.version)).map(String::as_str).unwrap_or("")));
+            features.push(feature_plan(
+                p,
+                f,
+                ids.features
+                    .get(&format!("{}@{}", f.id, f.version))
+                    .map(String::as_str)
+                    .unwrap_or(""),
+            ));
         }
         feature_sets.push(FeatureSetPlan {
             id: fs.id.clone(),
             version: fs.version.clone(),
-            fingerprint: ids.feature_sets.get(&format!("{}@{}", fs.id, fs.version)).cloned().unwrap_or_default(),
+            fingerprint: ids
+                .feature_sets
+                .get(&format!("{}@{}", fs.id, fs.version))
+                .cloned()
+                .unwrap_or_default(),
             population: PopulationNode {
                 entity: e.id.clone(),
                 source: e.population.source.clone(),
@@ -404,18 +617,32 @@ pub fn build_plan(p: &Project, file_sha256: &str, deployment_id: &str) -> Option
                 deletion_policy: e.population.deletion_policy.clone(),
             },
             features,
-            members: fs.features.iter().map(|m| format!("{}@{}", m.id, m.version)).collect(),
+            members: fs
+                .features
+                .iter()
+                .map(|m| format!("{}@{}", m.id, m.version))
+                .collect(),
             publication: PublicationIntent {
                 atomicity: d.publication.atomicity.clone(),
                 visibility: d.publication.visibility.clone(),
                 surface: d.publication.surface,
                 observed_timestamp_required: d.publication.observed_timestamp_required,
-                metadata: vec!["as_of", "published_at", "publication_sequence", "publication_id", "materialization_id"],
+                metadata: vec![
+                    "as_of",
+                    "published_at",
+                    "publication_sequence",
+                    "publication_id",
+                    "materialization_id",
+                ],
                 target_role: d.publication.surface.role(),
             },
         });
     }
-    let logical = LogicalPlan { plan_version: PLAN_VERSION, sources, feature_sets };
+    let logical = LogicalPlan {
+        plan_version: PLAN_VERSION,
+        sources,
+        feature_sets,
+    };
     let logical_plan_digest = digest(&serde_json::to_value(&logical).ok()?);
     let bindings = Bindings {
         deployment: d.id.clone(),
@@ -426,14 +653,33 @@ pub fn build_plan(p: &Project, file_sha256: &str, deployment_id: &str) -> Option
         sources: d.source_bindings.clone(),
         outputs: d.output_targets.clone(),
         consumers: d.consumer_bindings.clone(),
-        consumer_contracts: d.consumer_bindings.iter().filter_map(|b| p.consumer(&b.consumer).cloned()).collect(),
+        consumer_contracts: d
+            .consumer_bindings
+            .iter()
+            .filter_map(|b| p.consumer(&b.consumer).cloned())
+            .collect(),
         schedule: d.schedule.clone(),
         budget: d.budget.clone(),
         backfill: d.backfill.clone(),
         portability: d.portability.clone(),
     };
     let requirements = derive_requirements(p, d);
-    let nonportable = d.portability.native_bindings.iter().map(|n| format!("{}@{} is implemented natively by {}/{} ({}); migration: {}", n.feature.id, n.feature.version, n.adapter, n.role.as_str(), n.implementation.sha256, n.migration_notes)).collect();
+    let nonportable = d
+        .portability
+        .native_bindings
+        .iter()
+        .map(|n| {
+            format!(
+                "{}@{} is implemented natively by {}/{} ({}); migration: {}",
+                n.feature.id,
+                n.feature.version,
+                n.adapter,
+                n.role.as_str(),
+                n.implementation.sha256,
+                n.migration_notes
+            )
+        })
+        .collect();
     let mut project = BTreeMap::new();
     project.insert("id".into(), p.metadata.id.clone());
     project.insert("version".into(), p.metadata.version.clone());
@@ -447,7 +693,17 @@ pub fn build_plan(p: &Project, file_sha256: &str, deployment_id: &str) -> Option
         "requirements": serde_json::to_value(&requirements).ok()?,
         "core": core,
     }));
-    Some(Plan { plan_version: PLAN_VERSION, core, project, logical, logical_plan_digest, bindings, requirements, nonportable, plan_digest })
+    Some(Plan {
+        plan_version: PLAN_VERSION,
+        core,
+        project,
+        logical,
+        logical_plan_digest,
+        bindings,
+        requirements,
+        nonportable,
+        plan_digest,
+    })
 }
 
 pub fn plan_value(plan: &Plan) -> Value {

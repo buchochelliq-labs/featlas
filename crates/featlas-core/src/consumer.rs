@@ -16,7 +16,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as Json};
 use std::collections::BTreeMap;
 
-pub const OUTPUT_STATES: &[&str] = &["ok", "empty", "insufficient_history", "source_unavailable", "not_published"];
+pub const OUTPUT_STATES: &[&str] = &[
+    "ok",
+    "empty",
+    "insufficient_history",
+    "source_unavailable",
+    "not_published",
+];
 
 fn err(code: &str, rule: &str, msg: impl Into<String>) -> EvalError {
     EvalError::new(code, rule, msg)
@@ -60,16 +66,33 @@ fn parse_ts(v: &str, what: &str) -> Result<Instant, EvalError> {
 }
 
 impl PublicationRecord {
-    pub fn from_fixture(pv: &PublishedValue, entity: &Entity, f: &Feature) -> Result<Self, EvalError> {
+    pub fn from_fixture(
+        pv: &PublishedValue,
+        entity: &Entity,
+        f: &Feature,
+    ) -> Result<Self, EvalError> {
         let mut key = Vec::new();
         for k in &entity.keys {
-            let raw = pv.entity_keys.get(&k.name).ok_or_else(|| err("PUBLICATION_KEYS", "SEM-ENT-002", format!("Publication lacks entity key {}", k.name)))?;
-            key.push(V::from_json(raw, k.ty).map_err(|m| err("PUBLICATION_KEYS", "SEM-ENT-002", m))?);
+            let raw = pv.entity_keys.get(&k.name).ok_or_else(|| {
+                err(
+                    "PUBLICATION_KEYS",
+                    "SEM-ENT-002",
+                    format!("Publication lacks entity key {}", k.name),
+                )
+            })?;
+            key.push(
+                V::from_json(raw, k.ty).map_err(|m| err("PUBLICATION_KEYS", "SEM-ENT-002", m))?,
+            );
         }
         if pv.entity_keys.len() != entity.keys.len() {
-            return Err(err("PUBLICATION_KEYS", "SEM-ENT-002", "Publication entity keys must be exactly the entity keys"));
+            return Err(err(
+                "PUBLICATION_KEYS",
+                "SEM-ENT-002",
+                "Publication entity keys must be exactly the entity keys",
+            ));
         }
-        let value = V::from_json(&pv.value, f.output.ty).map_err(|m| err("FIXTURE_TYPE_MISMATCH", "SEM-OUT-001", m))?;
+        let value = V::from_json(&pv.value, f.output.ty)
+            .map_err(|m| err("FIXTURE_TYPE_MISMATCH", "SEM-OUT-001", m))?;
         Ok(PublicationRecord {
             feature: pv.feature.clone(),
             version: pv.version.clone(),
@@ -90,33 +113,56 @@ impl PublicationRecord {
 /// Select under historical-serving replay: eligible = as_of ≤ T and observed
 /// published_at ≤ requested_at; greatest (as_of, published_at, sequence);
 /// duplicate ordering keys fail; latest null supersedes; staleness after selection.
-pub fn select_replay<'r>(records: &'r [PublicationRecord], key: &[V], as_of: Instant, requested_at: Instant, max_staleness: i64) -> Result<Option<&'r PublicationRecord>, EvalError> {
+pub fn select_replay<'r>(
+    records: &'r [PublicationRecord],
+    key: &[V],
+    as_of: Instant,
+    requested_at: Instant,
+    max_staleness: i64,
+) -> Result<Option<&'r PublicationRecord>, EvalError> {
     select(records, key, as_of, Some(requested_at), max_staleness)
 }
 
 /// Shared selection. `requested_at = None` is the source-as-known read of the
 /// latest evidence-complete publication; replay passes `Some`.
-pub fn select<'r>(records: &'r [PublicationRecord], key: &[V], as_of: Instant, requested_at: Option<Instant>, max_staleness: i64) -> Result<Option<&'r PublicationRecord>, EvalError> {
+pub fn select<'r>(
+    records: &'r [PublicationRecord],
+    key: &[V],
+    as_of: Instant,
+    requested_at: Option<Instant>,
+    max_staleness: i64,
+) -> Result<Option<&'r PublicationRecord>, EvalError> {
     let k = key_string(key);
     let eligible: Vec<&PublicationRecord> = records
         .iter()
         .filter(|r| key_string(&r.entity_key) == k && r.as_of <= as_of)
         .filter(|r| match (r.published_at, requested_at) {
-            (None, _) => false, // Evidence pending: never served or replayed.
+            // Replay needs recorded visibility evidence; a pending record can never be replayed.
+            (None, Some(_)) => false,
             (Some(p), Some(req)) => p <= req,
-            (Some(_), None) => true,
+            // Source-as-known reads serve the committed (visible) snapshot even while its
+            // published_at evidence is being recorded; recorded evidence is the commit instant.
+            (_, None) => true,
         })
         .collect();
     let mut keys = BTreeMap::new();
     for r in &eligible {
-        let ord = (r.as_of, r.published_at, r.sequence);
+        // A pending publication is newer than every recorded one.
+        let ord = (
+            r.as_of,
+            r.published_at.unwrap_or(Instant { micros: i64::MAX }),
+            r.sequence,
+        );
         if keys.insert(ord, *r).is_some() {
             return Err(err("PUBLICATION_TIE", "SEM-REPLAY-002", "Two eligible publications share (as_of, published_at, sequence); no arbitrary choice is made"));
         }
     }
-    let Some((_, chosen)) = keys.into_iter().next_back() else { return Ok(None) };
+    let Some((_, chosen)) = keys.into_iter().next_back() else {
+        return Ok(None);
+    };
     let age = (as_of.micros - chosen.as_of.micros) / 1_000_000;
-    let exact_age_exceeds = as_of.micros - chosen.as_of.micros > max_staleness.saturating_mul(1_000_000);
+    let exact_age_exceeds =
+        as_of.micros - chosen.as_of.micros > max_staleness.saturating_mul(1_000_000);
     if exact_age_exceeds {
         return Err(err("STALE_FEATURE", "SEM-FRESH-002", format!("Selected publication is {age}s older than the request as_of; maximum {max_staleness}s; no fallback is applied")));
     }
@@ -146,8 +192,17 @@ pub struct PhysicalReadRequest {
 
 /// Storage-role interface: physical I/O only. Implemented in adapter crates.
 pub trait PublicationStore {
-    fn read(&self, adapter: &AdapterInstance, request: &PhysicalReadRequest) -> Result<Vec<Map<String, Json>>, EvalError>;
-    fn write(&self, adapter: &AdapterInstance, location: &Location, rows: Vec<Map<String, Json>>) -> Result<StoreCommit, EvalError>;
+    fn read(
+        &self,
+        adapter: &AdapterInstance,
+        request: &PhysicalReadRequest,
+    ) -> Result<Vec<Map<String, Json>>, EvalError>;
+    fn write(
+        &self,
+        adapter: &AdapterInstance,
+        location: &Location,
+        rows: Vec<Map<String, Json>>,
+    ) -> Result<StoreCommit, EvalError>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -163,11 +218,31 @@ pub trait StoreRegistry {
     fn store(&self, implementation: &str, version: &str) -> Option<&dyn PublicationStore>;
 }
 
-pub fn resolve<'p>(p: &'p Project, deployment_id: &str, consumer_id: &str, consumer_version: &str) -> Result<ResolvedTarget<'p>, EvalError> {
-    let d = p.deployment(deployment_id).ok_or_else(|| err("UNKNOWN_DEPLOYMENT", "SEM-ID-002", deployment_id.to_string()))?;
-    let consumer = p.consumer(consumer_id).ok_or_else(|| err("UNKNOWN_CONSUMER", "SEM-ID-002", consumer_id.to_string()))?;
+pub fn resolve<'p>(
+    p: &'p Project,
+    deployment_id: &str,
+    consumer_id: &str,
+    consumer_version: &str,
+) -> Result<ResolvedTarget<'p>, EvalError> {
+    let d = p.deployment(deployment_id).ok_or_else(|| {
+        err(
+            "UNKNOWN_DEPLOYMENT",
+            "SEM-ID-002",
+            deployment_id.to_string(),
+        )
+    })?;
+    let consumer = p
+        .consumer(consumer_id)
+        .ok_or_else(|| err("UNKNOWN_CONSUMER", "SEM-ID-002", consumer_id.to_string()))?;
     if consumer.version != consumer_version {
-        return Err(err("VERSION_MISMATCH", "SEM-CONS-001", format!("Requested {consumer_id}@{consumer_version}; project has {}", consumer.version)));
+        return Err(err(
+            "VERSION_MISMATCH",
+            "SEM-CONS-001",
+            format!(
+                "Requested {consumer_id}@{consumer_version}; project has {}",
+                consumer.version
+            ),
+        ));
     }
     let b = d
         .consumer_bindings
@@ -175,21 +250,62 @@ pub fn resolve<'p>(p: &'p Project, deployment_id: &str, consumer_id: &str, consu
         .find(|b| b.consumer == consumer_id && b.version == consumer_version)
         .ok_or_else(|| err("CONSUMER_UNBOUND", "SEM-PORT-005", format!("Deployment {deployment_id} has no binding for {consumer_id}@{consumer_version}")))?;
     if b.role != d.publication.surface.role() {
-        return Err(err("CONSUMER_SURFACE_MISMATCH", "SEM-PORT-005", "Consumer binding does not use the deployment's guaranteed publication surface"));
+        return Err(err(
+            "CONSUMER_SURFACE_MISMATCH",
+            "SEM-PORT-005",
+            "Consumer binding does not use the deployment's guaranteed publication surface",
+        ));
     }
-    let adapter = d.adapter(&b.adapter).ok_or_else(|| err("UNKNOWN_ADAPTER", "SEM-PORT-002", b.adapter.clone()))?;
+    let adapter = d
+        .adapter(&b.adapter)
+        .ok_or_else(|| err("UNKNOWN_ADAPTER", "SEM-PORT-002", b.adapter.clone()))?;
     let target = d
         .output_targets
         .iter()
-        .find(|t| t.feature_set == consumer.feature_set.feature_set && t.version == consumer.feature_set.version && t.adapter == b.adapter && t.role == b.role)
-        .ok_or_else(|| err("CONSUMER_TARGET_MISSING", "SEM-PORT-005", "No matching output target for the consumer binding"))?;
-    let feature_set = p.feature_set(&target.feature_set).ok_or_else(|| err("UNKNOWN_FEATURE_SET", "SEM-ID-002", target.feature_set.clone()))?;
-    let entity = p.entity(&feature_set.entity).ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", feature_set.entity.clone()))?;
-    Ok(ResolvedTarget { deployment: d, adapter, target, consumer, feature_set, entity })
+        .find(|t| {
+            t.feature_set == consumer.feature_set.feature_set
+                && t.version == consumer.feature_set.version
+                && t.adapter == b.adapter
+                && t.role == b.role
+        })
+        .ok_or_else(|| {
+            err(
+                "CONSUMER_TARGET_MISSING",
+                "SEM-PORT-005",
+                "No matching output target for the consumer binding",
+            )
+        })?;
+    let feature_set = p.feature_set(&target.feature_set).ok_or_else(|| {
+        err(
+            "UNKNOWN_FEATURE_SET",
+            "SEM-ID-002",
+            target.feature_set.clone(),
+        )
+    })?;
+    let entity = p
+        .entity(&feature_set.entity)
+        .ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", feature_set.entity.clone()))?;
+    Ok(ResolvedTarget {
+        deployment: d,
+        adapter,
+        target,
+        consumer,
+        feature_set,
+        entity,
+    })
 }
 
 fn phys(map: &ColumnMap, logical: &str) -> Result<String, EvalError> {
-    map.get(logical).and_then(Json::as_str).map(str::to_string).ok_or_else(|| err("OUTPUT_ENTITY_MAPPING_INCOMPLETE", "SEM-PORT-004", format!("No physical field for {logical}")))
+    map.get(logical)
+        .and_then(Json::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| {
+            err(
+                "OUTPUT_ENTITY_MAPPING_INCOMPLETE",
+                "SEM-PORT-004",
+                format!("No physical field for {logical}"),
+            )
+        })
 }
 
 /// Logical publication metadata attached to a snapshot write.
@@ -204,17 +320,33 @@ pub struct PublicationMetadata {
 }
 
 /// Map a logical feature-set snapshot to physical rows (lossless, rename only).
-pub fn to_physical(rt: &ResolvedTargetRef, rows: &[LogicalSnapshotRow], meta: &PublicationMetadata) -> Result<Vec<Map<String, Json>>, EvalError> {
+pub fn to_physical(
+    rt: &ResolvedTargetRef,
+    rows: &[LogicalSnapshotRow],
+    meta: &PublicationMetadata,
+) -> Result<Vec<Map<String, Json>>, EvalError> {
     let t = rt.target;
     let mut out = Vec::new();
     for r in rows {
         let mut m = Map::new();
         for k in &rt.entity.keys {
-            let v = r.entity_keys.get(&k.name).ok_or_else(|| err("OUTPUT_ENTITY_MAPPING_INCOMPLETE", "SEM-PORT-004", k.name.clone()))?;
+            let v = r.entity_keys.get(&k.name).ok_or_else(|| {
+                err(
+                    "OUTPUT_ENTITY_MAPPING_INCOMPLETE",
+                    "SEM-PORT-004",
+                    k.name.clone(),
+                )
+            })?;
             m.insert(phys(&t.entity_key_mapping, &k.name)?, v.clone());
         }
         for fm in &t.feature_mapping {
-            let (value, state) = r.values.get(&fm.feature).ok_or_else(|| err("OUTPUT_FEATURE_MAPPING_INCOMPLETE", "SEM-PORT-004", fm.feature.clone()))?;
+            let (value, state) = r.values.get(&fm.feature).ok_or_else(|| {
+                err(
+                    "OUTPUT_FEATURE_MAPPING_INCOMPLETE",
+                    "SEM-PORT-004",
+                    fm.feature.clone(),
+                )
+            })?;
             if !OUTPUT_STATES.contains(&state.as_str()) {
                 return Err(err("INVALID_STATE", "SEM-MISS-001", state.clone()));
             }
@@ -223,10 +355,25 @@ pub fn to_physical(rt: &ResolvedTargetRef, rows: &[LogicalSnapshotRow], meta: &P
         }
         let mc = &t.metadata_columns;
         m.insert(mc.as_of.clone(), Json::String(meta.as_of.clone()));
-        m.insert(mc.published_at.clone(), meta.published_at.clone().map(Json::String).unwrap_or(Json::Null));
-        m.insert(mc.publication_sequence.clone(), Json::from(meta.publication_sequence));
-        m.insert(mc.publication_id.clone(), Json::String(meta.publication_id.clone()));
-        m.insert(mc.materialization_id.clone(), Json::String(meta.materialization_id.clone()));
+        m.insert(
+            mc.published_at.clone(),
+            meta.published_at
+                .clone()
+                .map(Json::String)
+                .unwrap_or(Json::Null),
+        );
+        m.insert(
+            mc.publication_sequence.clone(),
+            Json::from(meta.publication_sequence),
+        );
+        m.insert(
+            mc.publication_id.clone(),
+            Json::String(meta.publication_id.clone()),
+        );
+        m.insert(
+            mc.materialization_id.clone(),
+            Json::String(meta.materialization_id.clone()),
+        );
         out.push(m);
     }
     Ok(out)
@@ -241,10 +388,29 @@ pub struct ResolvedTargetRef<'p> {
 
 impl<'p> ResolvedTargetRef<'p> {
     pub fn new(p: &'p Project, target: &'p OutputTarget) -> Result<Self, EvalError> {
-        let fs = p.feature_set(&target.feature_set).ok_or_else(|| err("UNKNOWN_FEATURE_SET", "SEM-ID-002", target.feature_set.clone()))?;
-        let entity = p.entity(&fs.entity).ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", fs.entity.clone()))?;
-        let features = fs.features.iter().map(|m| p.feature(&m.id).ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", m.id.clone()))).collect::<Result<_, _>>()?;
-        Ok(ResolvedTargetRef { target, entity, features })
+        let fs = p.feature_set(&target.feature_set).ok_or_else(|| {
+            err(
+                "UNKNOWN_FEATURE_SET",
+                "SEM-ID-002",
+                target.feature_set.clone(),
+            )
+        })?;
+        let entity = p
+            .entity(&fs.entity)
+            .ok_or_else(|| err("UNKNOWN_ENTITY", "SEM-ID-002", fs.entity.clone()))?;
+        let features = fs
+            .features
+            .iter()
+            .map(|m| {
+                p.feature(&m.id)
+                    .ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", m.id.clone()))
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(ResolvedTargetRef {
+            target,
+            entity,
+            features,
+        })
     }
 }
 
@@ -256,39 +422,109 @@ pub struct LogicalSnapshotRow {
 }
 
 /// Map physical rows back to logical publication records (one per member feature).
-pub fn from_physical(rt: &ResolvedTargetRef, rows: &[Map<String, Json>]) -> Result<Vec<PublicationRecord>, EvalError> {
+pub fn from_physical(
+    rt: &ResolvedTargetRef,
+    rows: &[Map<String, Json>],
+) -> Result<Vec<PublicationRecord>, EvalError> {
     let t = rt.target;
     let mc = &t.metadata_columns;
     let mut out = Vec::new();
     for (i, row) in rows.iter().enumerate() {
-        let get = |col: &str| row.get(col).ok_or_else(|| err("PHYSICAL_FIELD_MISSING", "SEM-PORT-004", format!("record {i} lacks physical field {col}")));
+        let get = |col: &str| {
+            row.get(col).ok_or_else(|| {
+                err(
+                    "PHYSICAL_FIELD_MISSING",
+                    "SEM-PORT-004",
+                    format!("record {i} lacks physical field {col}"),
+                )
+            })
+        };
         let mut key = Vec::new();
         let mut entity_keys = Map::new();
         for k in &rt.entity.keys {
             let raw = get(&phys(&t.entity_key_mapping, &k.name)?)?;
-            let v = V::from_json(raw, k.ty).map_err(|m| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-004", m))?;
+            let v = V::from_json(raw, k.ty)
+                .map_err(|m| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-004", m))?;
             if v.is_null() {
-                return Err(err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-004", format!("record {i} has a null entity key {}", k.name)));
+                return Err(err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-PORT-004",
+                    format!("record {i} has a null entity key {}", k.name),
+                ));
             }
             entity_keys.insert(k.name.clone(), raw.clone());
             key.push(v);
         }
-        let as_of = parse_ts(get(&mc.as_of)?.as_str().ok_or_else(|| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-009", "as_of must be a timestamp string"))?, "as_of")?;
+        let as_of = parse_ts(
+            get(&mc.as_of)?.as_str().ok_or_else(|| {
+                err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-PORT-009",
+                    "as_of must be a timestamp string",
+                )
+            })?,
+            "as_of",
+        )?;
         let published_at = match get(&mc.published_at)? {
             Json::Null => None,
             Json::String(s) => Some(parse_ts(s, "published_at")?),
-            _ => return Err(err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-009", "published_at must be a timestamp string or null")),
+            _ => {
+                return Err(err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-PORT-009",
+                    "published_at must be a timestamp string or null",
+                ))
+            }
         };
-        let sequence = get(&mc.publication_sequence)?.as_i64().ok_or_else(|| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-009", "publication_sequence must be an integer"))?;
-        let publication_id = get(&mc.publication_id)?.as_str().ok_or_else(|| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-009", "publication_id must be a string"))?.to_string();
+        let sequence = get(&mc.publication_sequence)?.as_i64().ok_or_else(|| {
+            err(
+                "PHYSICAL_TYPE_MISMATCH",
+                "SEM-PORT-009",
+                "publication_sequence must be an integer",
+            )
+        })?;
+        let publication_id = get(&mc.publication_id)?
+            .as_str()
+            .ok_or_else(|| {
+                err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-PORT-009",
+                    "publication_id must be a string",
+                )
+            })?
+            .to_string();
         let materialization_id = get(&mc.materialization_id)?.as_str().map(str::to_string);
         for fm in &t.feature_mapping {
-            let f = rt.features.iter().find(|f| f.id == fm.feature).ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", fm.feature.clone()))?;
+            let f = rt
+                .features
+                .iter()
+                .find(|f| f.id == fm.feature)
+                .ok_or_else(|| err("UNKNOWN_FEATURE", "SEM-ID-002", fm.feature.clone()))?;
             let raw = get(&fm.column)?;
-            let value = V::from_json(raw, f.output.ty).map_err(|m| err("PHYSICAL_TYPE_MISMATCH", "SEM-PORT-004", format!("{}: {m}", fm.column)))?;
-            let state = get(&fm.state_column)?.as_str().filter(|s| OUTPUT_STATES.contains(s)).ok_or_else(|| err("PHYSICAL_TYPE_MISMATCH", "SEM-MISS-001", format!("{} must hold a declared output state", fm.state_column)))?.to_string();
+            let value = V::from_json(raw, f.output.ty).map_err(|m| {
+                err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-PORT-004",
+                    format!("{}: {m}", fm.column),
+                )
+            })?;
+            let state = get(&fm.state_column)?
+                .as_str()
+                .filter(|s| OUTPUT_STATES.contains(s))
+                .ok_or_else(|| {
+                    err(
+                        "PHYSICAL_TYPE_MISMATCH",
+                        "SEM-MISS-001",
+                        format!("{} must hold a declared output state", fm.state_column),
+                    )
+                })?
+                .to_string();
             if value.is_null() && !f.output.nullable {
-                return Err(err("PHYSICAL_TYPE_MISMATCH", "SEM-OUT-001", format!("{} is null for a non-null output", fm.column)));
+                return Err(err(
+                    "PHYSICAL_TYPE_MISMATCH",
+                    "SEM-OUT-001",
+                    format!("{} is null for a non-null output", fm.column),
+                ));
             }
             out.push(PublicationRecord {
                 feature: f.id.clone(),
@@ -373,63 +609,136 @@ struct ParsedRequestRow {
     requested_at: Instant,
 }
 
-fn parse_request_row(c: &Consumer, e: &Entity, row: &Map<String, Json>) -> Result<ParsedRequestRow, EvalError> {
-    let mut allowed: Vec<&str> = c.entity_inputs.iter().map(|m| m.input_field.as_str()).collect();
+fn parse_request_row(
+    c: &Consumer,
+    e: &Entity,
+    row: &Map<String, Json>,
+) -> Result<ParsedRequestRow, EvalError> {
+    let mut allowed: Vec<&str> = c
+        .entity_inputs
+        .iter()
+        .map(|m| m.input_field.as_str())
+        .collect();
     allowed.push(&c.time_inputs.as_of);
     allowed.push(&c.time_inputs.requested_at);
     if let Some(d) = &c.time_inputs.dataset_cutoff {
         allowed.push(d);
     }
     if let Some(extra) = row.keys().find(|k| !allowed.contains(&k.as_str())) {
-        return Err(err("REQUEST_FIELD_UNKNOWN", "SEM-CONS-001", format!("Request field {extra} is not declared by the consumer")));
+        return Err(err(
+            "REQUEST_FIELD_UNKNOWN",
+            "SEM-CONS-001",
+            format!("Request field {extra} is not declared by the consumer"),
+        ));
     }
     let mut key = Vec::new();
     let mut entity_keys = Map::new();
     for k in &e.keys {
-        let m = c.entity_inputs.iter().find(|m| m.entity_key == k.name).ok_or_else(|| err("ENTITY_MAPPING_INCOMPLETE", "SEM-CONS-001", k.name.clone()))?;
+        let m = c
+            .entity_inputs
+            .iter()
+            .find(|m| m.entity_key == k.name)
+            .ok_or_else(|| err("ENTITY_MAPPING_INCOMPLETE", "SEM-CONS-001", k.name.clone()))?;
         let raw = row.get(&m.input_field).ok_or_else(|| err("REQUEST_KEY_MISSING", "SEM-CONS-001", format!("Request lacks {} (entity key {}); complete keys including tenant keys are required", m.input_field, k.name)))?;
-        let v = V::from_json(raw, k.ty).map_err(|msg| err("REQUEST_KEY_TYPE", "SEM-CONS-001", msg))?;
+        let v =
+            V::from_json(raw, k.ty).map_err(|msg| err("REQUEST_KEY_TYPE", "SEM-CONS-001", msg))?;
         if v.is_null() {
-            return Err(err("REQUEST_KEY_MISSING", "SEM-CONS-001", format!("{} is null", m.input_field)));
+            return Err(err(
+                "REQUEST_KEY_MISSING",
+                "SEM-CONS-001",
+                format!("{} is null", m.input_field),
+            ));
         }
         entity_keys.insert(k.name.clone(), raw.clone());
         key.push(v);
     }
     let ts = |field: &str| -> Result<Instant, EvalError> {
-        let raw = row.get(field).and_then(Json::as_str).ok_or_else(|| err("REQUEST_TIME_MISSING", "SEM-CONS-001", format!("Request lacks time input {field}")))?;
+        let raw = row.get(field).and_then(Json::as_str).ok_or_else(|| {
+            err(
+                "REQUEST_TIME_MISSING",
+                "SEM-CONS-001",
+                format!("Request lacks time input {field}"),
+            )
+        })?;
         parse_ts(raw, field)
     };
-    Ok(ParsedRequestRow { key, entity_keys, as_of: ts(&c.time_inputs.as_of)?, requested_at: ts(&c.time_inputs.requested_at)? })
+    Ok(ParsedRequestRow {
+        key,
+        entity_keys,
+        as_of: ts(&c.time_inputs.as_of)?,
+        requested_at: ts(&c.time_inputs.requested_at)?,
+    })
 }
 
 /// Serve a consumer request through the deployment's binding and a store.
-pub fn serve(p: &Project, stores: &dyn StoreRegistry, req: &ConsumerRequest, max_rows: usize) -> Result<ConsumerResponse, EvalError> {
+pub fn serve(
+    p: &Project,
+    stores: &dyn StoreRegistry,
+    req: &ConsumerRequest,
+    max_rows: usize,
+) -> Result<ConsumerResponse, EvalError> {
     if req.api_version != CONSUMER_API_VERSION {
-        return Err(err("API_VERSION_UNSUPPORTED", "SEM-CONS-001", format!("Expected {CONSUMER_API_VERSION}")));
+        return Err(err(
+            "API_VERSION_UNSUPPORTED",
+            "SEM-CONS-001",
+            format!("Expected {CONSUMER_API_VERSION}"),
+        ));
     }
     if req.rows.len() > max_rows {
-        return Err(err("RESOURCE_LIMIT_EXCEEDED", "SEM-BUDGET-001", format!("{} request rows exceed the limit {max_rows}", req.rows.len())));
+        return Err(err(
+            "RESOURCE_LIMIT_EXCEEDED",
+            "SEM-BUDGET-001",
+            format!(
+                "{} request rows exceed the limit {max_rows}",
+                req.rows.len()
+            ),
+        ));
     }
     let rt = resolve(p, &req.deployment, &req.consumer, &req.consumer_version)?;
     let store = stores
         .store(&rt.adapter.implementation, &rt.adapter.version)
-        .ok_or_else(|| err("UNRESOLVED_ADAPTER", "SEM-PORT-002", format!("No store implementation registered for {}@{}", rt.adapter.implementation, rt.adapter.version)))?;
+        .ok_or_else(|| {
+            err(
+                "UNRESOLVED_ADAPTER",
+                "SEM-PORT-002",
+                format!(
+                    "No store implementation registered for {}@{}",
+                    rt.adapter.implementation, rt.adapter.version
+                ),
+            )
+        })?;
     let mapping = ResolvedTargetRef::new(p, rt.target)?;
     let mut parsed = Vec::new();
     for row in &req.rows {
         parsed.push(parse_request_row(rt.consumer, rt.entity, row));
     }
     let ok_rows: Vec<&ParsedRequestRow> = parsed.iter().filter_map(|r| r.as_ref().ok()).collect();
-    let key_columns: Vec<String> = rt.entity.keys.iter().map(|k| phys(&rt.target.entity_key_mapping, &k.name)).collect::<Result<_, _>>()?;
-    let max_as_of = ok_rows.iter().map(|r| r.as_of).max().unwrap_or(Instant { micros: 0 });
+    let key_columns: Vec<String> = rt
+        .entity
+        .keys
+        .iter()
+        .map(|k| phys(&rt.target.entity_key_mapping, &k.name))
+        .collect::<Result<_, _>>()?;
+    let max_as_of = ok_rows
+        .iter()
+        .map(|r| r.as_of)
+        .max()
+        .unwrap_or(Instant { micros: 0 });
     let read = PhysicalReadRequest {
         location: rt.target.location.clone(),
         key_columns,
-        keys: ok_rows.iter().map(|r| r.entity_keys.values().cloned().collect()).collect(),
+        keys: ok_rows
+            .iter()
+            .map(|r| r.entity_keys.values().cloned().collect())
+            .collect(),
         as_of_column: rt.target.metadata_columns.as_of.clone(),
         max_as_of: max_as_of.to_string(),
     };
-    let physical = if ok_rows.is_empty() { Vec::new() } else { store.read(rt.adapter, &read)? };
+    let physical = if ok_rows.is_empty() {
+        Vec::new()
+    } else {
+        store.read(rt.adapter, &read)?
+    };
     let records = from_physical(&mapping, &physical)?;
     let c = rt.consumer;
     let mut rows = Vec::new();
@@ -437,7 +746,14 @@ pub fn serve(p: &Project, stores: &dyn StoreRegistry, req: &ConsumerRequest, max
         let pr = match pr {
             Ok(x) => x,
             Err(e) => {
-                rows.push(ResponseRow { request_index: i, entity_keys: Map::new(), as_of: String::new(), requested_at: String::new(), values: vec![], diagnostics: vec![e.to_diagnostic(&format!("/rows/{i}"))] });
+                rows.push(ResponseRow {
+                    request_index: i,
+                    entity_keys: Map::new(),
+                    as_of: String::new(),
+                    requested_at: String::new(),
+                    values: vec![],
+                    diagnostics: vec![e.to_diagnostic(&format!("/rows/{i}"))],
+                });
                 continue;
             }
         };
@@ -445,7 +761,11 @@ pub fn serve(p: &Project, stores: &dyn StoreRegistry, req: &ConsumerRequest, max
         let mut diagnostics = Vec::new();
         let mut publication_ids = std::collections::BTreeSet::new();
         for m in &rt.feature_set.features {
-            let recs: Vec<PublicationRecord> = records.iter().filter(|r| r.feature == m.id && r.version == m.version).cloned().collect();
+            let recs: Vec<PublicationRecord> = records
+                .iter()
+                .filter(|r| r.feature == m.id && r.version == m.version)
+                .cloned()
+                .collect();
             let requested = match c.selection.mode {
                 SelectionMode::HistoricalServingReplay => Some(pr.requested_at),
                 SelectionMode::SourceAsKnown => None,
@@ -454,13 +774,36 @@ pub fn serve(p: &Project, stores: &dyn StoreRegistry, req: &ConsumerRequest, max
                 Err(e) => diagnostics.push(e.to_diagnostic(&format!("/rows/{i}/{}", m.id))),
                 Ok(None) => {
                     if c.missing_value_policy == MissingValuePolicy::Reject {
-                        diagnostics.push(err("MISSING_FEATURE_VALUE", "SEM-FRESH-002", format!("{} has no eligible publication", m.id)).to_diagnostic(&format!("/rows/{i}/{}", m.id)));
+                        diagnostics.push(
+                            err(
+                                "MISSING_FEATURE_VALUE",
+                                "SEM-FRESH-002",
+                                format!("{} has no eligible publication", m.id),
+                            )
+                            .to_diagnostic(&format!("/rows/{i}/{}", m.id)),
+                        );
                     }
-                    values.push(FeatureValueOut { feature: m.id.clone(), version: m.version.clone(), value: Json::Null, state: "not_published".into(), provenance: None });
+                    values.push(FeatureValueOut {
+                        feature: m.id.clone(),
+                        version: m.version.clone(),
+                        value: Json::Null,
+                        state: "not_published".into(),
+                        provenance: None,
+                    });
                 }
                 Ok(Some(r)) => {
                     if r.value.is_null() && c.missing_value_policy == MissingValuePolicy::Reject {
-                        diagnostics.push(err("MISSING_FEATURE_VALUE", "SEM-FRESH-002", format!("{}: latest selected value is null ({}); no fallback", m.id, r.state)).to_diagnostic(&format!("/rows/{i}/{}", m.id)));
+                        diagnostics.push(
+                            err(
+                                "MISSING_FEATURE_VALUE",
+                                "SEM-FRESH-002",
+                                format!(
+                                    "{}: latest selected value is null ({}); no fallback",
+                                    m.id, r.state
+                                ),
+                            )
+                            .to_diagnostic(&format!("/rows/{i}/{}", m.id)),
+                        );
                     }
                     publication_ids.insert(r.publication_id.clone());
                     values.push(FeatureValueOut {
@@ -485,7 +828,14 @@ pub fn serve(p: &Project, stores: &dyn StoreRegistry, req: &ConsumerRequest, max
         if diagnostics.iter().any(|d| d.is_error()) {
             values.clear();
         }
-        rows.push(ResponseRow { request_index: i, entity_keys: pr.entity_keys, as_of: pr.as_of.to_string(), requested_at: pr.requested_at.to_string(), values, diagnostics });
+        rows.push(ResponseRow {
+            request_index: i,
+            entity_keys: pr.entity_keys,
+            as_of: pr.as_of.to_string(),
+            requested_at: pr.requested_at.to_string(),
+            values,
+            diagnostics,
+        });
     }
     Ok(ConsumerResponse {
         api_version: CONSUMER_API_VERSION.into(),
