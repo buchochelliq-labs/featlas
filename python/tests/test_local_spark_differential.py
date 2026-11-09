@@ -98,3 +98,39 @@ def test_custom_contract_deployment_is_rejected_before_code_generation(core):
         core.generate(str(ROOT / "projects" / "04_fitted_and_custom_contracts.yaml"), "contracts_prod", tempfile.mkdtemp())
     assert e.value.code == "PLANNING_FAILED"
     assert any(d["code"] == "UNSUPPORTED_CAPABILITY" for d in e.value.detail)
+
+
+# ---- Multi-violation cases: both engines must report the same *first* code -----------------
+
+def _mutated(tmp_path, name: str, deployment: str, suite: int, case_index: int, mutate):
+    doc = yaml.safe_load((ROOT / "projects" / name).read_text(encoding="utf-8"))
+    case = doc["acceptance_suites"][suite]["cases"][case_index]
+    mutate(case)
+    path = tmp_path / name.replace(".yaml", ".json")
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return str(path), case
+
+
+def _first_codes(spark, core, path, deployment, case):
+    out = tempfile.mkdtemp(prefix="featlas-gen-")
+    result = run_case(spark, core, path, core.generate(path, deployment, out), case)
+    return result.get("spark_code"), result.get("core_code")
+
+
+def test_invalid_interval_precedes_multiple_matches(spark, core, tmp_path):
+    def mutate(case):
+        case["source_rows"]["device_threshold_history"].append({
+            "tenant_id": "tenant_a", "device_id": "device_2", "interval_id": "bad", "valid_from": "2026-06-05T00:00:00Z",
+            "valid_to": "2026-06-04T00:00:00Z", "revision_no": 1, "available_at": "2026-06-01T00:00:00Z", "is_deleted": False, "critical_threshold_c": 50.0})
+    path, case = _mutated(tmp_path, "02_historical_temperature.yaml", "temperature_prod", 0, 6, mutate)
+    assert _first_codes(spark, core, path, "temperature_prod", case) == ("INVALID_INTERVAL", "INVALID_INTERVAL")
+
+
+def test_reconstruction_conflict_precedes_lookup_tie(spark, core, tmp_path):
+    def mutate(case):
+        rows = case["source_rows"]["fault_events"]
+        twin = dict(rows[0])
+        twin["is_fault"] = not rows[0]["is_fault"] if rows[0]["is_fault"] is not None else True
+        rows.append(twin)
+    path, case = _mutated(tmp_path, "05_lookup_and_recency.yaml", "lookup_prod", 0, 3, mutate)
+    assert _first_codes(spark, core, path, "lookup_prod", case) == ("DUPLICATE_CONFLICT", "DUPLICATE_CONFLICT")

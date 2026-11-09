@@ -1073,6 +1073,23 @@ fn check_feature(c: &mut Ctx, fi: usize, f: &Feature) {
                 );
             }
             let mut reached: HashSet<&str> = HashSet::from([input]);
+            // Tenant columns per alias, derived from the feature's own declarations (SEM-ENT-002):
+            // the tenant entity key's group_by mapping, then relationship key pairs along joins.
+            // This does not rely on tenant columns sharing the entity key's name.
+            let tenant_keys: HashSet<&str> = entity
+                .map(|e| {
+                    e.keys
+                        .iter()
+                        .filter(|k| k.is_tenant)
+                        .map(|k| k.name.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut tenant_cols: HashMap<String, String> = group_by
+                .iter()
+                .filter(|g| tenant_keys.contains(g.entity_key.as_str()))
+                .map(|g| (g.input.clone(), g.column.clone()))
+                .collect();
             for (ji, j) in joins.iter().enumerate() {
                 let jp = format!("{tpath}/joins/{ji}");
                 let Some(r) = p.relationship(&j.relationship) else {
@@ -1122,6 +1139,34 @@ fn check_feature(c: &mut Ctx, fi: usize, f: &Feature) {
                     c.err("JOIN_ORDER_INVALID", "SEM-REL-001", jp.clone(), "Each join must extend the reachable row environment with a new alias exactly once", &[fid, &r.id]);
                 }
                 reached.insert(j.right_alias.as_str());
+                let pairs: Vec<(&String, &String)> =
+                    r.from.columns.iter().zip(&r.to.columns).collect();
+                match (tenant_cols.get(&j.left_alias).cloned(), tenant_cols.get(&j.right_alias).cloned()) {
+                    (Some(lt), Some(rtc)) => {
+                        if !pairs.iter().any(|(a, b)| **a == lt && **b == rtc) {
+                            c.err("TENANT_JOIN_MISSING", "SEM-ENT-002", jp.clone(), format!("Join must pair tenant columns {}.{lt} and {}.{rtc}", l.source, rt.source), &[fid, &r.id]);
+                        }
+                    }
+                    (Some(lt), None) => match pairs.iter().find(|(a, _)| **a == lt) {
+                        Some((_, b)) => {
+                            tenant_cols.insert(j.right_alias.clone(), (*b).clone());
+                        }
+                        None => c.err(
+                            "TENANT_JOIN_MISSING",
+                            "SEM-ENT-002",
+                            jp.clone(),
+                            format!("Left input {} carries the tenant in {lt}, but relationship {} does not join on it; equal local keys in different tenants would cross-match", j.left_alias, r.id),
+                            &[fid, &r.id],
+                        ),
+                    },
+                    (None, Some(rtc)) => match pairs.iter().find(|(_, b)| **b == rtc) {
+                        Some((a, _)) => {
+                            tenant_cols.insert(j.left_alias.clone(), (*a).clone());
+                        }
+                        None => c.err("TENANT_JOIN_MISSING", "SEM-ENT-002", jp.clone(), format!("Right input {} carries the tenant in {rtc}, but relationship {} does not join on it", j.right_alias, r.id), &[fid, &r.id]),
+                    },
+                    (None, None) => {}
+                }
                 for (endpoint, inp) in [(&r.from, l), (&r.to, rt)] {
                     for col in &endpoint.columns {
                         if !inp.columns.contains(col) {

@@ -125,26 +125,38 @@ class SnapshotRun:
             if self._readable(st):
                 self._run(st, self._params())
 
-    def compute(self) -> None:
-        for f in self.artifacts["features"]:
+    def _check(self, c: dict) -> None:
+        """Run one zero-row assertion; a returned row raises its stable code."""
+        rows = self._sql(c["name"], c["sql"], self._params()).limit(1).collect()
+        if rows:
+            raise FeatlasError(c["code"], f"Contract assertion {c['name']} returned rows", c["rule"], {"check": c["name"], "example": rows[0].asDict()})
+
+    def execute(self) -> None:
+        """Assertions and feature views in the core's canonical order; raises at the first violation.
+
+        1. Untagged assertions (row validity, reconstruction, population) in generated order.
+        2. Per feature in plan order: register its view (computed or degraded variant); for computed
+           features run its transform assertions, then materialize the view so runtime errors
+           (overflow, division by zero, non-finite, empty-error) surface before later features.
+        """
+        a = self.artifacts
+        for c in a["checks"]:
+            if c.get("feature") is None and self._readable(c):
+                self._check(c)
+        for f in a["features"]:
             cov = self.coverage[f["feature"]]
             if cov["variant"] == "computed":
+                for c in a["checks"]:
+                    if c.get("feature") == f["feature"] and self._readable(c):
+                        self._check(c)
                 self._run(f["computed"], self._params())
             else:
-                params = dict(self._params(), coverage_state=cov["coverage_state"])
-                self._run(f["degraded"], params)
-
-    def assert_contracts(self) -> list[dict]:
-        """Run zero-row assertions; any returned row is a contract violation."""
-        violations = []
-        degraded = {f for f, cov in self.coverage.items() if cov["variant"] != "computed"}
-        for c in self.artifacts["checks"]:
-            if not self._readable(c) or c.get("feature") in degraded:
-                continue
-            rows = self._sql(c["name"], c["sql"], self._params()).limit(1).collect()
-            if rows:
-                violations.append({"check": c["name"], "code": c["code"], "rule": c["rule"], "example": rows[0].asDict()})
-        return violations
+                self._run(f["degraded"], dict(self._params(), coverage_state=cov["coverage_state"]))
+            view = (f["computed"] if cov["variant"] == "computed" else f["degraded"])["view"]
+            try:
+                self.spark.table(view).count()
+            except Exception as exc:  # noqa: BLE001
+                raise map_spark_exception(exc) from exc
 
     def materialize(self, publication: dict[str, Any]) -> list[dict]:
         """Build the snapshot view and materialize feature views to surface runtime errors."""
@@ -158,11 +170,7 @@ class SnapshotRun:
 
     def run_to_snapshot(self, publication: dict[str, Any]) -> list[dict]:
         self.prepare()
-        self.compute()
-        violations = self.assert_contracts()
-        if violations:
-            v = violations[0]
-            raise FeatlasError(v["code"], f"Contract assertion {v['check']} returned rows", v["rule"], violations)
+        self.execute()
         return self.materialize(publication)
 
     def publish(self, auth: PublicationAuthorization) -> dict:

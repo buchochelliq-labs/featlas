@@ -1159,6 +1159,7 @@ fn lower_feature(
                 join_type,
                 ..
             } => {
+                let jc0 = lw.checks.len();
                 let right_source = alias_cols
                     .get(right_alias)
                     .cloned()
@@ -1263,6 +1264,17 @@ fn lower_feature(
                         .join(", ");
                     lw.checks.push(Check { name: format!("{view}_{}_one_to_one", safe(relationship)), code: "CARDINALITY_VIOLATION".into(), rule: "SEM-REL-002".into(), sql: format!("SELECT {lk}, count(*) AS n FROM {base_from}{base_where} GROUP BY {lk} HAVING count(*) > 1 AND NOT ({})", left_null.replace(&format!("{la}."), "")), reads: vec![], feature: None });
                 }
+                // Canonical precedence, identical to the core evaluator: reconstruction, invalid
+                // intervals, null join keys, cardinality, multiple matches, unmatched rows.
+                let rank = |c: &Check| match c.code.as_str() {
+                    "INVALID_INTERVAL" => 1,
+                    "NULL_JOIN_KEY" => 2,
+                    "CARDINALITY_VIOLATION" => 3,
+                    "MULTIPLE_MATCHES" => 4,
+                    "UNMATCHED_JOIN" => 5,
+                    _ => 0,
+                };
+                lw.checks[jc0..].sort_by_key(rank);
             }
             Step::Filter { predicate } => {
                 let c = |a: &str, col: &str| format!("{}.{}", quote(a), quote(col));

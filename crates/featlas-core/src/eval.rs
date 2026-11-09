@@ -93,6 +93,7 @@ struct Evaluator<'a> {
     trace: Vec<TraceStep>,
     validated: BTreeMap<String, Vec<TRow>>,
     work: usize,
+    reconstructed: HashMap<(String, Boundary), Vec<TRow>>,
 }
 
 #[derive(Clone)]
@@ -245,6 +246,21 @@ impl<'a> Evaluator<'a> {
 
     /// Stages 2–5 for one source at one cutoff.
     fn reconstruct(
+        &mut self,
+        feature: &str,
+        sid: &str,
+        upper: Boundary,
+    ) -> Result<Vec<TRow>, EvalError> {
+        if let Some(rows) = self.reconstructed.get(&(sid.to_string(), upper)) {
+            return Ok(rows.clone());
+        }
+        let rows = self.reconstruct_uncached(feature, sid, upper)?;
+        self.reconstructed
+            .insert((sid.to_string(), upper), rows.clone());
+        Ok(rows)
+    }
+
+    fn reconstruct_uncached(
         &mut self,
         feature: &str,
         sid: &str,
@@ -538,6 +554,7 @@ impl<'a> Evaluator<'a> {
             }
             _ => {
                 let groups = self.row_environments(f, entity)?;
+                self.reduce_assertions(f, &groups, population)?;
                 for key in population {
                     if let Some(state) = coverage {
                         values.push(missing(f, state)?);
@@ -660,6 +677,15 @@ impl<'a> Evaluator<'a> {
             let mut out = Vec::new();
             let mut seen_left = BTreeSet::new();
             let (mut matched, mut unmatched) = (0usize, 0usize);
+            // Scan every left row and report by fixed precedence (null key, cardinality, multiple
+            // matches, unmatched) so the first diagnostic does not depend on row order and matches
+            // the order of the generated assertion queries.
+            let mut violations: [Option<EvalError>; 4] = [None, None, None, None];
+            let mut record = |slot: usize, e: EvalError| {
+                if violations[slot].is_none() {
+                    violations[slot] = Some(e);
+                }
+            };
             for env in envs {
                 let left = env.rows.get(&j.left_alias).cloned().flatten();
                 let key: Vec<V> = match &left {
@@ -668,24 +694,31 @@ impl<'a> Evaluator<'a> {
                 };
                 let has_null = key.iter().any(V::is_null);
                 if has_null && r.null_keys == NullKeys::Error {
-                    return Err(err(
-                        "NULL_JOIN_KEY",
-                        "SEM-REL-003",
-                        format!("{}: null join key with null_keys: error", r.id),
-                    ));
+                    record(
+                        0,
+                        err(
+                            "NULL_JOIN_KEY",
+                            "SEM-REL-003",
+                            format!("{}: null join key with null_keys: error", r.id),
+                        ),
+                    );
+                    continue;
                 }
                 if r.cardinality == Cardinality::OneToOne
                     && !has_null
                     && !seen_left.insert(key_string(&key))
                 {
-                    return Err(err(
-                        "CARDINALITY_VIOLATION",
-                        "SEM-REL-002",
-                        format!(
-                            "{}: repeated eligible left key for a one-to-one relationship",
-                            r.id
+                    record(
+                        1,
+                        err(
+                            "CARDINALITY_VIOLATION",
+                            "SEM-REL-002",
+                            format!(
+                                "{}: repeated eligible left key for a one-to-one relationship",
+                                r.id
+                            ),
                         ),
-                    ));
+                    );
                 }
                 let mut matches = Vec::new();
                 if !has_null {
@@ -728,7 +761,8 @@ impl<'a> Evaluator<'a> {
                     }
                 }
                 if matches.len() > 1 {
-                    return Err(err("MULTIPLE_MATCHES", "SEM-REL-002", format!("{}: {} eligible right rows match one left row; no arbitrary choice is made", r.id, matches.len())));
+                    record(2, err("MULTIPLE_MATCHES", "SEM-REL-002", format!("{}: {} eligible right rows match one left row; no arbitrary choice is made", r.id, matches.len())));
+                    continue;
                 }
                 let mut env = env;
                 if let Some(ci) = matches.first() {
@@ -739,13 +773,14 @@ impl<'a> Evaluator<'a> {
                 } else {
                     unmatched += 1;
                     match r.unmatched {
-                        Unmatched::Error => {
-                            return Err(err(
+                        Unmatched::Error => record(
+                            3,
+                            err(
                                 "UNMATCHED_JOIN",
                                 "SEM-REL-003",
                                 format!("{}: unmatched left row with unmatched: error", r.id),
-                            ))
-                        }
+                            ),
+                        ),
                         Unmatched::PreserveNull => {
                             env.rows.insert(j.right_alias.clone(), None);
                             out.push(env);
@@ -753,6 +788,9 @@ impl<'a> Evaluator<'a> {
                         Unmatched::Drop => {}
                     }
                 }
+            }
+            if let Some(e) = violations.into_iter().flatten().next() {
+                return Err(e);
             }
             self.note(
                 &f.id,
@@ -823,6 +861,93 @@ impl<'a> Evaluator<'a> {
             ),
         );
         Ok(groups)
+    }
+
+    /// Reduce-stage assertions over all population entities, before any computation, in the
+    /// fixed order NULL_INPUT → NULL_ORDER_KEY → LOOKUP_TIE (mirrors the generated assertions).
+    fn reduce_assertions(
+        &mut self,
+        f: &Feature,
+        groups: &HashMap<String, Vec<Env>>,
+        population: &[Vec<V>],
+    ) -> Result<(), EvalError> {
+        let rows_of = |k: &Vec<V>| groups.get(&key_string(k)).map(Vec::as_slice).unwrap_or(&[]);
+        match &f.transform {
+            Transform::Aggregate {
+                nulls: NullPolicy::Error,
+                value,
+                distinct_by,
+                ..
+            } => {
+                for k in population {
+                    for e in rows_of(k) {
+                        let env = Typed {
+                            inner: e,
+                            p: self.p,
+                            f,
+                        };
+                        let exprs: Vec<&Expr> = value.iter().chain(distinct_by.iter()).collect();
+                        for x in exprs {
+                            if expr::eval(x, &env)?.is_null() {
+                                return Err(err(
+                                    "NULL_INPUT",
+                                    "SEM-TRANS-004",
+                                    "Null aggregate input with nulls: error",
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            Transform::Lookup { order_by, .. } => {
+                let key_of = |e: &Env| -> Vec<V> {
+                    order_by
+                        .iter()
+                        .map(|o| {
+                            e.rows
+                                .get(&o.input)
+                                .cloned()
+                                .flatten()
+                                .map(|r| r[&o.column].clone())
+                                .unwrap_or(V::Null)
+                        })
+                        .collect()
+                };
+                for k in population {
+                    for e in rows_of(k) {
+                        if key_of(e).iter().any(V::is_null) {
+                            return Err(err(
+                                "NULL_ORDER_KEY",
+                                "SEM-TRANS-005",
+                                "Lookup ordering key is null",
+                            ));
+                        }
+                    }
+                }
+                let cmp = |a: &[V], b: &[V]| -> Ordering {
+                    for (i, o) in order_by.iter().enumerate() {
+                        let ord = compare(&a[i], &b[i]).unwrap_or(Ordering::Equal);
+                        if ord != Ordering::Equal {
+                            return if o.direction == "desc" {
+                                ord.reverse()
+                            } else {
+                                ord
+                            };
+                        }
+                    }
+                    Ordering::Equal
+                };
+                for k in population {
+                    let mut keys: Vec<Vec<V>> = rows_of(k).iter().map(key_of).collect();
+                    keys.sort_by(|a, b| cmp(a, b));
+                    if keys.len() > 1 && cmp(&keys[0], &keys[1]) == Ordering::Equal {
+                        return Err(err("LOOKUP_TIE", "SEM-TRANS-005", "Lookup ordering is tied for the first row; ties are diagnosed even when values are equal"));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     /// Stage 8 for one entity's eligible rows.
@@ -1466,6 +1591,7 @@ pub fn evaluate(
         limits,
         trace: Vec::new(),
         validated: BTreeMap::new(),
+        reconstructed: HashMap::new(),
         work: 0,
     };
     let target = ev.feature_by_id(feature_id)?;
@@ -1508,6 +1634,22 @@ pub fn evaluate(
             rows,
             trace: ev.trace,
         });
+    }
+    // Reconstruct every available input source of every feature, in plan order (primary input,
+    // then join targets), before any transform: reconstruction errors therefore surface in the
+    // same canonical order as the generated statements.
+    for fid in dependency_order(p, &[feature_id.to_string()]) {
+        let f = ev.feature_by_id(&fid)?;
+        if let Some((input, joins, _, _)) = f.transform.row_shape() {
+            let mut aliases = vec![input.to_string()];
+            aliases.extend(joins.iter().map(|j| j.right_alias.clone()));
+            for a in aliases {
+                let Some(inp) = f.input(&a) else { continue };
+                if matches!(ev.status(&inp.source)?, SourceStatus::Available { .. }) {
+                    ev.reconstruct(&f.id, &inp.source, f.time.availability.upper)?;
+                }
+            }
+        }
     }
     let mut outputs: HashMap<String, FeatureOutput> = HashMap::new();
     for fid in dependency_order(p, &[feature_id.to_string()]) {
@@ -1664,6 +1806,7 @@ pub fn reconstruct_rows(
         limits,
         trace: Vec::new(),
         validated: BTreeMap::new(),
+        reconstructed: HashMap::new(),
         work: 0,
     };
     ev.reconstruct("", source_id, upper)

@@ -77,7 +77,7 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
         view = f"fixture_{source}"
         register_source(spark, view, spec, case["source_rows"].get(source, []))
         relations[source] = view
-    outcome: dict[str, Any] = {"case": case["id"], "feature": feature, "core": core_result.get("status"), "core_reason": core_result.get("reason", "")}
+    outcome: dict[str, Any] = {"case": case["id"], "feature": feature, "core": core_result.get("status"), "core_reason": core_result.get("reason", ""), "core_code": (core_result.get("actual_diagnostic") or {}).get("code")}
     pop_source = next(fs for fs in plan["logical"]["feature_sets"] if fs["id"] == fs_id)["population"]["source"]
     if pop_source in unavailable:
         code = "SOURCE_UNAVAILABLE"
@@ -86,10 +86,7 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
     run = SnapshotRun(spark, art, case["as_of"], coverage, unavailable, relations, population_source=pop_source)
     try:
         run.prepare()
-        run.compute()
-        violations = run.assert_contracts()
-        if violations:
-            return _diag_outcome(outcome, expected, violations[0]["code"], f"assertion {violations[0]['check']}", [v["code"] for v in violations])
+        run.execute()
         pop = [tuple(r) for r in spark.table(f"fl_population_{fs_id.replace('.', '_').replace('-', '_')}").collect()]
         want_pop = sorted(tuple(row.values()) for row in case["population_rows"])
         if sorted(pop) != want_pop:
@@ -117,7 +114,8 @@ def _diag_outcome(outcome: dict, expected: dict, code: str, why: str, all_codes:
     outcome["spark_code"] = code
     outcome["spark_codes"] = all_codes or [code]
     want = expected.get("diagnostic", {}).get("code")
-    if want and want in outcome["spark_codes"]:
+    # The first reported code must match: both engines follow the same canonical precedence.
+    if want and code == want:
         outcome.update(status="passed", reason=f"{code} ({why})")
     else:
         outcome.update(status="failed", reason=f"Spark diagnostic {code} ({why}); expected {want or 'rows'}")

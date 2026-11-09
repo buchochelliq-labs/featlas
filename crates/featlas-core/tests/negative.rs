@@ -786,3 +786,98 @@ fn review_parser_rejects_directives_and_underflow() {
     let (_, r) = load_project(b"a: 1e-400\n", Format::Yaml);
     assert_eq!(r.diagnostics[0].code, "PARSE_NUMBER_RANGE");
 }
+
+/// Rename a column of one source throughout the document (contract, references, fixtures).
+fn rename_source_column(v: &mut Value, source: &str, from: &str, to: &str) {
+    fn rename_keys(v: &mut Value, from: &str, to: &str) {
+        if let Some(m) = v.as_object_mut() {
+            if let Some(x) = m.remove(from) {
+                m.insert(to.to_string(), x);
+            }
+        }
+    }
+    fn rename_in_list(v: &mut Value, from: &str, to: &str) {
+        if let Some(a) = v.as_array_mut() {
+            for x in a.iter_mut() {
+                if x == from {
+                    *x = json!(to);
+                }
+            }
+        }
+    }
+    let si = v["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|s| s["id"] == source)
+        .unwrap();
+    let s = &mut v["sources"][si];
+    for c in s["columns"].as_array_mut().unwrap() {
+        if c["name"] == from {
+            c["name"] = json!(to);
+        }
+    }
+    rename_in_list(&mut s["primary_key"], from, to);
+    rename_in_list(&mut s["record_semantics"]["logical_key"], from, to);
+    for u in s["lineage"]["upstream_columns"].as_array_mut().unwrap() {
+        if u["column"] == from {
+            u["column"] = json!(to);
+        }
+    }
+    for r in v["relationships"].as_array_mut().unwrap() {
+        for side in ["from", "to"] {
+            if r[side]["source"] == source {
+                rename_in_list(&mut r[side]["columns"], from, to);
+            }
+        }
+    }
+    for f in v["features"].as_array_mut().unwrap() {
+        for i in f["inputs"].as_array_mut().unwrap() {
+            if i["source"] == source {
+                rename_in_list(&mut i["columns"], from, to);
+            }
+        }
+        for l in f["lineage"]["sources"].as_array_mut().unwrap() {
+            if l["source"] == source && l["column"] == from {
+                l["column"] = json!(to);
+            }
+        }
+    }
+    for d in v["deployments"].as_array_mut().unwrap() {
+        for b in d["source_bindings"].as_array_mut().unwrap() {
+            if b["source"] == source {
+                rename_keys(&mut b["column_mapping"], from, to);
+            }
+        }
+    }
+    for suite in v["acceptance_suites"].as_array_mut().unwrap() {
+        for c in suite["cases"].as_array_mut().unwrap() {
+            if let Some(rows) = c["source_rows"][source].as_array_mut() {
+                for r in rows {
+                    rename_keys(r, from, to);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn review_tenant_join_detected_without_shared_column_names() {
+    let mut v = example_value("02_historical_temperature.yaml");
+    rename_source_column(&mut v, "device_threshold_history", "tenant_id", "org_id");
+    // Rename-only: the project stays valid and every golden still holds.
+    let (codes, _) = codes_for(&v);
+    assert!(codes.is_empty(), "{codes:?}");
+    let text = serde_json::to_string(&v).unwrap();
+    let (l, _) = load_project(text.as_bytes(), Format::Json);
+    let s =
+        featlas_core::fixtures::run_suites(&l.unwrap().project, None, &Limits::default(), false);
+    assert_eq!((s.passed, s.failed), (9, 0));
+    // Joining on device_id alone now crosses tenants; the name-based check cannot see it.
+    let mut bad = v.clone();
+    bad["relationships"][0]["from"]["columns"] = json!(["device_id"]);
+    bad["relationships"][0]["to"]["columns"] = json!(["device_id"]);
+    expect(&bad, "TENANT_JOIN_MISSING");
+    // Limitation: pairing the left tenant column with a *non-tenant* dimension column of the same
+    // type cannot be detected, because the language has no column-level tenant marker.
+}
