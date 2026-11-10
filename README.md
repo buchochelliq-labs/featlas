@@ -82,7 +82,7 @@ is released while the core runs.
 ```sh
 cargo test
 # Bindings + local Spark differential (needs maturin; Java 17+ and pyspark==4.0.1 for Spark):
-cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) python -m pytest -q tests
+cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) pytest -q tests
 # Regenerate docs/evidence (KIT_PYTHON / SPARK_PYTHON optional):
 ./tools/make_evidence.sh
 ```
