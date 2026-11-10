@@ -12,7 +12,9 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
   (test double) and `dev.featlas:databricks` (Spark SQL lowering, Unity Catalog statements).
 * **`crates/featlas-api`** — transport-neutral JSON API; the CLI, the MCP server and the Python
   bindings all call it, so every transport returns identical results.
-* **`crates/featlas-cli`** — the `fe-spec` CLI and a read-only MCP stdio server.
+* **`crates/featlas-cli`** — the `fe-spec` CLI and a read-only MCP stdio server. Text output is
+  rendered with [rs-rich](https://crates.io/crates/rs-rich) (colour only on a terminal; `NO_COLOR`
+  honoured); `--format json` and MCP output are unaffected. Needs Rust ≥ 1.90.
 * **`crates/featlas-py`** — PyO3 bindings, built by maturin into the `featlas._native` extension
   (abi3, CPython ≥ 3.12).
 * **`python/featlas`** — the Python package: `Project` wrapper over the native core.

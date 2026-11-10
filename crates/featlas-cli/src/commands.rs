@@ -1,3 +1,4 @@
+use crate::render::{self, e, verdict, Grid};
 use crate::OutFormat;
 use featlas_adapters::Registry;
 use featlas_core::canon::logical_identities;
@@ -38,9 +39,7 @@ fn print_json(v: &Value) {
 }
 
 fn print_diags(diags: &[Diagnostic]) {
-    for d in diags {
-        println!("{:7} {d}", format!("{:?}", d.severity).to_lowercase());
-    }
+    render::diagnostics(&render::console(), diags);
 }
 
 /// Load through the reference stage; on failure print the report and return the exit code.
@@ -57,8 +56,17 @@ fn load(
                     &json!({"schema": CLI_SCHEMA, "command": "load", "passed": false, "report": report}),
                 );
             } else {
-                print_diags(&report.diagnostics);
-                println!("FAILED: {} ({})", path.display(), stage_summary(&report));
+                let c = render::console();
+                render::diagnostics(&c, &report.diagnostics);
+                render::line(
+                    &c,
+                    &format!(
+                        "{}: {} ({})",
+                        verdict(false),
+                        e(&path.display().to_string()),
+                        e(&stage_summary(&report))
+                    ),
+                );
             }
             Ok(Err(ExitCode::from(1)))
         }
@@ -127,12 +135,16 @@ pub fn validate(path: &Path, format: OutFormat) -> Result<ExitCode, String> {
             &json!({"schema": CLI_SCHEMA, "command": "validate", "passed": passed, "report": report, "logical_identities": identities, "levels_not_evaluated": ["planning_and_capabilities", "data_and_fixture", "runtime_and_acceptance"]}),
         );
     } else {
-        print_diags(&report.diagnostics);
-        println!(
-            "{}: {} ({}); planning, data and runtime levels not evaluated by validate",
-            if passed { "PASS" } else { "FAILED" },
-            path.display(),
-            stage_summary(&report)
+        let c = render::console();
+        render::diagnostics(&c, &report.diagnostics);
+        render::line(
+            &c,
+            &format!(
+                "{}: {} ({}); [dim]planning, data and runtime levels not evaluated by validate[/]",
+                verdict(passed),
+                e(&path.display().to_string()),
+                e(&stage_summary(&report))
+            ),
         );
     }
     Ok(if passed {
@@ -202,7 +214,17 @@ pub fn explain(path: &Path, feature: &str, format: OutFormat) -> Result<ExitCode
             &json!({"schema": CLI_SCHEMA, "command": "explain", "feature": f, "fingerprint": ids.features.get(&format!("{}@{}", f.id, f.version)), "explanation": lines}),
         );
     } else {
-        println!("{}", lines.join("\n"));
+        let c = render::console();
+        let (head, rest) = lines.split_first().expect("explanation has a heading");
+        render::line(&c, &format!("[bold cyan]{}[/]", e(head)));
+        for l in rest {
+            match l.trim_start().split_once(": ") {
+                Some((k, v)) if !k.contains(' ') || k == "stage order" => {
+                    render::line(&c, &format!("  [bold]{}[/]: {}", e(k), e(v)))
+                }
+                _ => render::line(&c, &e(l)),
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -222,20 +244,36 @@ pub fn plan(path: &Path, deployment: &str, format: OutFormat) -> Result<ExitCode
             &json!({"schema": CLI_SCHEMA, "command": "plan", "plannable": outcome.plannable, "execution_ready": outcome.execution_ready, "diagnostics": outcome.diagnostics, "checks": outcome.checks, "plan": outcome.plan}),
         );
     } else {
-        print_diags(&outcome.diagnostics);
-        for c in &outcome.checks {
-            println!(
-                "  {:<22} {:<14} {:<32} {:<18} {}",
-                c.adapter,
-                c.role.as_str(),
-                c.capability,
-                c.status.as_str(),
-                c.evidence_scope.as_str()
+        let con = render::console();
+        render::diagnostics(&con, &outcome.diagnostics);
+        if !outcome.checks.is_empty() {
+            let mut g = Grid::new(
+                &format!("Capability checks: {deployment}"),
+                &["adapter", "role", "capability", "status", "evidence"],
             );
+            for c in &outcome.checks {
+                let status = c.status.as_str();
+                let style = match status {
+                    "supported" => "green",
+                    "unsupported" => "red",
+                    _ => "yellow",
+                };
+                g.row(&[
+                    e(&c.adapter),
+                    e(c.role.as_str()),
+                    e(&c.capability),
+                    format!("[{style}]{}[/]", e(status)),
+                    e(c.evidence_scope.as_str()),
+                ]);
+            }
+            g.print(&con);
         }
-        println!(
-            "plannable={} execution_ready={}",
-            outcome.plannable, outcome.execution_ready
+        render::line(
+            &con,
+            &format!(
+                "plannable={} execution_ready={}",
+                outcome.plannable, outcome.execution_ready
+            ),
         );
     }
     Ok(if outcome.plannable {
@@ -337,20 +375,31 @@ pub fn test(path: &Path, suite: Option<&str>, format: OutFormat) -> Result<ExitC
             &json!({"schema": CLI_SCHEMA, "command": "test", "project_file_sha256": l.file_sha256, "summary": summary}),
         );
     } else {
+        let con = render::console();
+        let mut g = Grid::new(
+            &format!("Acceptance cases: {}", path.display()),
+            &["status", "suite/case", "feature", "reason"],
+        );
         for c in &summary.cases {
             let st = match c.status {
-                CaseStatus::Passed => "PASS",
-                CaseStatus::Failed => "FAIL",
-                CaseStatus::NotExecuted => "NOT EXECUTED",
+                CaseStatus::Passed => "[green]PASS[/]",
+                CaseStatus::Failed => "[bold red]FAIL[/]",
+                CaseStatus::NotExecuted => "[yellow]NOT EXECUTED[/]",
             };
-            println!(
-                "{st:<13} {}/{} ({}@{}) {}",
-                c.suite, c.case, c.feature, c.feature_version, c.reason
-            );
+            g.row(&[
+                st.to_string(),
+                e(&format!("{}/{}", c.suite, c.case)),
+                e(&format!("{}@{}", c.feature, c.feature_version)),
+                e(&c.reason),
+            ]);
         }
-        println!(
-            "executed={} passed={} failed={} not_executed={} (not-executed cases are not passes)",
-            summary.executed, summary.passed, summary.failed, summary.not_executed
+        g.print(&con);
+        render::line(
+            &con,
+            &format!(
+                "executed={} passed={} failed={} not_executed={} [dim](not-executed cases are not passes)[/]",
+                summary.executed, summary.passed, summary.failed, summary.not_executed
+            ),
         );
     }
     Ok(if summary.failed == 0 {
@@ -375,16 +424,26 @@ pub fn evaluate(path: &Path, case_id: &str, format: OutFormat) -> Result<ExitCod
     if format == OutFormat::Json {
         print_json(&json!({"schema": CLI_SCHEMA, "command": "evaluate", "result": r}));
     } else {
-        println!("{:?}: {}", r.status, r.reason);
-        for t in &r.trace {
-            println!("  [{}] {} {}", t.stage, t.feature, t.detail);
+        let con = render::console();
+        let st = match r.status {
+            CaseStatus::Passed => "[bold green]Passed[/]",
+            CaseStatus::Failed => "[bold red]Failed[/]",
+            CaseStatus::NotExecuted => "[bold yellow]NotExecuted[/]",
+        };
+        render::line(&con, &format!("{st}: {}", e(&r.reason)));
+        if !r.trace.is_empty() {
+            let mut g = Grid::new(
+                &format!("Trace: {case_id}"),
+                &["stage", "feature", "detail"],
+            );
+            for t in &r.trace {
+                g.row(&[e(&t.stage.to_string()), e(&t.feature), e(&t.detail)]);
+            }
+            g.print(&con);
         }
-        println!(
-            "{}",
-            serde_json::to_string_pretty(
-                &json!({"rows": r.actual_rows, "diagnostic": r.actual_diagnostic})
-            )
-            .unwrap()
+        render::json(
+            &con,
+            &json!({"rows": r.actual_rows, "diagnostic": r.actual_diagnostic}),
         );
     }
     Ok(if r.status == CaseStatus::Failed {
@@ -421,18 +480,27 @@ pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, S
     let gen = match featlas_api::generate(&bytes, fmt_of(path), deployment, None) {
         Ok(g) => g,
         Err(e) => {
+            let con = render::console();
             if let Some(diags) = e.detail.as_array() {
                 for d in diags {
-                    println!(
-                        "{} {} [{}]: {}",
-                        d["severity"].as_str().unwrap_or(""),
-                        d["code"].as_str().unwrap_or(""),
-                        d["rule"].as_str().unwrap_or(""),
-                        d["message"].as_str().unwrap_or("")
+                    let sev = d["severity"].as_str().unwrap_or("");
+                    let style = if sev == "error" { "bold red" } else { "yellow" };
+                    render::line(
+                        &con,
+                        &format!(
+                            "[{style}]{}[/] {} \\[{}]: {}",
+                            render::e(sev),
+                            render::e(d["code"].as_str().unwrap_or("")),
+                            render::e(d["rule"].as_str().unwrap_or("")),
+                            render::e(d["message"].as_str().unwrap_or(""))
+                        ),
                     );
                 }
             }
-            println!("Not generated: {e}");
+            render::line(
+                &con,
+                &format!("[bold red]Not generated[/]: {}", render::e(&e.to_string())),
+            );
             return Ok(ExitCode::from(1));
         }
     };
@@ -454,11 +522,14 @@ pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, S
         serde_json::to_string_pretty(&manifest).unwrap(),
     )
     .map_err(|e| e.to_string())?;
-    println!(
-        "Generated {} files under {}; execution_ready={}",
-        files.len() + 1,
-        out.display(),
-        manifest["execution_ready"]
+    render::line(
+        &render::console(),
+        &format!(
+            "[green]Generated[/] {} files under {}; execution_ready={}",
+            files.len() + 1,
+            e(&out.display().to_string()),
+            manifest["execution_ready"]
+        ),
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -490,14 +561,21 @@ pub fn migration_plan(
     if format == OutFormat::Json {
         print_json(&serde_json::to_value(&plan).unwrap());
     } else {
-        println!("Migration plan {from} -> {to}");
+        let con = render::console();
+        render::line(
+            &con,
+            &format!("[bold cyan]Migration plan[/] {} -> {}", e(from), e(to)),
+        );
         for b in &plan.blockers {
-            println!("  BLOCKER: {b}");
+            render::line(
+                &con,
+                &format!("  [bold red]BLOCKER[/]: {}", e(&b.to_string())),
+            );
         }
         for r in &plan.semantic_review {
-            println!("  REVIEW: {r}");
+            render::line(&con, &format!("  [yellow]REVIEW[/]: {}", e(&r.to_string())));
         }
-        println!("{}", serde_json::to_string_pretty(&plan.mapping).unwrap());
+        render::json(&con, &serde_json::to_value(&plan.mapping).unwrap());
     }
     Ok(ExitCode::SUCCESS)
 }

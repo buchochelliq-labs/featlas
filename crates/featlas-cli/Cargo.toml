@@ -3,6 +3,8 @@ name = "featlas-cli"
 description = "fe-spec command-line interface and MCP stdio server over the featlas core."
 version.workspace = true
 edition.workspace = true
+# rs-rich needs Rust 1.90; the libraries and Python bindings keep the workspace minimum.
+rust-version = "1.90"
 license.workspace = true
 
 [[bin]]
@@ -18,4 +20,5 @@ serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true
 clap.workspace = true
+rich.workspace = true
 jsonschema.workspace = true
