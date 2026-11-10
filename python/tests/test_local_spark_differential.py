@@ -21,6 +21,7 @@ yaml = pytest.importorskip("yaml")
 
 from featlas_databricks.core import Core  # noqa: E402
 from featlas_databricks.differential import run_case, utc_process  # noqa: E402
+from featlas_databricks.errors import FeatlasError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECTS = [
@@ -29,6 +30,10 @@ PROJECTS = [
     ("03_commerce_ratio.yaml", "commerce_prod"),
     ("05_lookup_and_recency.yaml", "lookup_prod"),
     ("06_store_migration.yaml", "fault_prod"),
+    # SEM-QUAL-001 failure handling (projects/quality/derive.py): warn, quarantine, error.
+    ("quality/quality_warn.yaml", "fault_prod"),
+    ("quality/quality_quarantine.yaml", "fault_prod"),
+    ("quality/quality_error.yaml", "fault_prod"),
 ]
 RESULTS: list[dict] = []
 
@@ -125,3 +130,32 @@ def test_reconstruction_conflict_precedes_lookup_tie(spark, core, tmp_path):
         rows.append(twin)
     path, case = _mutated(tmp_path, "05_lookup_and_recency.yaml", "lookup_prod", 0, 3, mutate)
     assert _first_codes(spark, core, path, "lookup_prod", case) == ("DUPLICATE_CONFLICT", "DUPLICATE_CONFLICT")
+
+
+def test_quarantine_reports_the_violating_rows_and_warn_keeps_values(spark, core):
+    """Quarantine raises with the offending rows (nothing to publish); warn records a finding."""
+    from featlas_databricks.differential import register_source
+    from featlas_databricks.runner import SnapshotRun
+
+    for name, expect in (("quality/quality_quarantine.yaml", "quarantine"), ("quality/quality_warn.yaml", "warning")):
+        project = str(ROOT / "projects" / name)
+        art = generated(core, name, "fault_prod")["artifacts"]["device_reliability"]
+        doc = yaml.safe_load((ROOT / "projects" / name).read_text(encoding="utf-8"))
+        case = doc["acceptance_suites"][0]["cases"][0]
+        rel = {}
+        for source, spec in art["expected_source_schemas"].items():
+            register_source(spark, f"fixture_{source}", spec, case["source_rows"][source])
+            rel[source] = f"fixture_{source}"
+        cov = core.coverage(project, "fault_prod", "device_reliability", case["as_of"], case["context"]["source_status"])
+        run = SnapshotRun(spark, art, case["as_of"], cov, set(), rel, population_source="device_registry")
+        run.prepare()
+        if expect == "quarantine":
+            with pytest.raises(FeatlasError) as e:
+                run.execute()
+            assert e.value.code == "QUALITY_QUARANTINED"
+            [q] = e.value.detail["quarantined"]
+            assert q["entity_keys"] == {"tenant_id": "tenant_b", "device_id": "device_1"} and q["value"] == 2 and q["check"] == "range"
+        else:
+            run.execute()
+            [w] = run.quality_warnings
+            assert w["outcome"] == "warning" and w["value"] == 2 and w["entity_keys"]["tenant_id"] == "tenant_b"

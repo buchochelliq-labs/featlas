@@ -108,8 +108,21 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
     problems = compare(spark_rows, expected["rows"], fplan["output"]["type"], tol)
     core_rows = core_result.get("actual_rows") or []
     problems += [f"vs core: {p}" for p in compare(spark_rows, core_rows, fplan["output"]["type"], tol)]
+    problems += compare_warnings(run.quality_warnings, core_result.get("quality_warnings") or [])
+    outcome["quality_warnings"] = run.quality_warnings
     outcome.update(status="failed" if problems else "passed", reason="; ".join(problems))
     return outcome
+
+
+def compare_warnings(spark: list[dict], core: list[dict]) -> list[str]:
+    """Warning-severity findings must match the core exactly (feature, check, keys, value)."""
+    import json
+
+    def key(w: dict) -> str:
+        return json.dumps([w["feature"], w["check"], w["check_index"], w["outcome"], w["entity_keys"], w["value"]], sort_keys=True)
+
+    a, b = sorted(map(key, spark)), sorted(map(key, core))
+    return [] if a == b else [f"quality warnings differ: spark {a} vs core {b}"]
 
 
 def _diag_outcome(outcome: dict, expected: dict, code: str, why: str, all_codes: list[str] | None = None) -> dict:

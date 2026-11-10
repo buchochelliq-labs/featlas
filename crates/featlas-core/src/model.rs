@@ -747,6 +747,13 @@ pub enum QualityCheck {
 }
 
 impl QualityCheck {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            QualityCheck::Range { .. } => "range",
+            QualityCheck::NotNull { .. } => "not_null",
+            QualityCheck::Finite { .. } => "finite",
+        }
+    }
     pub fn severity(&self) -> &str {
         match self {
             QualityCheck::Range { severity, .. }

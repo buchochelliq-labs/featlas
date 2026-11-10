@@ -66,6 +66,23 @@ pub struct TraceStep {
 pub struct Evaluation {
     pub rows: Vec<OutputRow>,
     pub trace: Vec<TraceStep>,
+    /// Warning-severity quality findings (SEM-QUAL-001). Values are never changed by them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quality_warnings: Vec<QualityFinding>,
+}
+
+/// One violated quality check that did not stop evaluation by itself.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct QualityFinding {
+    pub feature: String,
+    pub check: String,
+    /// Position of the check in the feature's `quality.checks`.
+    pub check_index: usize,
+    pub severity: String,
+    /// `warning` (severity warn) or `quarantine` (severity error with on_violation quarantine).
+    pub outcome: String,
+    pub entity_keys: Map<String, Json>,
+    pub value: Json,
 }
 
 /// Inputs to one evaluation, independent of fixture syntax.
@@ -1503,7 +1520,12 @@ fn aggregate(op: AggregateOp, vals: &[V]) -> Result<V, EvalError> {
 }
 
 /// Stage 9: output type, constraints and quality checks.
-fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
+///
+/// Type, nullability and output constraints always fail. A violated check fails when its
+/// severity is `error` and the feature's `on_violation` is `error`; a `warn` check yields a
+/// warning and an `error` check under `quarantine` yields a quarantine finding. Checks run in
+/// declared order, so an error-level check after a finding still fails.
+fn check_output(f: &Feature, v: &V, state: &str) -> Result<Vec<(usize, &'static str, String, &'static str)>, (usize, EvalError)> {
     let o = &f.output;
     let type_ok = match v {
         V::Null => o.nullable,
@@ -1515,7 +1537,7 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
         V::Date(_) => o.ty == LogicalType::Date,
     };
     if !type_ok {
-        return Err(err(
+        return Err((0, err(
             "OUTPUT_TYPE_MISMATCH",
             "SEM-OUT-001",
             format!(
@@ -1525,7 +1547,7 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
                 o.ty.as_str(),
                 if o.nullable { "?" } else { "" }
             ),
-        ));
+        )));
     }
     let num = match v {
         V::Int(i) => Some(*i as f64),
@@ -1544,18 +1566,18 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
         _ => false,
     };
     if o.constraints.minimum.is_some_and(below) {
-        return Err(err(
+        return Err((1, err(
             "QUALITY_VIOLATION",
             "SEM-OUT-001",
             format!("{}: output below minimum", f.id),
-        ));
+        )));
     }
     if o.constraints.maximum.is_some_and(above) {
-        return Err(err(
+        return Err((2, err(
             "QUALITY_VIOLATION",
             "SEM-OUT-001",
             format!("{}: output above maximum", f.id),
-        ));
+        )));
     }
     if let Some(allowed) = &o.constraints.enumeration {
         if !v.is_null()
@@ -1563,14 +1585,15 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
                 .iter()
                 .any(|a| V::from_json(a, o.ty).is_ok_and(|a| identical(&a, v)))
         {
-            return Err(err(
+            return Err((3, err(
                 "QUALITY_VIOLATION",
                 "SEM-OUT-001",
                 format!("{}: output outside enum", f.id),
-            ));
+            )));
         }
     }
-    for q in &f.quality.checks {
+    let mut findings = Vec::new();
+    for (i, q) in f.quality.checks.iter().enumerate() {
         let violated = match q {
             QualityCheck::NotNull { .. } => (state == "ok" || state == "empty") && v.is_null(),
             QualityCheck::Range {
@@ -1581,17 +1604,20 @@ fn check_output(f: &Feature, v: &V, state: &str) -> Result<(), EvalError> {
             }
         };
         if violated {
-            if q.severity() == "warn" || f.quality.on_violation == "quarantine" {
-                return Err(err("UNSUPPORTED_CAPABILITY", "SEM-QUAL-001", "Warning/quarantine quality outcomes require an artifact sink this evaluator does not provide"));
+            if q.severity() == "warn" {
+                findings.push((i, q.kind(), q.severity().to_string(), "warning"));
+            } else if f.quality.on_violation == "quarantine" {
+                findings.push((i, q.kind(), q.severity().to_string(), "quarantine"));
+            } else {
+                return Err((4 + i, err(
+                    "QUALITY_VIOLATION",
+                    "SEM-QUAL-001",
+                    format!("{}: declared {} quality check failed", f.id, q.kind()),
+                )));
             }
-            return Err(err(
-                "QUALITY_VIOLATION",
-                "SEM-QUAL-001",
-                format!("{}: declared quality check failed", f.id),
-            ));
         }
     }
-    Ok(())
+    Ok(findings)
 }
 
 fn key_row(entity: &Entity, key: &[V]) -> Map<String, Json> {
@@ -1659,6 +1685,7 @@ pub fn evaluate(
         return Ok(Evaluation {
             rows,
             trace: ev.trace,
+            quality_warnings: Vec::new(),
         });
     }
     // Reconstruct every available input source of every feature, in plan order (primary input,
@@ -1678,6 +1705,7 @@ pub fn evaluate(
         }
     }
     let mut outputs: HashMap<String, FeatureOutput> = HashMap::new();
+    let mut findings: Vec<QualityFinding> = Vec::new();
     for fid in dependency_order(p, &[feature_id.to_string()]) {
         let f = ev.feature_by_id(&fid)?;
         let deps: HashMap<String, FeatureOutput> = f
@@ -1694,10 +1722,46 @@ pub fn evaluate(
         for (v, _) in out.values.iter_mut() {
             *v = expr::conform(std::mem::replace(v, V::Null), Some(f.output.ty));
         }
-        for (v, state) in &out.values {
-            check_output(f, v, state)?;
+        let mut first: Option<(usize, EvalError)> = None;
+        for (k, (v, state)) in population.iter().zip(&out.values) {
+            let found = match check_output(f, v, state) {
+                Ok(found) => found,
+                Err((rank, e)) => {
+                    if first.as_ref().is_none_or(|(r, _)| rank < *r) {
+                        first = Some((rank, e));
+                    }
+                    continue;
+                }
+            };
+            for (i, kind, severity, outcome) in found {
+                findings.push(QualityFinding {
+                    feature: f.id.clone(),
+                    check: kind.into(),
+                    check_index: i,
+                    severity,
+                    outcome: outcome.into(),
+                    entity_keys: key_row(entity, k),
+                    value: v.to_json(),
+                });
+            }
+        }
+        if let Some((_, e)) = first {
+            return Err(e);
         }
         outputs.insert(fid, out);
+    }
+    // Quarantine is decided once every member is computed, so any error-level failure wins.
+    let quarantined: Vec<&QualityFinding> = findings.iter().filter(|q| q.outcome == "quarantine").collect();
+    if !quarantined.is_empty() {
+        return Err(err(
+            "QUALITY_QUARANTINED",
+            "SEM-QUAL-001",
+            format!(
+                "{} value(s) violate error-level quality checks under on_violation: quarantine ({}); the snapshot must not be published as successful data",
+                quarantined.len(),
+                quarantined.iter().map(|q| format!("{} {} {:?}", q.feature, q.check, q.entity_keys)).collect::<Vec<_>>().join("; ")
+            ),
+        ));
     }
     let rows = population
         .iter()
@@ -1711,6 +1775,7 @@ pub fn evaluate(
     Ok(Evaluation {
         rows,
         trace: ev.trace,
+        quality_warnings: findings,
     })
 }
 

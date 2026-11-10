@@ -319,6 +319,83 @@ pub struct FeatureStatements {
     pub computed: Statement,
     pub degraded: Statement,
     pub missingness: Missingness,
+    /// Output and quality rules in the core's rank order (SEM-OUT-001, SEM-QUAL-001).
+    pub quality: Vec<QualityStatement>,
+}
+
+/// One output/quality rule over a feature view; `sql` returns the violating rows.
+#[derive(Debug, Clone, Serialize)]
+pub struct QualityStatement {
+    pub name: String,
+    /// 0 type/nullability, 1 minimum, 2 maximum, 3 enumeration, 4+i declared check i.
+    pub rank: usize,
+    pub rule: String,
+    pub code: String,
+    /// `error` fails the run; `warning` is recorded, values unchanged; `quarantine` blocks publication.
+    pub outcome: String,
+    pub check: String,
+    pub sql: String,
+}
+
+/// A numeric bound as a Spark literal that compares exactly with BIGINT/DOUBLE values.
+fn bound_literal(x: f64) -> String {
+    if x.fract() == 0.0 && x.abs() < 1e15 {
+        format!("{}", x as i64)
+    } else {
+        format!("CAST('{x:?}' AS DOUBLE)")
+    }
+}
+
+/// Output constraints and declared quality checks of one feature, lowered over its view.
+fn quality_statements(f: &Feature, view: &str, keys: &str) -> Vec<QualityStatement> {
+    let o = &f.output;
+    let v = "fl_value";
+    let numeric = matches!(o.ty, LogicalType::Integer | LogicalType::Number);
+    let mut rules: Vec<(usize, &str, String, &str, &str, String)> = Vec::new();
+    if !o.nullable {
+        rules.push((0, "SEM-OUT-001", "OUTPUT_TYPE_MISMATCH".into(), "error", "nullability", format!("{v} IS NULL")));
+    }
+    if let Some(m) = o.constraints.minimum.filter(|_| numeric) {
+        rules.push((1, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "minimum", format!("{v} < {}", bound_literal(m))));
+    }
+    if let Some(m) = o.constraints.maximum.filter(|_| numeric) {
+        rules.push((2, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "maximum", format!("{v} > {}", bound_literal(m))));
+    }
+    if let Some(allowed) = &o.constraints.enumeration {
+        let lits: Vec<String> = allowed.iter().map(|a| literal_json(a, o.ty)).collect();
+        rules.push((3, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "enumeration", if lits.is_empty() { format!("{v} IS NOT NULL") } else { format!("{v} IS NOT NULL AND NOT ({v} IN ({}))", lits.join(", ")) }));
+    }
+    for (i, q) in f.quality.checks.iter().enumerate() {
+        let predicate = match q {
+            QualityCheck::NotNull { .. } => format!("fl_state IN ('ok', 'empty') AND {v} IS NULL"),
+            QualityCheck::Range { minimum, maximum, .. } => {
+                let mut parts = Vec::new();
+                if let Some(m) = minimum { parts.push(format!("{v} < {}", bound_literal(*m))); }
+                if let Some(m) = maximum { parts.push(format!("{v} > {}", bound_literal(*m))); }
+                if parts.is_empty() || !numeric { "false".into() } else { format!("({})", parts.join(" OR ")) }
+            }
+            QualityCheck::Finite { .. } => match o.ty {
+                LogicalType::Number => format!("(isnan({v}) OR abs({v}) = double('Infinity'))"),
+                LogicalType::Integer => "false".into(),
+                _ => format!("{v} IS NOT NULL"),
+            },
+        };
+        let outcome = if q.severity() == "warn" { "warning" } else if f.quality.on_violation == "quarantine" { "quarantine" } else { "error" };
+        let code = match outcome { "warning" => "QUALITY_WARNING", "quarantine" => "QUALITY_QUARANTINED", _ => "QUALITY_VIOLATION" };
+        rules.push((4 + i, "SEM-QUAL-001", code.into(), outcome, q.kind(), predicate));
+    }
+    rules
+        .into_iter()
+        .map(|(rank, rule, code, outcome, check, predicate)| QualityStatement {
+            name: format!("{view}_quality_{rank}_{check}"),
+            rank,
+            rule: rule.into(),
+            code,
+            outcome: outcome.into(),
+            check: check.into(),
+            sql: format!("SELECT {keys}, {v} AS value, fl_state AS state FROM {view} WHERE {predicate}"),
+        })
+        .collect()
 }
 
 struct Lowering<'a> {
@@ -776,6 +853,8 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             purpose: format!("{}: coverage not established; typed null with the core-computed state and no source reads", f.id),
             sql: format!("CREATE OR REPLACE TEMP VIEW {view} AS\nSELECT {keys}, {value} AS fl_value, CAST({degraded_state} AS STRING) AS fl_state FROM {population}"),
             reads: vec![fs.population.source.clone()], view: None };
+        let model = p.feature(&f.id).ok_or_else(|| format!("{} is not in the project", f.id))?;
+        let quality = quality_statements(model, &view, &keys);
         features.push(FeatureStatements {
             feature: f.id.clone(),
             version: f.version.clone(),
@@ -783,6 +862,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             computed,
             degraded,
             missingness: f.missingness.clone(),
+            quality,
         });
     }
     // Snapshot assembly with physical names.

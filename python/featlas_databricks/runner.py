@@ -53,6 +53,28 @@ class PublicationAuthorization:
     materialization_id: str = ""
 
 
+def _plain(row: dict) -> dict:
+    from datetime import date, datetime
+
+    return {k: format_instant(v) if isinstance(v, datetime) else v.isoformat() if isinstance(v, date) else v for k, v in row.items()}
+
+
+def _finding(feature: str, rule: dict, row: dict) -> dict:
+    """A quality finding in the core's shape (eval::QualityFinding)."""
+    row = _plain(row)
+    value, state = row.pop("value"), row.pop("state")
+    return {
+        "feature": feature,
+        "check": rule["check"],
+        "check_index": rule["rank"] - 4,
+        "severity": "warn" if rule["outcome"] == "warning" else "error",
+        "outcome": rule["outcome"],
+        "entity_keys": row,
+        "value": value,
+        "state": state,
+    }
+
+
 @dataclass
 class SnapshotRun:
     spark: Any
@@ -64,6 +86,8 @@ class SnapshotRun:
     population_source: str | None = None
     log: list[dict] = field(default_factory=list)
     source_versions: dict[str, int] = field(default_factory=dict)
+    # Warning-severity findings of the last execute() (values unchanged, SEM-QUAL-001).
+    quality_warnings: list[dict] = field(default_factory=list)
 
     def _run(self, st: dict, params: dict[str, Any] | None = None, sql: str | None = None):
         """Execute one generated statement; view statements register their bound SELECT."""
@@ -145,8 +169,13 @@ class SnapshotRun:
         2. Per feature in plan order: register its view (computed or degraded variant); for computed
            features run its transform assertions, then materialize the view so runtime errors
            (overflow, division by zero, non-finite, empty-error) surface before later features.
+        3. Per feature, its output/quality rules in rank order: the first `error` rule with rows
+           raises; `warning` rows are recorded; `quarantine` rows are collected and, once every
+           feature has passed its error rules, raise QUALITY_QUARANTINED so nothing is published.
         """
         a = self.artifacts
+        self.quality_warnings = []
+        quarantined: list[dict] = []
         for c in a["checks"]:
             if c.get("feature") is None and self._readable(c):
                 self._check(c)
@@ -164,6 +193,22 @@ class SnapshotRun:
                 self.spark.table(view).count()
             except Exception as exc:  # noqa: BLE001
                 raise map_spark_exception(exc) from exc
+            for q in f.get("quality", []):
+                rows = [r.asDict() for r in self._sql(q["name"], q["sql"]).collect()]
+                if not rows:
+                    continue
+                if q["outcome"] == "error":
+                    raise FeatlasError(q["code"], f"{f['feature']}: {q['check']} rule {q['name']} returned rows", q["rule"], {"check": q["name"], "example": _plain(rows[0])})
+                findings = quarantined if q["outcome"] == "quarantine" else self.quality_warnings
+                for row in rows:
+                    findings.append(_finding(f["feature"], q, row))
+        if quarantined:
+            raise FeatlasError(
+                "QUALITY_QUARANTINED",
+                f"{len(quarantined)} value(s) violate error-level quality checks under on_violation: quarantine; the snapshot is not published",
+                "SEM-QUAL-001",
+                {"quarantined": quarantined},
+            )
 
     def materialize(self, publication: dict[str, Any]) -> list[dict]:
         """Build the snapshot view and materialize feature views to surface runtime errors."""
@@ -250,8 +295,9 @@ class SnapshotRun:
             "rows": stored_rows,
             "retry": retry,
             "retry_materialization_id": auth.materialization_id if retry else None,
-            # Source pins are only known for the run that computed the rows.
+            # Source pins and quality warnings are only known for the run that computed the rows.
             "source_versions": None if retry else self.source_versions,
+            "quality_warnings": None if retry else self.quality_warnings,
             "evidence_source": "change data feed (table_changes)",
             "approved_by": auth.approved_by,
             "environment": auth.environment,
