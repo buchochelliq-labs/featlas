@@ -20,7 +20,7 @@ pyspark = pytest.importorskip("pyspark")
 yaml = pytest.importorskip("yaml")
 
 from featlas_databricks.core import Core  # noqa: E402
-from featlas_databricks.differential import run_case, utc_process  # noqa: E402
+from featlas_databricks.differential import run_case  # noqa: E402
 from featlas_databricks.errors import FeatlasError  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]

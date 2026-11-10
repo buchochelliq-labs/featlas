@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass, field
-from typing import Any
 
 import sqlglot
 from sqlglot import exp
@@ -549,6 +548,34 @@ def _reconcile_windows(outputs: list[Output], shared: Window | None, unsupported
     return kept
 
 
+def _valid_time_bound(c: exp.Expression, fact: str, dim: str):
+    """`f.ts >= d.vf` -> ("from", (f,ts), vf); `d.vt IS NULL OR f.ts < d.vt` -> ("to", (f,ts), vt)."""
+    def side(x):
+        return _col(x, fact) if isinstance(x, exp.Column) else None
+    if isinstance(c, (exp.GTE, exp.LTE)):
+        lt, rt = side(c.this), side(c.expression)
+        if lt and rt:
+            ts, vf = (lt, rt) if isinstance(c, exp.GTE) else (rt, lt)
+            if ts[0] != dim and vf[0] == dim:
+                return ("from", ts, vf[1])
+        return None
+    if isinstance(c, exp.Paren):
+        return _valid_time_bound(c.this, fact, dim)
+    if isinstance(c, exp.Or):
+        parts = [c.this.this if isinstance(c.this, exp.Paren) else c.this, c.expression.this if isinstance(c.expression, exp.Paren) else c.expression]
+        nulls = [x for x in parts if isinstance(x, exp.Is) and isinstance(x.expression, exp.Null)]
+        lts = [x for x in parts if isinstance(x, (exp.LT, exp.GT))]
+        if len(nulls) == 1 and len(lts) == 1:
+            vt_null = side(nulls[0].this)
+            x = lts[0]
+            lt, rt = side(x.this), side(x.expression)
+            if vt_null and lt and rt:
+                ts, vt = (lt, rt) if isinstance(x, exp.LT) else (rt, lt)
+                if vt == vt_null and vt[0] == dim and ts[0] != dim:
+                    return ("to", ts, vt[1])
+    return None
+
+
 def analyze_sql(sql: str, dialect: str = "databricks") -> Analysis:
     tree = sqlglot.parse_one(sql, read=dialect)
     unsupported: list[dict] = []
@@ -570,12 +597,32 @@ def analyze_sql(sql: str, dialect: str = "databricks") -> Analysis:
         a = _alias_name(j.this)
         tables[a] = _table_name(j.this)
         pairs = []
+        valid: dict = {}
+        ok = True
         for c in _conjuncts(j.args.get("on")):
             if isinstance(c, exp.EQ) and isinstance(c.this, exp.Column) and isinstance(c.expression, exp.Column):
-                pairs.append([_col(c.this, fact), _col(c.expression, fact)])
+                left, right = _col(c.this, fact), _col(c.expression, fact)
+                if left[0] == a:  # keep the fact (left) side first
+                    left, right = right, left
+                pairs.append([left, right])
+                continue
+            vt = _valid_time_bound(c, fact, a)
+            if vt is not None and vt[0] not in valid:
+                valid[vt[0]] = vt[1:]
+                continue
+            ok = False
+            unsupported.append({"construct": "non-equi join condition", "sql": c.sql(dialect=dialect), "advice": "Only equi-join keys and a half-open valid-time probe (fact.ts >= d.valid_from AND (d.valid_to IS NULL OR fact.ts < d.valid_to)) are translated."})
+        join = {"alias": a, "table": tables[a], "kind": (j.args.get("side") or "inner").lower(), "on": pairs, "valid_time": None, "translatable": ok and bool(pairs)}
+        if valid:
+            if set(valid) == {"from", "to"} and valid["from"][0] == valid["to"][0]:
+                join["valid_time"] = {"probe": valid["from"][0], "valid_from": valid["from"][1], "valid_to": valid["to"][1]}
             else:
-                unsupported.append({"construct": "non-equi join condition", "sql": c.sql(dialect=dialect)})
-        joins.append({"alias": a, "table": tables[a], "kind": (j.args.get("side") or "inner").lower(), "on": pairs})
+                join["translatable"] = False
+                unsupported.append({"construct": "valid-time join", "sql": j.sql(dialect=dialect)[:400], "reason": "needs both fact.ts >= d.valid_from and (d.valid_to IS NULL OR fact.ts < d.valid_to) on the same fact column"})
+        if join["kind"] not in ("left", "inner"):
+            join["translatable"] = False
+            unsupported.append({"construct": "JOIN", "sql": j.sql(dialect=dialect)[:400], "reason": f"{join['kind'].upper()} JOIN: relationships are left or inner"})
+        joins.append(join)
     group = [_col(g, fact) for g in (select.args.get("group").expressions if select.args.get("group") else []) if isinstance(g, exp.Column)]
     lower = upper = None
     filters = []

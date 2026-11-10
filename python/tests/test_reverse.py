@@ -307,3 +307,95 @@ def test_draft_with_windows_recency_and_lookups_reproduces_legacy_outputs(spark,
                 assert want is not None and got is not None and abs(got - want) <= 1e-9 * max(1, abs(want)), (key, col, got, want)
             else:
                 assert got == want, (key, col, got, want)
+
+
+JOIN_SQL = """
+SELECT o.tenant_id, o.customer_id, :as_of AS feature_ts,
+  COUNT(*) AS orders_30d,
+  COUNT(*) FILTER (WHERE ch.channel_group = 'online') AS online_orders_30d,
+  SUM(o.amount_cents * p.multiplier) AS weighted_spend_30d,
+  MAX_BY(ch.channel_group, o.ordered_at) AS last_channel_group
+FROM main.sales.orders o
+LEFT JOIN main.sales.channels ch ON ch.channel = o.channel
+JOIN main.sales.tenant_policy p ON p.tenant_id = o.tenant_id
+  AND o.ordered_at >= p.valid_from AND (p.valid_to IS NULL OR o.ordered_at < p.valid_to)
+WHERE o.ordered_at >= :as_of - INTERVAL 30 DAYS AND o.ordered_at < :as_of AND o.is_test = false
+GROUP BY o.tenant_id, o.customer_id
+"""
+CHANNELS_DESC = {"table": "main.sales.channels", "primary_key": ["channel"], "columns": [
+    {"name": "channel", "type": "string", "nullable": False}, {"name": "channel_group", "type": "string"},
+    {"name": "updated_at", "type": "timestamp", "nullable": False}, {"name": "ingested_at", "type": "timestamp", "nullable": False}]}
+POLICY_DESC = {"table": "main.sales.tenant_policy", "primary_key": ["tenant_id", "valid_from"], "columns": [
+    {"name": "tenant_id", "type": "string", "nullable": False}, {"name": "valid_from", "type": "timestamp", "nullable": False},
+    {"name": "valid_to", "type": "timestamp"}, {"name": "multiplier", "type": "double"}, {"name": "ingested_at", "type": "timestamp", "nullable": False}]}
+CHANNELS = [  # 'invoice' is not a channel: the LEFT JOIN keeps those orders with a null group
+    {"channel": "web", "channel_group": "online", "updated_at": "2026-01-01T00:00:00Z", "ingested_at": "2026-01-01T00:00:00Z"},
+    {"channel": "store", "channel_group": "offline", "updated_at": "2026-01-01T00:00:00Z", "ingested_at": "2026-01-01T00:00:00Z"},
+]
+POLICY = [  # tenant_a's multiplier changes on 2026-05-15; tenant_b has one open interval
+    {"tenant_id": "tenant_a", "valid_from": "2026-01-01T00:00:00Z", "valid_to": "2026-05-15T00:00:00Z", "multiplier": 1.0, "ingested_at": "2026-01-01T00:00:00Z"},
+    {"tenant_id": "tenant_a", "valid_from": "2026-05-15T00:00:00Z", "valid_to": None, "multiplier": 2.0, "ingested_at": "2026-05-01T00:00:00Z"},
+    {"tenant_id": "tenant_b", "valid_from": "2026-01-01T00:00:00Z", "valid_to": None, "multiplier": 0.5, "ingested_at": "2026-01-01T00:00:00Z"},
+]
+
+
+def test_analyzer_reads_equi_and_valid_time_joins():
+    a = analyze_sql(JOIN_SQL)
+    ch, p = a.joins
+    assert ch["kind"] == "left" and ch["on"] == [[("o", "channel"), ("ch", "channel")]] and ch["valid_time"] is None
+    assert p["kind"] == "inner" and p["valid_time"] == {"probe": ("o", "ordered_at"), "valid_from": "valid_from", "valid_to": "valid_to"}
+    assert not a.unsupported
+
+
+def test_draft_with_joins_becomes_relationships_and_reproduces_legacy(spark, inputs):
+    _, _, descs = inputs
+    analysis = analyze_sql(JOIN_SQL)
+    views = _register(spark, descs, ORDERS, CUSTOMERS)
+    for name, desc, rows in (("legacy_channels", CHANNELS_DESC, CHANNELS), ("legacy_policy", POLICY_DESC, POLICY)):
+        register_source(spark, name, {"columns": [{"physical": c["name"], "logical": c["name"], "type": {"string": "STRING", "timestamp": "TIMESTAMP", "double": "DOUBLE"}[c["type"]]} for c in desc["columns"]]}, rows)
+    views.update({"main.sales.channels": "legacy_channels", "main.sales.tenant_policy": "legacy_policy"})
+    legacy = legacy_sample(spark, analysis, views, AS_OF)
+    by_key = {(r["tenant_id"], r["customer_id"]): r for r in legacy}
+    # o1 (05-02, x1.0) 1200 + o2 (05-10, x1.0) 800 + o3 (05-31, x2.0) 500 = 3000
+    assert by_key[("tenant_a", "c1")]["weighted_spend_30d"] == 3000.0 and by_key[("tenant_a", "c1")]["online_orders_30d"] == 2
+    target = {"table": "main.features.customer_joined", "columns": [{"name": n, "type": t} for n, t in (
+        ("tenant_id", "string"), ("customer_id", "string"), ("feature_ts", "timestamp"), ("orders_30d", "bigint"),
+        ("online_orders_30d", "bigint"), ("weighted_spend_30d", "double"), ("last_channel_group", "string"))]}
+    sample = {"as_of": AS_OF, "coverage_end": "2026-06-02T00:00:00Z", "legacy_rows": legacy,
+              "source_rows": {"customers": CUSTOMERS, "orders": ORDERS, "channels": CHANNELS, "tenant_policy": POLICY}}
+    sources = {d["table"]: d for d in (descs["orders"], descs["customers"], CHANNELS_DESC, POLICY_DESC)}
+    # Default: tenant-scoped entity; the global channels table cannot be joined (SEM-ENT-002).
+    scoped = draft_spec(target, analysis, sources, {"samples": [sample]})
+    assert any("SEM-ENT-002" in u.get("reason", "") for u in scoped["report"]["unsupported"])
+    assert {"online_orders_30d", "last_channel_group"} <= {k for k, m in scoped["report"]["mapping"].items() if "unsupported" in m}
+    out = draft_spec(target, analysis, sources, {"samples": [sample], "entity": {"tenant_key": None}})
+    assert out["project"] is not None, out["report"]
+    rels = {x["id"]: x for x in out["project"]["relationships"]}
+    assert rels["orders_to_channels"]["join_type"] == "left" and rels["orders_to_channels"]["temporal"] == {"mode": "none"}
+    assert rels["orders_to_tenant_policy"]["join_type"] == "inner" and rels["orders_to_tenant_policy"]["temporal"]["mode"] == "as_of"
+    feats = {f["id"].split(".", 1)[1]: f for f in out["project"]["features"]}
+    # The inner join filters every feature's rows; the left join only touches the features that read it.
+    assert [j["relationship"] for j in feats["orders_30d"]["transform"]["joins"]] == ["orders_to_tenant_policy"]
+    assert {j["relationship"] for j in feats["online_orders_30d"]["transform"]["joins"]} == {"orders_to_channels", "orders_to_tenant_policy"}
+    doc = to_yaml(out["project"])
+    v = featlas.validate(doc)
+    assert v["passed"], [(d["path"], d["message"]) for d in v["report"]["diagnostics"] if d["severity"] == "error"]
+    p = featlas.Project(doc)
+    res = p.run_fixtures()["summary"]
+    assert res["failed"] == 0, [c for c in res["cases"] if c["status"] == "failed"]
+    characterized = {c["case"].split("_characterization")[0] for c in res["cases"] if "characterization" in c["case"] and c["status"] == "passed"}
+    assert characterized >= {"orders_30d", "online_orders_30d", "weighted_spend_30d", "last_channel_group"}, [(c["case"], c["status"], c.get("reason")) for c in res["cases"]]
+    # Regenerate through the Databricks lowering on local Spark: column-by-column equal to legacy.
+    dep = out["project"]["deployments"][0]["id"]
+    [art] = p.generate(dep)["artifacts"].values()
+    rows = {"customers": CUSTOMERS, "orders": ORDERS, "channels": CHANNELS, "tenant_policy": POLICY}
+    rel = {}
+    for source, spec in art["expected_source_schemas"].items():
+        register_source(spark, f"jx_{source}", spec, rows[source])
+        rel[source] = f"jx_{source}"
+    statuses = [{"source": s, "state": "available", "coverage_start": "2026-01-01T00:00:00Z", "coverage_end": "2026-06-02T00:00:00Z"} for s in rows]
+    run = SnapshotRun(spark, art, AS_OF, p.coverage(dep, "customer_joined", AS_OF, statuses), set(), rel, population_source="customers")
+    snap = {(r["tenant_id"], r["customer_id"]): r for r in run.run_to_snapshot({"publication_id": "p", "publication_sequence": 1, "materialization_id": "m"})}
+    for key, lrow in by_key.items():
+        for col in feats:
+            assert snap[key][col] == lrow[col], (key, col, snap[key][col], lrow[col])

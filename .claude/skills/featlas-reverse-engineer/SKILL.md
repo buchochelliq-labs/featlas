@@ -53,9 +53,14 @@ what the analyzer understood without drafting).
   `unix_timestamp` differences) and lookups (`MAX_BY`/`MIN_BY`). Their legacy-semantics notes are
   assumptions in the report: legacy `MAX_BY` ignores null ordering values and picks arbitrarily on
   ties, the spec rejects both; check the ordering column is non-null and unique per entity.
-* `report.unsupported` lists SQL the analyzer did not translate (non-equi joins, HAVING, window
+* Joins to dimensions are drafted as relationships (equi-keys, optional valid-time probe). Check
+  the `relationships.*` assumptions: a `temporal: none` join reads the dimension as available at
+  `as_of`, which differs from a legacy job that read today's dimension; a dimension without the
+  tenant key cannot be joined under a tenant-scoped entity (scope it or set
+  `decisions.entity.tenant_key = null` if the business is single-tenant).
+* `report.unsupported` lists SQL the analyzer did not translate (other non-equi joins, HAVING, window
   functions, UDFs, `DATEDIFF` / non-second `TIMESTAMPDIFF`, windows that end before `as_of`...).
-  For each: translate it by hand into the spec (relationships for joins, a learned/custom
+  For each: translate it by hand into the spec (relationships for join chains, a learned/custom
   contract for UDFs), or drop the column and record why. Never leave a legacy column silently unmapped: every column appears in
   `report.mapping`.
 

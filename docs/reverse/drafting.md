@@ -48,11 +48,25 @@ GROUP BY <entity keys>
   references to `name`. Chains of such CTEs resolve in order. A CTE with `GROUP BY`, joins,
   `DISTINCT`, `LIMIT`, window functions, set operations, or recursion stays and is reported
   unsupported with the reason.
+* **Joins.** Each `[LEFT] JOIN dim ON fact.k = dim.k [AND ...]` becomes a spec relationship
+  `<fact>_to_<dim>` (`many_to_one`, `join_type` left/inner, null keys never match, unmatched rows
+  kept with nulls for LEFT and dropped for INNER, multiple matches fail). Adding
+  `AND fact.ts >= dim.valid_from AND (dim.valid_to IS NULL OR fact.ts < dim.valid_to)` makes it a
+  valid-time (`as_of`) relationship probed at the fact event time; without it the relationship is
+  `temporal: none` and the report records that the legacy job read the dimension as it was when
+  the job ran, while the spec reads only rows available at `as_of`. A feature joins a dimension
+  when it reads one of its columns; an INNER join filters rows, so every feature joins it. The
+  dimension's key must make the join many-to-one (else an assumption is recorded: the spec fails a
+  run on multiple matches where SQL would duplicate fact rows). Under a tenant-scoped entity a
+  join must pair the tenant key (SEM-ENT-002); a tenant-less dimension is reported unsupported
+  with the advice to scope it by tenant or declare the entity single-tenant
+  (`decisions.entity.tenant_key = null`). Chains (dimension joined to dimension), other `ON`
+  predicates and FULL/RIGHT joins are unsupported.
 * Derived outputs that combine other outputs (`a / b`, `a / NULLIF(b, 0)`, `COALESCE(...)`)
   become expression features with dependencies; a derived feature's window is the widest of its
   inputs'. A derived output over an output that could not be translated is reported too.
 * Interval units `SECOND`, `MINUTE`, `HOUR`, `DAY`, `WEEK` become elapsed seconds.
-* Anything else (non-equi joins, `HAVING`, window functions, UDFs…) is returned in
+* Anything else (other non-equi join conditions, `HAVING`, window functions, UDFs…) is returned in
   `unsupported` with its SQL fragment. The skill tells the agent to translate each by hand
   (relationships, a learned/custom contract) or drop it with a reason — never leave a legacy
   column silently unmapped.

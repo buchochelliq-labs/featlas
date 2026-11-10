@@ -62,7 +62,7 @@ def parity_sql(legacy_table: str, legacy_as_of_column: str, keys: list[str], map
         # Every regenerated table must carry the whole population: count absences per table.
         + "".join(f"  sum(CASE WHEN l.{_q(keys[0])} IS NOT NULL AND {alias[t]}.{_q(keys[0])} IS NULL THEN 1 ELSE 0 END) AS {_q('missing_in_' + t.split('.')[-1])},\n" for t in tables)
         + ",\n".join(checks)
-        + f"\nFROM all_keys a\nLEFT JOIN l ON " + " AND ".join(f"l.{_q(x)} = a.{_q(x)}" for x in keys)
+        + "\nFROM all_keys a\nLEFT JOIN l ON " + " AND ".join(f"l.{_q(x)} = a.{_q(x)}" for x in keys)
         + "\nLEFT JOIN k ON " + " AND ".join(f"k.{_q(x)} = a.{_q(x)}" for x in keys)
         + "\n" + joins.replace("= k.", "= a.")
     )
