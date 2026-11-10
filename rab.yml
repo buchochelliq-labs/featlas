@@ -30,11 +30,12 @@ packages:
       - "Cargo.toml"
       - "Cargo.lock"
       - "README.md"
+      - "LICENSE"
     artifacts:
       - kind: rust-binary
         bin: fe-spec
         crate: featlas-cli
-        include: [README.md]
+        include: [README.md, LICENSE]
         test:
           run: |
             set -euo pipefail
@@ -55,12 +56,14 @@ packages:
       - "python/featlas/**"
       - "python/featlas_databricks/**"
       - "python/pyproject.toml"
+      - "python/LICENSE"
       - "crates/featlas-core/**"
       - "crates/featlas-adapters/**"
       - "crates/featlas-api/**"
       - "crates/featlas-py/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "LICENSE"
     artifacts:
       - kind: maturin
         targets:

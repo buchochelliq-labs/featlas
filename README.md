@@ -97,3 +97,8 @@ the `fe-spec` binaries on a GitHub release and the `featlas` wheels on PyPI (the
 are `publish = false`). CI runs `release.py check` and `release.py vendored`. Nothing is
 published until someone runs `python3 .github/rab/scripts/release.py tag` on `main`, after the
 `pypi` environment's trusted publisher is set up.
+
+## License
+
+Apache License 2.0; see [`LICENSE`](LICENSE). The vendored specification under `spec/` keeps
+its own terms.

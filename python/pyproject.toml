@@ -7,6 +7,7 @@ name = "featlas"
 version = "0.1.0"
 description = "Python bindings (PyO3) to the featlas Rust core, plus a thin Azure Databricks host."
 requires-python = ">=3.12"
+license = "Apache-2.0"
 dependencies = []
 classifiers = ["Programming Language :: Rust", "Programming Language :: Python :: Implementation :: CPython"]
 

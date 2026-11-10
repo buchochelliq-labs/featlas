@@ -24,6 +24,8 @@ jobs:
       - run: python3 -m pip install --quiet pyyaml
       - run: python3 .github/rab/scripts/release.py check
       - run: python3 .github/rab/scripts/release.py vendored
+      # maturin ships licence files from beside pyproject.toml; the copy must match the root one.
+      - run: cmp LICENSE python/LICENSE
   rust:
     runs-on: ubuntu-latest
     steps:
