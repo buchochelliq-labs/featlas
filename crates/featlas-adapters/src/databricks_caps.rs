@@ -40,6 +40,7 @@ pub const COMPUTE_LOWERED: &[&str] = &[
     "core.as_of_join",
     "core.relationship_join",
     "core.source_as_known",
+    "core.label_construction",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -220,7 +221,6 @@ pub fn assess(role: Role, capability: &str, ctx: &AssessmentContext) -> Assessme
         (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Declaration, "Databricks job scheduling is not implemented in this version; manual runs only"),
         (Role::OnlineStore, _) => Assessment::unsupported("This adapter version provides no online_store role"),
         (_, c) if c.starts_with("learned.") || c.starts_with("custom.") => Assessment::unsupported(format!("{c} has no attested implementation in this adapter; custom/learned execution is not supported")),
-        (_, "core.label_construction") => Assessment::unsupported("Label dataset construction is not lowered to Spark in this version"),
         (_, "core.online_publication") => Assessment::unsupported("Online publication is not implemented"),
         (r, c) => Assessment::unsupported(format!("{c} is not provided for role {}", r.as_str())),
     }

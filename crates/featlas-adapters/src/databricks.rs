@@ -1786,3 +1786,159 @@ pub fn render_script(a: &Artifacts) -> String {
     );
     s
 }
+
+/// Spark SQL for one label consumer (SEM-LABEL-001/002).
+///
+/// The core decides maturity and completeness per request (`featlas_core::label::label_requests`)
+/// without reading data; the host registers the eligible requests as `fl_label_requests`
+/// (`fl_request_index`, entity keys, `fl_as_of`, `fl_dataset_cutoff`, `fl_horizon_end`) and runs,
+/// once per distinct dataset cutoff bound to `:as_of`, the label source reconstruction
+/// (availability <= cutoff, duplicates, revisions, tombstones) and the `values` query. Row-level
+/// failures are returned as data (`fl_error`) so the host reports them in request order, as the
+/// core does.
+#[derive(Debug, Clone, Serialize)]
+pub struct LabelArtifacts {
+    pub consumer: String,
+    pub consumer_version: String,
+    pub label_source: String,
+    pub requests_view: String,
+    pub request_columns: Vec<(String, String)>,
+    pub session: Vec<Statement>,
+    pub bind_sources: Vec<Statement>,
+    pub stages: Vec<Statement>,
+    pub checks: Vec<Check>,
+    pub values: Statement,
+    pub value_type: String,
+    pub expected_source_schemas: BTreeMap<String, Value>,
+    pub notes: Vec<String>,
+}
+
+pub fn lower_labels(plan: &Plan, p: &Project, consumer: &str) -> Result<LabelArtifacts, String> {
+    let c = p.consumer(consumer).ok_or_else(|| format!("Unknown consumer {consumer}"))?;
+    let label = c.label.as_ref().ok_or_else(|| format!("{consumer} declares no label"))?;
+    let fs = plan
+        .logical
+        .feature_sets
+        .iter()
+        .find(|f| f.id == c.feature_set.feature_set)
+        .ok_or_else(|| format!("Feature set {} is not in the plan", c.feature_set.feature_set))?;
+    if !plan.logical.sources.contains_key(&label.source) {
+        return Err(format!("Label source {} is not bound by this deployment", label.source));
+    }
+    let base = lower(plan, &fs.id, p)?;
+    let session = base.session.clone();
+    let bind_sources: Vec<Statement> = base
+        .bind_sources
+        .into_iter()
+        .filter(|b| b.name == format!("fl_raw_{}", safe(&label.source)))
+        .collect();
+    let expected_source_schemas = base
+        .expected_source_schemas
+        .into_iter()
+        .filter(|(k, _)| k == &label.source)
+        .collect();
+    let mut lw = Lowering { plan, fs, stages: Vec::new(), checks: Vec::new(), reconstructed: BTreeSet::new() };
+    let selected = lw.reconstruct(&label.source, Boundary::Inclusive);
+    let src = lw.source(&label.source);
+    let col_ty = |name: &str| src.columns.iter().find(|c| c.name == name).map(|c| c.ty);
+    let vty = col_ty(&label.value_column).ok_or_else(|| format!("Unknown label column {}", label.value_column))?;
+    let out_ty = match label.aggregation {
+        LabelAggregation::Count => LogicalType::Integer,
+        LabelAggregation::AnyTrue => LogicalType::Boolean,
+        _ => vty,
+    };
+    let entity = p.entity(&fs.population.entity).ok_or("Unknown entity")?;
+    let mut request_columns = vec![("fl_request_index".to_string(), "BIGINT".to_string())];
+    let mut on = Vec::new();
+    for k in &entity.keys {
+        let m = label.entity_keys.iter().find(|m| m.entity_key == k.name).ok_or_else(|| format!("Label maps no column to entity key {}", k.name))?;
+        request_columns.push((k.name.clone(), spark_type(k.ty).to_string()));
+        on.push(format!("s.{} = r.{}", quote(&m.column), quote(&k.name)));
+    }
+    for t in ["fl_as_of", "fl_dataset_cutoff", "fl_horizon_end"] {
+        request_columns.push((t.into(), "TIMESTAMP".into()));
+    }
+    let et = quote(&label.event_time_column);
+    let at = quote(&label.available_time_column);
+    let lower_cmp = boundary_op(label.lower, ">=", ">");
+    let upper_cmp = boundary_op(label.upper, "<=", "<");
+    let v = "e.fl_v";
+    let n = "count(e.fl_present)";
+    let nulls = format!("{n} > count({v})");
+    let (empty_value, empty_error) = match &label.empty {
+        EmptyPolicy::Error => ("NULL".to_string(), "'LABEL_EMPTY'"),
+        EmptyPolicy::Null => ("NULL".to_string(), "NULL"),
+        EmptyPolicy::Value { value } => (literal_json(value, out_ty), "NULL"),
+    };
+    let (value, error) = match label.aggregation {
+        LabelAggregation::Count => (n.to_string(), "NULL".to_string()),
+        LabelAggregation::AnyTrue => (
+            format!("CASE WHEN max(CASE WHEN {v} THEN 1 ELSE 0 END) = 1 THEN true WHEN {nulls} THEN NULL ELSE false END"),
+            "NULL".into(),
+        ),
+        LabelAggregation::Max => (format!("CASE WHEN {nulls} THEN NULL ELSE max({v}) END"), "NULL".into()),
+        LabelAggregation::Sum if vty == LogicalType::Integer => {
+            // Exact: DECIMAL(38,0) accumulation; overflow is an error (as data), never a wrapped value.
+            let dec = format!("sum(CAST({v} AS DECIMAL(38,0)))");
+            let fits = format!("{dec} BETWEEN -9223372036854775808 AND 9223372036854775807");
+            (
+                format!("CASE WHEN {nulls} THEN NULL WHEN {fits} THEN CAST({dec} AS BIGINT) END"),
+                format!("CASE WHEN {nulls} THEN NULL WHEN NOT ({fits}) THEN 'NUMERIC_OVERFLOW' END"),
+            )
+        }
+        LabelAggregation::Sum => (
+            format!("CASE WHEN {nulls} THEN NULL ELSE sum(CAST({v} AS DOUBLE)) END"),
+            format!("CASE WHEN {nulls} THEN NULL WHEN isnan(sum(CAST({v} AS DOUBLE))) OR abs(sum(CAST({v} AS DOUBLE))) = double('Infinity') THEN 'NON_FINITE_RESULT' END"),
+        ),
+        LabelAggregation::Latest => (
+            "max(CASE WHEN e.fl_rank = 1 THEN e.fl_v END)".into(),
+            "CASE WHEN count(CASE WHEN e.fl_rank = 1 THEN 1 END) > 1 THEN 'LABEL_TIE' END".into(),
+        ),
+    };
+    let rank = if label.aggregation == LabelAggregation::Latest {
+        format!(", rank() OVER (PARTITION BY r.fl_request_index ORDER BY s.{et} DESC, s.{at} DESC) AS fl_rank")
+    } else {
+        String::new()
+    };
+    let sql = format!(
+        "WITH req AS (SELECT * FROM fl_label_requests WHERE fl_dataset_cutoff = :as_of),\n\
+         e AS (\n  SELECT r.fl_request_index AS fl_ri, s.{val} AS fl_v, 1 AS fl_present{rank}\n  FROM req r JOIN {selected} s ON {on}\n   AND s.{et} {lower_cmp} r.fl_as_of AND s.{et} {upper_cmp} r.fl_horizon_end\n)\n\
+         SELECT r.fl_request_index AS request_index, {n} AS eligible_rows,\n\
+           CASE WHEN {n} = 0 THEN 'empty' ELSE 'ok' END AS fl_state,\n\
+           CAST(CASE WHEN {n} = 0 THEN {empty_value} ELSE {value} END AS {sty}) AS fl_value,\n\
+           CASE WHEN {n} = 0 THEN {empty_error} ELSE {error} END AS fl_error\n\
+         FROM req r LEFT JOIN e ON e.fl_ri = r.fl_request_index\n\
+         GROUP BY r.fl_request_index ORDER BY r.fl_request_index",
+        val = quote(&label.value_column),
+        on = on.join(" AND "),
+        sty = spark_type(out_ty),
+    );
+    // Spark forbids parameter markers in CREATE VIEW: register bound SELECTs instead.
+    for st in lw.stages.iter_mut() {
+        as_view(st);
+    }
+    Ok(LabelArtifacts {
+        consumer: c.id.clone(),
+        consumer_version: c.version.clone(),
+        label_source: label.source.clone(),
+        requests_view: "fl_label_requests".into(),
+        request_columns,
+        session,
+        bind_sources,
+        stages: lw.stages,
+        checks: lw.checks,
+        values: Statement {
+            name: format!("fl_label_values_{}", safe(&c.id)),
+            purpose: format!("{}: {:?} over [as_of, as_of + {}s) of {} as known at the dataset cutoff (:as_of)", c.id, label.aggregation, label.horizon_seconds, label.source),
+            sql,
+            reads: vec![label.source.clone()],
+            view: None,
+        },
+        value_type: spark_type(out_ty).into(),
+        expected_source_schemas,
+        notes: vec![
+            "Maturity, completeness and exclusion are decided by the core (label_requests); this SQL computes values for eligible requests only.".into(),
+            "Feature filters are never applied to labels; the label source is reconstructed independently at each dataset cutoff.".into(),
+        ],
+    })
+}

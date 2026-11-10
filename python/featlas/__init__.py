@@ -112,3 +112,7 @@ class Project:
 
     def labels(self, consumer: str, label_input: dict) -> dict:
         return self._c(_native.labels, consumer, json.dumps(label_input))["dataset"]
+
+    def label_requests(self, consumer: str, rows: list[dict], source_status: dict) -> dict:
+        """Eligible and excluded label requests (maturity and completeness; no label data)."""
+        return self._c(_native.label_requests, consumer, json.dumps({"rows": rows, "source_status": source_status}))["requests"]

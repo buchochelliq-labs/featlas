@@ -172,6 +172,19 @@ fn labels(
     out(py.detach(|| api::labels(document, f, consumer, &input)))
 }
 
+#[pyfunction]
+fn label_requests(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    consumer: &str,
+    input_json: &str,
+) -> PyResult<String> {
+    let f = fmt(format)?;
+    let input = json_arg(input_json)?;
+    out(py.detach(|| api::label_requests(document, f, consumer, &input)))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FeatlasError", m.py().get_type::<FeatlasError>())?;
@@ -192,6 +205,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
         wrap_pyfunction!(consume, m)?,
         wrap_pyfunction!(migration_plan, m)?,
         wrap_pyfunction!(labels, m)?,
+        wrap_pyfunction!(label_requests, m)?,
     ] {
         m.add_function(f)?;
     }

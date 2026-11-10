@@ -43,7 +43,7 @@ class Core:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(content, encoding="utf-8")
             (root / "manifest.json").write_text(json.dumps(gen["manifest"], indent=2), encoding="utf-8")
-        return {"artifacts": gen["artifacts"], "manifest": gen["manifest"], "plan": gen["plan"]}
+        return {"artifacts": gen["artifacts"], "label_artifacts": gen.get("label_artifacts", {}), "manifest": gen["manifest"], "plan": gen["plan"]}
 
     def coverage(self, project: str, deployment: str, feature_set: str, as_of: str, statuses: list[dict]) -> dict:
         return self.project(project).coverage(deployment, feature_set, as_of, statuses)
@@ -53,6 +53,12 @@ class Core:
             return {"response": self.project(project).consume(request, records)}
         except FeatlasError as e:
             return {"error": {"code": e.code, "message": e.message, "detail": e.detail}}
+
+    def labels(self, project: str, consumer: str, label_input: dict) -> dict:
+        return self.project(project).labels(consumer, label_input)
+
+    def label_requests(self, project: str, consumer: str, rows: list[dict], source_status: dict) -> dict:
+        return self.project(project).label_requests(consumer, rows, source_status)
 
     def evaluate_case(self, project: str, case_id: str) -> dict:
         return self.project(project).evaluate_case(case_id)

@@ -59,51 +59,46 @@ pub struct LabelDataset {
     pub excluded: Vec<Excluded>,
 }
 
-pub fn build_labels(
+/// One request whose horizon is mature and proven complete at its dataset cutoff.
+#[derive(Debug, Clone, Serialize)]
+pub struct LabelRequest {
+    pub request_index: usize,
+    pub entity_keys: Map<String, Json>,
+    pub as_of: String,
+    pub dataset_cutoff: String,
+    /// Exclusive end of the horizon window (`as_of + horizon_seconds`).
+    pub horizon_end: String,
+}
+
+/// The data-free part of label construction: which requests are labelled and which excluded.
+#[derive(Debug, Clone, Serialize)]
+pub struct LabelRequests {
+    pub consumer: String,
+    pub consumer_version: String,
+    pub label_source: String,
+    pub eligible: Vec<LabelRequest>,
+    pub excluded: Vec<Excluded>,
+}
+
+/// Decide maturity and completeness for every request before any label data is read
+/// (`incomplete_horizon: error` fails on the first incomplete request in request order).
+/// Target adapters compute values only for `eligible` requests.
+pub fn label_requests(
     p: &Project,
     consumer_id: &str,
-    input: &LabelInput,
-    limits: &Limits,
-) -> Result<LabelDataset, EvalError> {
-    let c = p
-        .consumer(consumer_id)
-        .ok_or_else(|| err("UNKNOWN_CONSUMER", consumer_id))?;
-    let label = c.label.as_ref().ok_or_else(|| {
-        err(
-            "LABEL_NOT_DECLARED",
-            format!("{consumer_id} declares no label"),
-        )
-    })?;
-    let cutoff_field = c.time_inputs.dataset_cutoff.as_ref().ok_or_else(|| {
-        err(
-            "LABEL_CUTOFF_REQUIRED",
-            "Consumer has no dataset_cutoff input",
-        )
-    })?;
-    let fs = p
-        .feature_set(&c.feature_set.feature_set)
-        .ok_or_else(|| err("UNKNOWN_FEATURE_SET", &c.feature_set.feature_set))?;
-    let entity = p
-        .entity(&fs.entity)
-        .ok_or_else(|| err("UNKNOWN_ENTITY", &fs.entity))?;
-    let source = p
-        .source(&label.source)
-        .ok_or_else(|| err("UNKNOWN_SOURCE", &label.source))?;
-    if input.source_status.source() != source.id {
+    rows: &[Map<String, Json>],
+    status: &SourceStatus,
+) -> Result<LabelRequests, EvalError> {
+    let (c, label, cutoff_field, entity, source) = label_contract(p, consumer_id)?;
+    if status.source() != source.id {
         return Err(err(
             "MISSING_SOURCE_STATUS",
             format!("Status evidence must describe label source {}", source.id),
         ));
     }
-    let value_col = source
-        .column(&label.value_column)
-        .ok_or_else(|| err("UNKNOWN_COLUMN", &label.value_column))?;
-    let mut rows_map = Map::new();
-    rows_map.insert(source.id.clone(), Json::Array(input.source_rows.clone()));
-    let mut out = Vec::new();
+    let mut eligible = Vec::new();
     let mut excluded = Vec::new();
-    let mut cache: std::collections::HashMap<i64, Vec<crate::eval::TRow>> = Default::default();
-    for (i, row) in input.rows.iter().enumerate() {
+    for (i, row) in rows.iter().enumerate() {
         let ts = |field: &str| -> Result<Instant, EvalError> {
             let raw = row
                 .get(field)
@@ -113,7 +108,6 @@ pub fn build_labels(
         };
         let t = ts(&c.time_inputs.as_of)?;
         let cutoff = ts(cutoff_field)?;
-        let mut key = Vec::new();
         let mut entity_keys = Map::new();
         for k in &entity.keys {
             let m = c
@@ -134,7 +128,6 @@ pub fn build_labels(
                     format!("Row {i}: entity key {} is null", k.name),
                 ));
             }
-            key.push(v);
             entity_keys.insert(k.name.clone(), raw.clone());
         }
         let end = t
@@ -147,7 +140,7 @@ pub fn build_labels(
                 "Horizon ends {end}, after dataset cutoff {cutoff}: immature"
             ));
         }
-        match &input.source_status {
+        match status {
             SourceStatus::Unavailable { .. } => {
                 incomplete = Some("Label source unavailable".into())
             }
@@ -183,6 +176,80 @@ pub fn build_labels(
             });
             continue;
         }
+        eligible.push(LabelRequest {
+            request_index: i,
+            entity_keys,
+            as_of: t.to_string(),
+            dataset_cutoff: cutoff.to_string(),
+            horizon_end: end.to_string(),
+        });
+    }
+    Ok(LabelRequests {
+        consumer: c.id.clone(),
+        consumer_version: c.version.clone(),
+        label_source: source.id.clone(),
+        eligible,
+        excluded,
+    })
+}
+
+type Contract<'a> = (&'a Consumer, &'a Label, &'a String, &'a Entity, &'a Source);
+
+fn label_contract<'a>(p: &'a Project, consumer_id: &str) -> Result<Contract<'a>, EvalError> {
+    let c = p
+        .consumer(consumer_id)
+        .ok_or_else(|| err("UNKNOWN_CONSUMER", consumer_id))?;
+    let label = c.label.as_ref().ok_or_else(|| {
+        err(
+            "LABEL_NOT_DECLARED",
+            format!("{consumer_id} declares no label"),
+        )
+    })?;
+    let cutoff_field = c.time_inputs.dataset_cutoff.as_ref().ok_or_else(|| {
+        err(
+            "LABEL_CUTOFF_REQUIRED",
+            "Consumer has no dataset_cutoff input",
+        )
+    })?;
+    let fs = p
+        .feature_set(&c.feature_set.feature_set)
+        .ok_or_else(|| err("UNKNOWN_FEATURE_SET", &c.feature_set.feature_set))?;
+    let entity = p
+        .entity(&fs.entity)
+        .ok_or_else(|| err("UNKNOWN_ENTITY", &fs.entity))?;
+    let source = p
+        .source(&label.source)
+        .ok_or_else(|| err("UNKNOWN_SOURCE", &label.source))?;
+    Ok((c, label, cutoff_field, entity, source))
+}
+
+pub fn build_labels(
+    p: &Project,
+    consumer_id: &str,
+    input: &LabelInput,
+    limits: &Limits,
+) -> Result<LabelDataset, EvalError> {
+    let requests = label_requests(p, consumer_id, &input.rows, &input.source_status)?;
+    let (c, label, _, entity, source) = label_contract(p, consumer_id)?;
+    let value_col = source
+        .column(&label.value_column)
+        .ok_or_else(|| err("UNKNOWN_COLUMN", &label.value_column))?;
+    let mut rows_map = Map::new();
+    rows_map.insert(source.id.clone(), Json::Array(input.source_rows.clone()));
+    let mut out = Vec::new();
+    let excluded = requests.excluded;
+    let mut cache: std::collections::HashMap<i64, Vec<crate::eval::TRow>> = Default::default();
+    for req in requests.eligible {
+        let i = req.request_index;
+        let t = Instant::parse(&req.as_of).map_err(|m| err("INVALID_TIMESTAMP", m))?;
+        let cutoff = Instant::parse(&req.dataset_cutoff).map_err(|m| err("INVALID_TIMESTAMP", m))?;
+        let end = Instant::parse(&req.horizon_end).map_err(|m| err("INVALID_TIMESTAMP", m))?;
+        let entity_keys = req.entity_keys;
+        let key: Vec<V> = entity
+            .keys
+            .iter()
+            .map(|k| V::from_json(&entity_keys[&k.name], k.ty).map_err(|m| err("REQUEST_KEY_TYPE", m)))
+            .collect::<Result<_, _>>()?;
         if !cache.contains_key(&cutoff.micros) {
             let rec = reconstruct_rows(
                 p,

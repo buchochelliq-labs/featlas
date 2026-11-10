@@ -1,0 +1,311 @@
+{
+  "description": "Hand-reasoned label goldens (SEM-LABEL-001/002) for consumer spend_training_dataset of projects/03_commerce_ratio.yaml (sum of amount_usd_cents over [as_of, as_of + 7 days), as known at the dataset cutoff). Shared by crates/featlas-core/tests/labels.rs and the Spark differential suite.",
+  "project": "projects/03_commerce_ratio.yaml",
+  "deployment": "commerce_prod",
+  "consumer": "spend_training_dataset",
+  "source_rows": [
+    {
+      "transaction_id": "at_lower",
+      "tenant_id": "tenant_a",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-06-01T00:00:00Z",
+      "available_at": "2026-06-01T00:00:00Z",
+      "amount_usd_cents": 100,
+      "status": "settled"
+    },
+    {
+      "transaction_id": "refund",
+      "tenant_id": "tenant_a",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-06-02T00:00:00Z",
+      "available_at": "2026-06-02T00:00:00Z",
+      "amount_usd_cents": -30,
+      "status": "cancelled"
+    },
+    {
+      "transaction_id": "at_upper",
+      "tenant_id": "tenant_a",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-06-08T00:00:00Z",
+      "available_at": "2026-06-08T00:00:00Z",
+      "amount_usd_cents": 200,
+      "status": "settled"
+    },
+    {
+      "transaction_id": "before",
+      "tenant_id": "tenant_a",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-05-31T23:59:59.999999Z",
+      "available_at": "2026-05-31T23:59:59.999999Z",
+      "amount_usd_cents": 400,
+      "status": "settled"
+    },
+    {
+      "transaction_id": "late",
+      "tenant_id": "tenant_a",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-06-03T00:00:00Z",
+      "available_at": "2026-06-11T00:00:00.000001Z",
+      "amount_usd_cents": 1000,
+      "status": "settled"
+    },
+    {
+      "transaction_id": "other_tenant",
+      "tenant_id": "tenant_b",
+      "customer_id": "customer_1",
+      "purchased_at": "2026-06-02T00:00:00Z",
+      "available_at": "2026-06-02T00:00:00Z",
+      "amount_usd_cents": 7,
+      "status": "settled"
+    }
+  ],
+  "cases": [
+    {
+      "id": "mature_horizon_sums_every_status",
+      "why": "at_lower (100, inclusive lower) + refund (-30, cancelled still counts) = 70; at_upper (exclusive upper), before (outside), late (available after the cutoff) and tenant_b are excluded.",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-06-11T00:00:00Z"
+      },
+      "expected": {
+        "rows": [
+          {
+            "request_index": 0,
+            "value": 70,
+            "state": "ok",
+            "eligible_rows": 2
+          }
+        ],
+        "excluded": []
+      }
+    },
+    {
+      "id": "cutoffs_reconstruct_independently",
+      "why": "Same anchor under two cutoffs: at 06-11 the late purchase (available 06-11T00:00:00.000001Z) is unknown (70); at 06-12 it is known (70 + 1000 = 1070). tenant_b's own purchase only (7).",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        },
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-12T00:00:00Z",
+          "dataset_cutoff": "2026-06-12T00:00:00Z"
+        },
+        {
+          "tenant_id": "tenant_b",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-06-12T00:00:00Z"
+      },
+      "expected": {
+        "rows": [
+          {
+            "request_index": 0,
+            "value": 70,
+            "state": "ok",
+            "eligible_rows": 2
+          },
+          {
+            "request_index": 1,
+            "value": 1070,
+            "state": "ok",
+            "eligible_rows": 3
+          },
+          {
+            "request_index": 2,
+            "value": 7,
+            "state": "ok",
+            "eligible_rows": 1
+          }
+        ],
+        "excluded": []
+      }
+    },
+    {
+      "id": "immature_excluded_exact_maturity_labelled",
+      "why": "Horizon ends 06-08: a cutoff one microsecond earlier is immature (excluded, not negative); exactly at 06-08 the row is labelled with what is known then (at_lower + refund = 70).",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-07T23:59:59.999999Z",
+          "dataset_cutoff": "2026-06-07T23:59:59.999999Z"
+        },
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-08T00:00:00Z",
+          "dataset_cutoff": "2026-06-08T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-06-11T00:00:00Z"
+      },
+      "expected": {
+        "rows": [
+          {
+            "request_index": 1,
+            "value": 70,
+            "state": "ok",
+            "eligible_rows": 2
+          }
+        ],
+        "excluded": [
+          {
+            "request_index": 0,
+            "reason_contains": "immature"
+          }
+        ]
+      }
+    },
+    {
+      "id": "censored_coverage_excluded",
+      "why": "Completeness evidence ends one microsecond before the exclusive horizon end: censored, excluded.",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-06-07T23:59:59.999999Z"
+      },
+      "expected": {
+        "rows": [],
+        "excluded": [
+          {
+            "request_index": 0,
+            "reason_contains": "censored"
+          }
+        ]
+      }
+    },
+    {
+      "id": "known_complete_empty_horizon",
+      "why": "No purchases in [07-01, 07-08) and coverage proves completeness: label.empty value 0, state empty.",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-07-01T00:00:00Z",
+          "requested_at": "2026-07-09T00:00:00Z",
+          "dataset_cutoff": "2026-07-09T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-07-09T00:00:00Z"
+      },
+      "expected": {
+        "rows": [
+          {
+            "request_index": 0,
+            "value": 0,
+            "state": "empty",
+            "eligible_rows": 0
+          }
+        ],
+        "excluded": []
+      }
+    },
+    {
+      "id": "unavailable_source_is_not_negative",
+      "why": "An unavailable label source excludes the row; it is never a 0 label.",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "unavailable"
+      },
+      "expected": {
+        "rows": [],
+        "excluded": [
+          {
+            "request_index": 0,
+            "reason_contains": "unavailable"
+          }
+        ]
+      }
+    },
+    {
+      "id": "conflicting_revisions_fail",
+      "why": "Two rows share transaction_id at_lower with different payloads at the cutoff.",
+      "rows": [
+        {
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "as_of": "2026-06-01T00:00:00Z",
+          "requested_at": "2026-06-11T00:00:00Z",
+          "dataset_cutoff": "2026-06-11T00:00:00Z"
+        }
+      ],
+      "source_status": {
+        "source": "purchase_events",
+        "state": "available",
+        "coverage_start": "2026-01-01T00:00:00Z",
+        "coverage_end": "2026-06-11T00:00:00Z"
+      },
+      "extra_source_rows": [
+        {
+          "transaction_id": "at_lower",
+          "tenant_id": "tenant_a",
+          "customer_id": "customer_1",
+          "purchased_at": "2026-06-01T00:00:00Z",
+          "available_at": "2026-06-01T00:00:00Z",
+          "amount_usd_cents": 999,
+          "status": "settled"
+        }
+      ],
+      "expected": {
+        "diagnostic": {
+          "code": "DUPLICATE_CONFLICT"
+        }
+      }
+    }
+  ]
+}

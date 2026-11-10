@@ -390,6 +390,7 @@ pub fn generate(
     let d = l.project.deployment(deployment).unwrap();
     let compute = d.adapter(&d.execution.compute).unwrap();
     let mut artifacts = Map::new();
+    let mut label_artifacts = Map::new();
     if compute.implementation == databricks::IMPLEMENTATION {
         for fs in &plan.logical.feature_sets {
             let art = databricks::lower(plan, &fs.id, &l.project)
@@ -401,6 +402,21 @@ pub fn generate(
             );
             files.insert(format!("{dir}/script.sql"), databricks::render_script(&art));
             artifacts.insert(fs.id.clone(), serde_json::to_value(&art).unwrap());
+        }
+        // Label datasets for label consumers of the planned feature sets (SEM-LABEL-001).
+        for c in &l.project.consumers {
+            let Some(label) = &c.label else { continue };
+            let in_plan = plan.logical.feature_sets.iter().any(|f| f.id == c.feature_set.feature_set);
+            if !in_plan || !plan.logical.sources.contains_key(&label.source) {
+                continue;
+            }
+            let art = databricks::lower_labels(plan, &l.project, &c.id)
+                .map_err(|m| ApiError::new("LOWERING_FAILED", m, Value::Null))?;
+            files.insert(
+                format!("databricks/labels/{}/artifacts.json", c.id.replace(['/', '\\'], "_")),
+                serde_json::to_string_pretty(&art).unwrap(),
+            );
+            label_artifacts.insert(c.id.clone(), serde_json::to_value(&art).unwrap());
         }
     }
     let digests: Vec<Value> = files
@@ -421,7 +437,7 @@ pub fn generate(
     });
     Ok(envelope(
         "generate",
-        json!({"plan": plan, "capability_report": report, "diagnostics": outcome.diagnostics, "artifacts": artifacts, "files": files, "manifest": manifest}),
+        json!({"plan": plan, "capability_report": report, "diagnostics": outcome.diagnostics, "artifacts": artifacts, "label_artifacts": label_artifacts, "files": files, "manifest": manifest}),
     ))
 }
 
@@ -521,6 +537,18 @@ pub fn labels(bytes: &[u8], format: Format, consumer: &str, input: &Value) -> Ap
         .map_err(|e| ApiError::new("LABEL_INPUT_INVALID", e.to_string(), Value::Null))?;
     let ds = featlas_core::label::build_labels(&l.project, consumer, &li, &limits(60))?;
     Ok(envelope("labels", json!({"dataset": ds})))
+}
+
+/// The data-free part of label construction: eligible and excluded requests.
+/// `input` is `{"rows": [...], "source_status": {...}}`.
+pub fn label_requests(bytes: &[u8], format: Format, consumer: &str, input: &Value) -> ApiResult {
+    let l = load(bytes, format)?;
+    let rows: Vec<serde_json::Map<String, Value>> = serde_json::from_value(input["rows"].clone())
+        .map_err(|e| ApiError::new("LABEL_INPUT_INVALID", e.to_string(), Value::Null))?;
+    let status: featlas_core::model::SourceStatus = serde_json::from_value(input["source_status"].clone())
+        .map_err(|e| ApiError::new("LABEL_INPUT_INVALID", e.to_string(), Value::Null))?;
+    let r = featlas_core::label::label_requests(&l.project, consumer, &rows, &status)?;
+    Ok(envelope("label_requests", json!({"requests": r})))
 }
 
 /// Parse an untrusted JSON value under the restricted profile (duplicate keys rejected).

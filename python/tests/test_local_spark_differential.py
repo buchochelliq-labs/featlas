@@ -159,3 +159,44 @@ def test_quarantine_reports_the_violating_rows_and_warn_keeps_values(spark, core
             run.execute()
             [w] = run.quality_warnings
             assert w["outcome"] == "warning" and w["value"] == 2 and w["entity_keys"]["tenant_id"] == "tenant_b"
+
+
+LABELS = json.loads((ROOT / "projects/labels/spend_training_dataset.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("case", LABELS["cases"], ids=[c["id"] for c in LABELS["cases"]])
+def test_generated_label_sql_matches_goldens_and_core(spark, core, case):
+    """Label datasets through generated Spark SQL vs hand-reasoned goldens and the core."""
+    from featlas_databricks.differential import register_source
+    from featlas_databricks.labels import LabelRun
+
+    project = str(ROOT / LABELS["project"])
+    gen = core.generate(project, LABELS["deployment"])
+    art = gen["label_artifacts"][LABELS["consumer"]]
+    source_rows = LABELS["source_rows"] + case.get("extra_source_rows", [])
+    rel = {}
+    for source, spec in art["expected_source_schemas"].items():
+        register_source(spark, f"fixture_label_{source}", spec, source_rows)
+        rel[source] = f"fixture_label_{source}"
+    want = case["expected"]
+    label_input = {"rows": case["rows"], "source_rows": source_rows, "source_status": case["source_status"]}
+    try:
+        core_ds = core.labels(project, LABELS["consumer"], label_input)
+        core_code = None
+    except Exception as e:  # noqa: BLE001 - FeatlasError from the bindings
+        core_ds, core_code = None, getattr(e, "code", None)
+    requests = core.label_requests(project, LABELS["consumer"], case["rows"], case["source_status"])
+    run = LabelRun(spark, art, requests, source_relations=rel)
+    if "diagnostic" in want:
+        with pytest.raises(FeatlasError) as e:
+            run.run()
+        assert e.value.code == want["diagnostic"]["code"] == core_code
+        return
+    ds = run.run()
+    rows = [{k: r[k] for k in ("request_index", "value", "state", "eligible_rows")} for r in ds["rows"]]
+    assert rows == want["rows"]
+    assert rows == [{k: r[k] for k in ("request_index", "value", "state", "eligible_rows")} for r in core_ds["rows"]]
+    assert ds["rows"] == core_ds["rows"], "entity keys, as_of and cutoff match the core too"
+    assert [x["request_index"] for x in ds["excluded"]] == [w["request_index"] for w in want["excluded"]]
+    for x, w in zip(ds["excluded"], want["excluded"]):
+        assert w["reason_contains"] in x["reason"]
