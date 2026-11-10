@@ -57,7 +57,10 @@ def test_agent_workflow_over_mcp():
         par = c.tool("parity_sql", document=a["project_yaml"], legacy_table="main.features.customer_wide", legacy_as_of_column="feature_ts", keys=["tenant_id", "customer_id"], as_of="2026-06-01T00:00:00Z")
         assert "missing_in_new" in par["sql"] and "mismatched_return_rate_30d" in par["sql"]
         g = c.tool("spec_generate", document=a["project_yaml"], deployment="customer_wide_databricks", include_files=False)
-        assert g["execution_ready"] is False and any("customer_wide_revenue" in f for f in g["files"])
+        assert any("customer_wide_revenue" in f for f in g["files"])
+        # Ready exactly when every check is supported with live evidence (adapter lock state).
+        checks = g["capability_report"]["checks"]
+        assert g["execution_ready"] == all(c["status"] == "supported_native" and c["evidence_scope"] == "live_target" for c in checks)
         bad = c.call("tools/call", {"name": "split_apply", "arguments": {"document": d["project_yaml"], "feature_set": "customer_wide", "assignment": {}}})["result"]
         assert bad["isError"]
     finally:
