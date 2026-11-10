@@ -162,3 +162,32 @@ def test_evidence_lookup_reads_only_retained_commits(env, monkeypatch):
     with pytest.raises(FeatlasError) as e:
         r._inserting_commit("pub-1", after_version=max(int(h["version"]) for h in real))
     assert e.value.code == "PUBLICATION_EVIDENCE_MISSING"
+
+
+def test_output_row_budget_stops_before_publication(env):
+    """SEM-BUDGET-001: a snapshot over max_output_rows is refused; nothing is merged."""
+    import copy
+
+    before = len(merge_commits(env["spark"]))
+    art = copy.deepcopy(env["art"])
+    art["budget"]["max_output_rows"] = 1
+    r = SnapshotRun(env["spark"], art, env["case"]["as_of"], env["coverage"], set(), env["relations"], population_source="device_registry")
+    with pytest.raises(FeatlasError) as e:
+        r.publish(auth("pub-budget", 9, "mat-budget"))
+    assert e.value.code == "BUDGET_EXCEEDED" and e.value.detail == {"rows": 2, "limit": 1}
+    assert len(merge_commits(env["spark"])) == before
+    # An explicitly authorized larger budget lets it through.
+    ok = r.publish(PublicationAuthorization(environment="local-delta-test", approved_by="test-suite", publication_id="pub-budget", publication_sequence=9, materialization_id="mat-budget", budget_override={"max_output_rows": 2}))
+    assert ok["budget"]["output_rows"] == 2 and ok["budget"]["overridden"] is True
+
+
+def test_retention_preflight_checks_change_data_feed(env):
+    """SEM-PORT-009 / DEPLOY-002: the output table must keep its change data feed."""
+    spark = env["spark"]
+    spark.sql(f"ALTER TABLE {LOCAL_TABLE} SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'false')")
+    try:
+        art = dict(env["art"], retention={"sources": {}, "output_retention_seconds": 0})
+        problems = SnapshotRun(spark, art, env["case"]["as_of"], env["coverage"], set(), env["relations"]).retention_preflight()
+        assert [p["code"] for p in problems] == ["CHANGE_DATA_FEED_DISABLED"]
+    finally:
+        spark.sql(f"ALTER TABLE {LOCAL_TABLE} SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')")

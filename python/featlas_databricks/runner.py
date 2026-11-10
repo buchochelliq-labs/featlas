@@ -51,6 +51,13 @@ class PublicationAuthorization:
     publication_id: str = ""
     publication_sequence: int = 0
     materialization_id: str = ""
+    # An explicitly authorized larger budget, e.g. {"max_scan_bytes": ..., "max_output_rows": ...}
+    # (SEM-BUDGET-001: exceeding a limit stops the run unless a larger budget is authorized).
+    budget_override: dict | None = None
+
+
+def _q(name: str) -> str:
+    return "`" + name.replace("`", "``") + "`"
 
 
 def _plain(row: dict) -> dict:
@@ -258,7 +265,10 @@ class SnapshotRun:
                 raise FeatlasError("PUBLICATION_IDENTITY_CONFLICT", f"publication_id {auth.publication_id} is already committed with a different as_of or sequence ({row['s']}); use a new publication_id")
             commit_mid, stored_sequence, stored_rows = row["m"], row["s"], row["n"]
         else:
+            budget = self.budget_preflight(auth.budget_override)
             rows = self.run_to_snapshot(pub)
+            self._check_output_rows(len(rows), auth.budget_override)
+            budget["output_rows"] = len(rows)
             after_version = self._latest_version()
             # Best effort: label the commit with the materialization id. Serverless compute may
             # reject this conf; evidence lookup does not depend on it (change data feed below).
@@ -295,14 +305,75 @@ class SnapshotRun:
             "rows": stored_rows,
             "retry": retry,
             "retry_materialization_id": auth.materialization_id if retry else None,
-            # Source pins and quality warnings are only known for the run that computed the rows.
+            # Source pins, budget use and quality warnings are only known for the run that computed the rows.
             "source_versions": None if retry else self.source_versions,
+            "budget": None if retry else budget,
             "quality_warnings": None if retry else self.quality_warnings,
             "evidence_source": "change data feed (table_changes)",
             "approved_by": auth.approved_by,
             "environment": auth.environment,
             "statement_log": self.log,
         }
+
+    # --- SEM-BUDGET-001 / SEM-DEPLOY-002 -------------------------------------------------------
+
+    def _limit(self, name: str, override: dict | None) -> int:
+        b = self.artifacts.get("budget") or {}
+        return int((override or {}).get(name) or b.get(name) or 0)
+
+    def budget_preflight(self, override: dict | None = None) -> dict:
+        """Upper bound of the bytes this run scans (full size of every read source table) against
+        ``max_scan_bytes``; raises BUDGET_EXCEEDED rather than sampling or truncating."""
+        limit = self._limit("max_scan_bytes", override)
+        scanned, measured = 0, {}
+        if not self.source_relations:
+            for source, spec in self.artifacts["expected_source_schemas"].items():
+                if source in self.unavailable_sources:
+                    continue
+                detail = self._sql(f"detail_{source}", f"DESCRIBE DETAIL {spec['table']}").collect()[0].asDict()
+                measured[source] = int(detail.get("sizeInBytes") or 0)
+                scanned += measured[source]
+            if limit and scanned > limit:
+                raise FeatlasError("BUDGET_EXCEEDED", f"Sources total {scanned} bytes, over max_scan_bytes {limit}; authorize a larger budget explicitly to proceed", "SEM-BUDGET-001", {"measured": measured, "limit": limit})
+        return {
+            "max_scan_bytes": limit,
+            "scan_bytes_upper_bound": scanned if not self.source_relations else None,
+            "per_source_bytes": measured,
+            "max_output_rows": self._limit("max_output_rows", override),
+            "overridden": bool(override),
+            "not_enforced_by_host": ["max_daily_cost (no cost signal available to the host)", "max_memory_mib (serverless compute sizes itself)", "max_concurrent_runs (enforced by the job's max_concurrent_runs / the workflow concurrency group)"],
+        }
+
+    def _check_output_rows(self, n: int, override: dict | None) -> None:
+        limit = self._limit("max_output_rows", override)
+        if limit and n > limit:
+            raise FeatlasError("BUDGET_EXCEEDED", f"Snapshot has {n} rows, over max_output_rows {limit}; nothing was published", "SEM-BUDGET-001", {"rows": n, "limit": limit})
+
+    def retention_preflight(self) -> list[dict]:
+        """Verify retention contracts against the physical tables (read-only).
+
+        * every source must physically retain rows back to its declared
+          ``earliest_reproducible_at`` (oldest availability time <= the declared instant), else
+          history the contract promises is gone (RETENTION_CONTRACT_VIOLATED);
+        * an existing output table must keep its change data feed on, which publication evidence
+          needs (CHANGE_DATA_FEED_DISABLED).
+        """
+        problems = []
+        ret = self.artifacts.get("retention") or {}
+        for source, chk in (ret.get("sources") or {}).items():
+            if source in self.unavailable_sources:
+                continue
+            oldest = self._sql(f"oldest_{source}", f"SELECT min({_q(chk['available_time'])}) AS t FROM {chk['table']}").collect()[0]["t"]
+            declared = parse_instant(chk["earliest_reproducible_at"]).replace(tzinfo=None)
+            if oldest is not None and oldest.replace(tzinfo=None) > declared:
+                problems.append({"code": "RETENTION_CONTRACT_VIOLATED", "rule": "SEM-DEPLOY-002", "source": source, "table": chk["table"], "declared_earliest_reproducible_at": chk["earliest_reproducible_at"], "oldest_retained": format_instant(oldest)})
+        try:
+            props = {r["key"]: r["value"] for r in self._sql("table_properties", self.artifacts["table_properties"]["sql"]).collect()}
+        except FeatlasError:
+            props = None  # the output table does not exist yet; its DDL enables the change data feed
+        if props is not None and props.get("delta.enableChangeDataFeed", "false").lower() != "true":
+            problems.append({"code": "CHANGE_DATA_FEED_DISABLED", "rule": "SEM-PORT-009", "table": self.artifacts["output_table"], "detail": "publication evidence is read from the change data feed"})
+        return problems
 
     def _evidence(self, name: str) -> dict:
         return next(st for st in self.artifacts["evidence"] if st["name"] == name)

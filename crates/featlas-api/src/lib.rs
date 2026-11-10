@@ -403,6 +403,12 @@ pub fn generate(
             files.insert(format!("{dir}/script.sql"), databricks::render_script(&art));
             artifacts.insert(fs.id.clone(), serde_json::to_value(&art).unwrap());
         }
+        // Scheduled deployments: a paused Databricks job running every feature set (SEM-DEPLOY-003).
+        if d.execution.orchestrator.is_some() && matches!(d.schedule, featlas_core::model::Schedule::Interval { .. }) {
+            let job = databricks::job_bundle(plan, d, &l.project.metadata.id)
+                .map_err(|m| ApiError::new("LOWERING_FAILED", m, Value::Null))?;
+            files.insert("databricks/job.yml".into(), serde_json::to_string_pretty(&job).unwrap());
+        }
         // Label datasets for label consumers of the planned feature sets (SEM-LABEL-001).
         for c in &l.project.consumers {
             let Some(label) = &c.label else { continue };

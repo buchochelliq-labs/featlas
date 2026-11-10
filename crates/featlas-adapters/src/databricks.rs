@@ -308,7 +308,26 @@ pub struct Artifacts {
     pub output_table: String,
     /// Physical names of the five publication metadata fields of the output target.
     pub metadata_columns: PublicationColumns,
+    /// Deployment resource limits the host enforces where measurable (SEM-BUDGET-001).
+    pub budget: Budget,
+    /// Retention contracts the host verifies against the physical tables (SEM-DEPLOY-002).
+    pub retention: RetentionContract,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RetentionContract {
+    /// Per bound source: physical table, availability column and the declared earliest
+    /// reproducible instant.
+    pub sources: BTreeMap<String, SourceRetentionCheck>,
+    pub output_retention_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceRetentionCheck {
+    pub table: String,
+    pub available_time: String,
+    pub earliest_reproducible_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -747,6 +766,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
     };
     let mut bind_sources = Vec::new();
     let mut expected_schemas = BTreeMap::new();
+    let mut retention_sources = BTreeMap::new();
     for sid in plan.logical.sources.keys() {
         let b = plan
             .bindings
@@ -783,6 +803,20 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             reads: vec![sid.clone()],
             view: None,
         });
+        let phys_avail = b
+            .column_mapping
+            .get(&s.available_time)
+            .and_then(Value::as_str)
+            .unwrap_or(&s.available_time)
+            .to_string();
+        retention_sources.insert(
+            sid.clone(),
+            SourceRetentionCheck {
+                table: table_name(&b.location)?,
+                available_time: phys_avail,
+                earliest_reproducible_at: s.earliest_reproducible_at.clone(),
+            },
+        );
         expected_schemas.insert(
             sid.clone(),
             json!({
@@ -1106,6 +1140,11 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         expected_source_schemas: expected_schemas,
         output_table,
         metadata_columns: target.metadata_columns.clone(),
+        budget: plan.bindings.budget.clone(),
+        retention: RetentionContract {
+            sources: retention_sources,
+            output_retention_seconds: p.deployment(&plan.bindings.deployment).map(|d| d.output_retention_seconds).unwrap_or(0),
+        },
         notes,
     })
 }
@@ -1941,4 +1980,80 @@ pub fn lower_labels(plan: &Plan, p: &Project, consumer: &str) -> Result<LabelArt
             "Feature filters are never applied to labels; the label source is reconstructed independently at each dataset cutoff.".into(),
         ],
     })
+}
+
+/// A Databricks Asset Bundle job (`resources.jobs`) running each feature set of a scheduled
+/// deployment (SEM-DEPLOY-003, `core.scheduling`). JSON is valid bundle YAML.
+///
+/// * The trigger is a Quartz cron in UTC on the deployment's interval grid
+///   (`every_seconds`, `offset_seconds`); intervals that are not whole minutes dividing an hour,
+///   whole hours dividing a day, or exactly one day are refused.
+/// * Each task derives `as_of` from the trigger time floored to that grid, and its publication
+///   identity from `as_of` (`publication_id = <deployment>/<feature set>/<as_of>`, sequence =
+///   epoch seconds), so a retried run republishes nothing (the host's retry path).
+/// * Retries, `max_concurrent_runs` (budget) and `timeout_seconds` (SLO) are explicit.
+/// * The job is created **paused**: deploying the bundle authorizes nothing; unpausing it is the
+///   explicit publication approval for `environment`.
+pub fn job_bundle(plan: &Plan, d: &Deployment, project_id: &str) -> Result<Value, String> {
+    let Schedule::Interval { every_seconds, offset_seconds } = d.schedule else {
+        return Err("Deployment schedule is manual; no job is generated".into());
+    };
+    if d.execution.orchestrator.is_none() {
+        return Err("A scheduled deployment must select an orchestrator (SEM-PORT-002)".into());
+    }
+    let (e, o) = (every_seconds, offset_seconds.rem_euclid(every_seconds.max(1)));
+    let cron = if e == 86400 {
+        format!("{} {} {} * * ?", o % 60, (o / 60) % 60, o / 3600)
+    } else if e % 3600 == 0 && 86400 % e == 0 {
+        format!("{} {} {}/{} * * ?", o % 60, (o / 60) % 60, o / 3600, e / 3600)
+    } else if e % 60 == 0 && 3600 % e == 0 {
+        format!("{} {}/{} * * * ?", o % 60, o / 60, e / 60)
+    } else {
+        return Err(format!("every_seconds {e} is not expressible as a UTC Quartz schedule (whole minutes dividing an hour, whole hours dividing a day, or one day)"));
+    };
+    let job_key = format!("featlas_{}", safe(&d.id));
+    let tasks: Vec<Value> = plan
+        .logical
+        .feature_sets
+        .iter()
+        .map(|fs| {
+            json!({
+                "task_key": safe(&fs.id),
+                "environment_key": "featlas",
+                "max_retries": 2,
+                "min_retry_interval_millis": 60000,
+                "retry_on_timeout": false,
+                "python_wheel_task": {
+                    "package_name": "featlas",
+                    "entry_point": "featlas-databricks",
+                    "parameters": [
+                        "${var.project_path}", "--deployment", d.id, "--feature-set", fs.id,
+                        "--as-of-from-trigger", "{{job.trigger.time.iso_datetime}}",
+                        "--grid-seconds", e.to_string(), "--offset-seconds", o.to_string(),
+                        "--status-table", "${var.source_status_table}",
+                        "--publish", "--environment", d.environment,
+                        "--approved-by", format!("databricks-job:{job_key}"),
+                        "--materialization-id", "{{job.run_id}}-{{task.run_id}}",
+                    ],
+                },
+            })
+        })
+        .collect();
+    Ok(json!({
+        "variables": {
+            "project_path": {"description": "Workspace path of the exact project file this job runs (its sha256 must equal the plan's)."},
+            "featlas_wheel": {"description": "Workspace/Volume path of the featlas wheel built from the verified candidate."},
+            "source_status_table": {"description": "Three-part name of the source-status evidence table (source, state, coverage_start, coverage_end, observed_at)."},
+        },
+        "resources": {"jobs": {job_key.clone(): {
+            "name": format!("featlas {} ({project_id})", d.id),
+            "description": format!("Generated by {IMPLEMENTATION}@{VERSION} from plan {}. Paused on creation: unpausing is the publication approval for environment {}.", plan.plan_digest, d.environment),
+            "max_concurrent_runs": d.budget.max_concurrent_runs,
+            "timeout_seconds": d.slo.max_compute_seconds,
+            "schedule": {"quartz_cron_expression": cron, "timezone_id": "UTC", "pause_status": "PAUSED"},
+            "tags": {"featlas_deployment": d.id, "featlas_deployment_identity": plan.bindings.deployment_identity, "featlas_plan_digest": plan.plan_digest},
+            "environments": [{"environment_key": "featlas", "spec": {"client": "2", "dependencies": ["${var.featlas_wheel}"]}}],
+            "tasks": tasks,
+        }}},
+    }))
 }
