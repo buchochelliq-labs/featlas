@@ -101,13 +101,15 @@ logic does not invalidate the lowering pin.
 
 ### What this commit reports
 
-The lock pins three runs. Run 42771706619 tested `databricks.rs` `1847f7c2…` and `runner.py`
+The lock pins four runs. Run 42771706619 tested `databricks.rs` `1847f7c2…` and `runner.py`
 `44be9ac4…`; run 42816483568 tested `95a63302…` and `3f0cb046…`; run 42847828392 tested
-`95a63302…` and `b0deb914…`, which are the compiled sources of this commit. So step 2 applies
-with run 42847828392: the eight core checks of
+`95a63302…` and `b0deb914…`; run 42890653921 tested the five files vouched for since the online,
+Feature Views and job changes (`databricks.rs` `c47b23bf…`, `runner.py` `a024c552…`, `cli.py`
+`0993793f…`, `online.py` `6be70a8d…`, `feature_views.py` `c83cc6fa…`), which are the compiled
+sources of this commit. So step 2 applies with run 42890653921: the eight core checks of
 `projects/01_fault_count.yaml` (`fault_prod`) and `core.label_construction` (project 03) are
-`supported_native` with `live_target` evidence, and `core.scheduling` stays `unverified`/`static`
-(the generated job has not been deployed). Real output of
+`supported_native` with `live_target` evidence, while `core.scheduling` and the `online_store`
+checks stay `unverified`/`static` until a run of the platform job is pinned. Real output of
 `fe-spec capabilities projects/01_fault_count.yaml --deployment fault_prod`, first check:
 
 ```json
@@ -119,19 +121,19 @@ with run 42847828392: the eight core checks of
   "evidence_scope": "live_target",
   "evidence": [
     {
-      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42847828392#docs/evidence/databricks-live/run-42847828392/databricks-differential.json",
+      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
       "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-      "description": "Live run 42847828392 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit c3fa3016f686, artifact sha256 74b17487a392b593eb05f1c2a835ba2c157db55458c8611123b2c7f53a9de16a): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+      "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
     }
   ],
   "limitations": [
-    "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 95a633029a87a35211f37802b958551ca9918db9b7796be039193a79778010b3 and host runner sha256 b0deb9142df9b3c70d0947ae06a86a64e051fef3c4a01cd732d2960db7c3f72b."
+    "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
   ]
 }
 ```
 
 and the report ends with `"execution_ready": false` because of `core.scheduling`. The compiled
-digests depend on the exact source bytes, so any edit to those two files sends the checks back to
+digests depend on the exact source bytes, so any edit to those files sends the checks back to
 step 3 until a new run is pinned. How to re-pin is in the
 [Databricks guide](../guides/databricks.md#re-pinning-the-adapter-lock).
 

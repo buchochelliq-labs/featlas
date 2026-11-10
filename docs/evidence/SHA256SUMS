@@ -1,5 +1,5 @@
 12312647076ead3e6fb309c7feb018cb73e07d64cd98b057f85e579b499e9c2a  ./candidate.txt
-f363a257bbe8db595bb6ee3f13cce063170245e965ce19210c0df6579c92feba  ./capability-report-databricks.json
+1d6bde40e72777c9ba63734c25576fb404dcdb7f81745801a9bfb02e7efde125  ./capability-report-databricks.json
 97245151f665a6aefb799a38658d2c97cfe141e25dba250803ca73b5229bf134  ./capability-report-positive-local.json
 ed34e0526432a2fae1b9e6e9a9d64ab8ed1f2176da853629f3668e8044621efe  ./capability-report-rejecting-custom.json
 4763ea4685581e8463260af34eb9a282aeee7b6c5f710508a77545c548f30761  ./cargo-test.txt
@@ -46,3 +46,10 @@ a2ef0db4d40023362aafb8893868419710d1553f9c9ad80231913058bfa3cc48  ./local-accept
 d4cf8d0929721ae64ffd500f4f93f06e66ca9dab97f3d915f6d530082a355600  ./plan-synthetic-pins-rejected.json
 82405e8550befe6c3922fc164a2622cc449e2a3b09be27edb958de7ec6a3cedd  ./python-pytest.txt
 039b16bda8cfc935562bacc6e74988cf516620303333b4960a5dbe3f090fc26e  ./validate.txt
+68ac67e577a47ecdc0a871a31cb7eb3b167cba75edf027e83401a77b36dbc5f3  ./databricks-live/run-42890653921/RUN.md
+908a5bc80356b8a21547d13a9e3736bebeacc0110dadb2b2adc84af812b4e783  ./databricks-live/run-42890653921/commit.txt
+e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437  ./databricks-live/run-42890653921/databricks-differential.json
+654a92658b89a72e1c20d289821e4723fd8dd25e792d777a125e07d9ca522bda  ./databricks-live/run-42890653921/databricks-live.json
+c1a801fb738dd87fb84036d223a60958b8b77667efd27b3f73fc99f394c6dac0  ./databricks-live/run-42890653921/pip-freeze.txt
+f31cdad66b4009037b76769ad10cb4efce291ef3d4b32d00d61e2671f50b4950  ./databricks-live/run-42890653921/pytest-summary.txt
+f9652c9af0c93ddfb5d114f0701ea8c6f3096946e2f058cdea0b3e0cad6bd2f6  ./databricks-live/run-42890653921/sources.sha256
