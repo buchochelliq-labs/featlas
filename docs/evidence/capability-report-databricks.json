@@ -15,7 +15,7 @@
       "id": "databricks_platform",
       "implementation": "dev.featlas:databricks",
       "version": "0.1.0",
-      "implementation_sha256": "22184e39861772883183e19806bfcd2cca22a5fffa41c15881d0fef3b45eeb50",
+      "implementation_sha256": "edf6725883f923ad768955ae018be0b93e7ff92b53324dc4758b1f11b5086e3b",
       "runtime_versions": {
         "target.cloud": "aws",
         "target.compute": "serverless",
@@ -26,7 +26,7 @@
         "client.databricks-connect": "17.3.15",
         "client.databricks-sdk": "0.164.0",
         "client.python": "3.12.16",
-        "lock.run_id": "42890653921"
+        "lock.run_id": "42907049080"
       }
     }
   ],
@@ -39,13 +39,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -56,13 +56,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -73,13 +73,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -90,13 +90,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -107,13 +107,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -124,13 +124,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-live.json",
-          "sha256": "654a92658b89a72e1c20d289821e4723fd8dd25e792d777a125e07d9ca522bda",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-live.json",
+          "sha256": "84f1131d0842f1808088ca9dcbb94a96a2a234b4ea957f38d399c6e43ab079d7",
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -141,13 +141,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-live.json",
-          "sha256": "654a92658b89a72e1c20d289821e4723fd8dd25e792d777a125e07d9ca522bda",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-live.json",
+          "sha256": "84f1131d0842f1808088ca9dcbb94a96a2a234b4ea957f38d399c6e43ab079d7",
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
@@ -158,13 +158,13 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921#docs/evidence/databricks-live/run-42890653921/databricks-live.json",
-          "sha256": "654a92658b89a72e1c20d289821e4723fd8dd25e792d777a125e07d9ca522bda",
-          "description": "Live run 42890653921 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ac72f96a7645, artifact sha256 1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-live.json",
+          "sha256": "84f1131d0842f1808088ca9dcbb94a96a2a234b4ea957f38d399c6e43ab079d7",
+          "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
-        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     },
     {
