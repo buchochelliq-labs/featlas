@@ -127,7 +127,9 @@ fn capability_reports_positive_and_rejecting() {
         .iter()
         .all(|c| c["evidence_scope"] == "local_reference"
             && !c["evidence"].as_array().unwrap().is_empty()));
-    // Databricks deployment: static/declaration only, not ready.
+    // Databricks deployment: live-pinned capabilities are supported_native with live_target
+    // evidence (adapter lock), everything else unverified; scheduling is never observed, so the
+    // deployment is not execution-ready.
     let (code, out) = run(&[
         "capabilities",
         &project("01_fault_count.yaml"),
@@ -140,11 +142,15 @@ fn capability_reports_positive_and_rejecting() {
     let v = json_of(&out);
     assert_eq!(v["execution_scope"], json!("external_target"));
     assert_eq!(v["execution_ready"], json!(false));
-    assert!(v["checks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|c| c["status"] == "unverified"));
+    for c in v["checks"].as_array().unwrap() {
+        let live = c["status"] == "supported_native"
+            && c["evidence_scope"] == "live_target"
+            && !c["evidence"].as_array().unwrap().is_empty();
+        assert!(live || c["status"] == "unverified", "{c}");
+        if c["capability"] == "core.scheduling" {
+            assert_eq!(c["status"], "unverified");
+        }
+    }
     // Custom contract on Databricks: rejected as unsupported.
     let (_, out) = run(&[
         "capabilities",

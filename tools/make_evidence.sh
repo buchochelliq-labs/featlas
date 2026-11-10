@@ -20,7 +20,7 @@ $B hash projects/06_store_migration.yaml > "$OUT/hash-06.json"
 $B hash $E/01_fault_count.yaml > "$OUT/hash-example-01.json"
 
 $B capabilities projects/01_fault_count.yaml --deployment fault_dev --evidence-dir "$OUT/local-acceptance" --assessed-at $TS > "$OUT/capability-report-positive-local.json"
-$B capabilities projects/01_fault_count.yaml --deployment fault_prod --assessed-at $TS > "$OUT/capability-report-databricks-unverified.json"
+$B capabilities projects/01_fault_count.yaml --deployment fault_prod --assessed-at $TS > "$OUT/capability-report-databricks.json"
 $B capabilities projects/04_fitted_and_custom_contracts.yaml --deployment contracts_prod --assessed-at $TS > "$OUT/capability-report-rejecting-custom.json"
 $B check-report $E/reports/databricks_capabilities_unverified.json --project $E/06_store_migration.yaml > "$OUT/kit-report-check.json" || true
 $B plan $E/01_fault_count.yaml --deployment fault_prod > "$OUT/plan-synthetic-pins-rejected.json" || true

@@ -60,7 +60,7 @@ still required. This is why the kit's sample report for example 06 is flagged
 
 Example: the positive local report `docs/evidence/capability-report-positive-local.json` is
 `execution_ready: true` with scope `local_reference`; the Databricks report
-`docs/evidence/capability-report-databricks-unverified.json` is `execution_ready: false`.
+`docs/evidence/capability-report-databricks.json` is `execution_ready: false`.
 
 ## The Databricks adapter lock
 
@@ -87,13 +87,12 @@ Assessment logic, in order:
    `core.revision_reconstruction`, `core.as_of_join`, `core.relationship_join`,
    `core.source_as_known`, `core.label_construction`), `core.source_read`,
    `core.atomic_publication` and `core.serving_replay` are `unverified`/`static`;
-   `core.scheduling` is `unverified`/`declaration`; online roles, learned/custom and online
-   publication are `unsupported`.
+   `core.scheduling` is `unverified`/`static` (a paused job is generated, DECISIONS D14); online
+   roles, learned/custom and online publication are `unsupported`.
 
 So `supported_native` is only ever reported while the compiled `databricks.rs` and `runner.py`
-hash exactly as in a pinned live run, and only for the pairs that run verified. The pinned run
-42771706619 does not list `core.label_construction`, so labels stay unverified even after the
-sources match again, until a run that exercises them is pinned.
+hash exactly as in a pinned live run, and only for the pairs that run verified. Run 42771706619
+does not list `core.label_construction`; run 42816483568 does.
 
 The adapter's `implementation_sha256` is the SHA-256 over `path:sha256` lines of the vouched-for
 sources, and `runtime_versions` lists the target and client versions only when a matching run
@@ -102,9 +101,12 @@ logic does not invalidate the lowering pin.
 
 ### What this commit reports
 
-The lock pins run 42771706619 at `databricks.rs` SHA-256 `1847f7c2…` and `runner.py` `44be9ac4…`;
-the compiled files are `3ff43415…` and `0463a638…` (both changed by the quality and label work),
-so the checks fall back to step 3. Real output of
+The lock pins two runs. Run 42771706619 tested `databricks.rs` `1847f7c2…` and `runner.py`
+`44be9ac4…`; run 42816483568 tested `95a63302…` and `3f0cb046…`, which are the compiled sources
+of this commit. So step 2 applies with run 42816483568: the eight core checks of
+`projects/01_fault_count.yaml` (`fault_prod`) and `core.label_construction` (project 03) are
+`supported_native` with `live_target` evidence, and `core.scheduling` stays `unverified`/`static`
+(the generated job has not been deployed). Real output of
 `fe-spec capabilities projects/01_fault_count.yaml --deployment fault_prod`, first check:
 
 ```json
@@ -112,17 +114,24 @@ so the checks fall back to step 3. Real output of
   "adapter": "databricks_platform",
   "role": "compute",
   "capability": "core.aggregate",
-  "status": "unverified",
-  "evidence_scope": "static",
-  "evidence": [],
+  "status": "supported_native",
+  "evidence_scope": "live_target",
+  "evidence": [
+    {
+      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42816483568#docs/evidence/databricks-live/run-42816483568/databricks-differential.json",
+      "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
+      "description": "Live run 42816483568 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit ef5877b9b965, artifact sha256 707d1dba1023f3c2b08b0595533d2c65d203fb330f25f20d21378330d35923de): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+    }
+  ],
   "limitations": [
-    "Live run 42771706619 verified this on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0, but the adapter lowering or host runner has changed since (tested sources: {\"crates/featlas-adapters/src/databricks.rs\": \"1847f7c2f6078ff5e460bddfe02c9fa30c8d31cf23da8a9be8b01e794d240aa8\", \"python/featlas_databricks/runner.py\": \"44be9ac4df5cee7d738bc9307f9515625f5733579c4852e9c305ebeaae4e16fb\"}; compiled: {\"crates/featlas-adapters/src/databricks.rs\": \"3ff43415c95392d1ffa03153c2f1ac466bd630c10b498f5e6c02d196b0dfd77a\", \"python/featlas_databricks/runner.py\": \"0463a638521220074f0f1ecc44b264caf306c99df718f6be2dca609f041a8d2c\"}). Re-run .github/workflows/databricks-live.yml and pin the new run in databricks_lock.json."
+    "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 95a633029a87a35211f37802b958551ca9918db9b7796be039193a79778010b3 and host runner sha256 3f0cb046505ddeb0ce1996c14e26a91de2ed01ba3ad2383c3b255641f84da4a4."
   ]
 }
 ```
 
-and the report ends with `"execution_ready": false`. The compiled digests depend on the exact
-source bytes, so they change with every edit to those two files. How to re-pin is in the
+and the report ends with `"execution_ready": false` because of `core.scheduling`. The compiled
+digests depend on the exact source bytes, so any edit to those two files sends the checks back to
+step 3 until a new run is pinned. How to re-pin is in the
 [Databricks guide](../guides/databricks.md#re-pinning-the-adapter-lock).
 
 ## Checking a report
