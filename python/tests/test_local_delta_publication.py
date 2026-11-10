@@ -21,14 +21,14 @@ import pytest
 pytest.importorskip("pyspark")
 yaml = pytest.importorskip("yaml")
 
-from spark_session import HAVE_DELTA, get_spark  # noqa: E402
+from spark_session import HAVE_DELTA, LIVE, get_spark  # noqa: E402
 
 from featlas_databricks.core import Core  # noqa: E402
 from featlas_databricks.differential import _jsonable, register_source  # noqa: E402
 from featlas_databricks.errors import FeatlasError  # noqa: E402
 from featlas_databricks.runner import PublicationAuthorization, SnapshotRun, parse_instant  # noqa: E402
 
-pytestmark = pytest.mark.skipif(not HAVE_DELTA, reason="delta-spark not installed")
+pytestmark = pytest.mark.skipif(LIVE or not HAVE_DELTA, reason="local Delta only (delta-spark installed, not a live run)")
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = str(ROOT / "projects/01_fault_count.yaml")
@@ -88,7 +88,7 @@ def consume(env, consumer: str, requested_at: str) -> list:
 def test_publish_records_commit_evidence_and_replays(env):
     spark = env["spark"]
     ev = run(env).publish(auth("pub-1", 1, "mat-1"))
-    assert ev["rows"] == 2 and ev["retry"] is False and ev["operation"] == "MERGE"
+    assert ev["rows"] == 2 and ev["retry"] is False and ev["table_version"] == merge_commits(env["spark"])[0]["version"]
     assert len(merge_commits(spark)) == 1
     published = {r["published_at"] for r in read_records(spark)}
     assert published == {ev["commit_timestamp"]}, "published_at is the observed MERGE commit instant"

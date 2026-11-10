@@ -1,0 +1,71 @@
+name: databricks-live
+
+# Live acceptance on Databricks (Free Edition, serverless) with the service principal stored in
+# the `databricks-free` environment. Expected environment secrets (or variables for the host):
+#   DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET
+# The SP needs USE CATALOG on `featlas` and USE SCHEMA, CREATE TABLE, SELECT, MODIFY on
+# `featlas.synthetic_raw` and `featlas.synthetic_features` (plus CREATE SCHEMA on the catalog if
+# those schemas do not exist yet). All tables created by a run carry the run id and are dropped.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/featlas-adapters/src/databricks.rs"
+      - "crates/featlas-core/src/**"
+      - "python/featlas_databricks/**"
+      - "python/tests/**"
+      - "projects/live/**"
+      - ".github/workflows/databricks-live.yml"
+
+concurrency:
+  group: databricks-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    environment: databricks-free
+    timeout-minutes: 45
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST || vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      FEATLAS_SPARK: databricks
+      TZ: UTC
+    steps:
+      - name: Check required configuration (names only)
+        run: |
+          missing=""
+          [ -n "$DATABRICKS_HOST" ] || missing="$missing DATABRICKS_HOST"
+          [ -n "$DATABRICKS_CLIENT_ID" ] || missing="$missing DATABRICKS_CLIENT_ID"
+          [ -n "$DATABRICKS_CLIENT_SECRET" ] || missing="$missing DATABRICKS_CLIENT_SECRET"
+          if [ -n "$missing" ]; then echo "::error::Missing in environment databricks-free:$missing"; exit 1; fi
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # databricks-connect provides the pyspark client; do not install pyspark alongside it.
+      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 "databricks-connect>=16.4,<18"
+      - run: cargo build --release -p featlas-cli
+      - run: cd python && maturin build --release --out dist && pip install dist/*.whl
+      - name: Record client versions
+        run: |
+          mkdir -p live-evidence
+          python -m pip freeze | grep -iE "databricks|pyspark|featlas|protobuf|grpc" > live-evidence/pip-freeze.txt
+          git rev-parse HEAD > live-evidence/commit.txt
+          sha256sum target/release/fe-spec >> live-evidence/commit.txt
+      - name: Differential suite on Databricks serverless (generated SQL vs goldens and core)
+        run: cd python && FEATLAS_DIFFERENTIAL_REPORT=../live-evidence/databricks-differential.json pytest -q -rA tests/test_local_spark_differential.py
+      - name: Unity Catalog publication suite
+        if: always()
+        run: cd python && FEATLAS_LIVE_REPORT=../live-evidence/databricks-live.json pytest -q -rA tests/test_databricks_live.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: databricks-live-evidence
+          path: live-evidence/

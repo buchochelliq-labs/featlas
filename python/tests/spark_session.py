@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 
 from featlas_databricks.differential import utc_process
@@ -14,8 +15,22 @@ except ImportError:  # pragma: no cover
     HAVE_DELTA = False
 
 
+LIVE = os.environ.get("FEATLAS_SPARK") == "databricks"
+
+
 def get_spark():
+    """Local Spark (default) or, with FEATLAS_SPARK=databricks, Databricks serverless via Databricks Connect.
+
+    Live mode authenticates with the Databricks SDK's unified auth environment variables
+    (DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET); nothing is read here.
+    """
     utc_process()
+    if LIVE:
+        from databricks.connect import DatabricksSession  # type: ignore
+
+        s = DatabricksSession.builder.serverless(True).getOrCreate()
+        s.sql("SET TIME ZONE 'UTC'")
+        return s
     from pyspark.sql import SparkSession
 
     b = (

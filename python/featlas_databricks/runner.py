@@ -214,17 +214,28 @@ class SnapshotRun:
             commit_mid, stored_sequence, stored_rows = row["m"], row["s"], row["n"]
         else:
             rows = self.run_to_snapshot(pub)
-            self.spark.conf.set("spark.databricks.delta.commitInfo.userMetadata", auth.materialization_id)
+            # Best effort: label the commit with the materialization id. Serverless compute may
+            # reject this conf; evidence lookup does not depend on it (change data feed below).
+            labelled = True
+            try:
+                self.spark.conf.set("spark.databricks.delta.commitInfo.userMetadata", auth.materialization_id)
+            except Exception:  # noqa: BLE001
+                labelled = False
             try:
                 self._sql("publish_snapshot", a["publish"]["sql"], dict(self._params(), **pub))
             finally:
-                self.spark.conf.unset("spark.databricks.delta.commitInfo.userMetadata")
+                if labelled:
+                    try:
+                        self.spark.conf.unset("spark.databricks.delta.commitInfo.userMetadata")
+                    except Exception:  # noqa: BLE001
+                        pass
             commit_mid, stored_sequence, stored_rows = auth.materialization_id, auth.publication_sequence, len(rows)
-        history = self._sql("commit_history", a["evidence"][0]["sql"]).collect()
-        commits = [h.asDict() for h in history if h.asDict().get("userMetadata") == commit_mid and h.asDict().get("operation") == "MERGE"]
+        commits = [h.asDict() for h in self._sql("commit_history", a["evidence"][0]["sql"], {"publication_id": auth.publication_id}).collect()]
         if len(commits) != 1:
-            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"Expected exactly one MERGE commit with userMetadata {commit_mid}; found {len(commits)}. published_at stays NULL and replay cannot use this publication.")
+            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"Expected exactly one commit inserting publication {auth.publication_id}; found {len(commits)}. published_at stays NULL and replay cannot use this publication.")
         commit = commits[0]
+        if commit["rows"] != stored_rows:
+            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"The inserting commit holds {commit['rows']} rows but the publication has {stored_rows}; the snapshot was not committed atomically")
         observed = commit["timestamp"]
         self._sql("record_published_at", a["evidence"][1]["sql"], {"observed_commit_timestamp": observed, "publication_id": auth.publication_id})
         micros = self.spark.sql("SELECT unix_micros(:t) AS u", args={"t": observed}).collect()[0]["u"]
@@ -241,8 +252,7 @@ class SnapshotRun:
             "retry_materialization_id": auth.materialization_id if retry else None,
             # Source pins are only known for the run that computed the rows.
             "source_versions": None if retry else self.source_versions,
-            "operation": commit.get("operation"),
-            "operation_metrics": commit.get("operationMetrics"),
+            "evidence_source": "change data feed (table_changes)",
             "approved_by": auth.approved_by,
             "environment": auth.environment,
             "statement_log": self.log,

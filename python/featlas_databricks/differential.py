@@ -18,7 +18,6 @@ from .core import Core
 from .errors import FeatlasError
 from .runner import SnapshotRun, format_instant, parse_instant
 
-_SPARK_TYPES = {"BIGINT": "long", "DOUBLE": "double", "BOOLEAN": "boolean", "STRING": "string", "TIMESTAMP": "timestamp", "DATE": "date"}
 
 
 def utc_process() -> None:
@@ -42,9 +41,12 @@ def _convert(value: Any, spark_type: str) -> Any:
 
 
 def register_source(spark, name: str, spec: dict, rows: list[dict]) -> None:
-    from pyspark.sql.types import StructField, StructType, _parse_datatype_string
+    from pyspark.sql import types as T
 
-    fields = [StructField(c["physical"], _parse_datatype_string(_SPARK_TYPES[c["type"]]), True) for c in spec["columns"]]
+    # Explicit type objects (no JVM-side type parsing, so this also works over Spark Connect).
+    spark_types = {"BIGINT": T.LongType(), "DOUBLE": T.DoubleType(), "BOOLEAN": T.BooleanType(), "STRING": T.StringType(), "TIMESTAMP": T.TimestampType(), "DATE": T.DateType()}
+    fields = [T.StructField(c["physical"], spark_types[c["type"]], True) for c in spec["columns"]]
+    StructType = T.StructType
     data = [tuple(_convert(r.get(c["logical"]), c["type"]) for c in spec["columns"]) for r in rows]
     spark.createDataFrame(data, StructType(fields)).createOrReplaceTempView(name)
 

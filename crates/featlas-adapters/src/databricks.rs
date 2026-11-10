@@ -962,7 +962,17 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         ),
     ]);
     let evidence = vec![
-        Statement { name: "commit_history".into(), purpose: "Read the Delta commit whose userMetadata is this materialization_id; its timestamp is the observed visibility instant".into(), sql: format!("DESCRIBE HISTORY {output_table}"), reads: vec![], view: None },
+        Statement {
+            name: "commit_history".into(),
+            purpose: "Find, through the table's change data feed, the commit(s) that inserted this publication's rows; exactly one is required, and its timestamp is the observed visibility instant. Independent of session confs such as commit userMetadata.".into(),
+            sql: format!(
+                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, 0) WHERE _change_type = 'insert' AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
+                sql_string(&output_table),
+                quote(&mc.publication_id)
+            ),
+            reads: vec![],
+            view: None,
+        },
         Statement {
             name: "record_published_at".into(),
             purpose: "Record observed visibility evidence on the rows of this publication only (never fabricated from schedules or job time)".into(),
@@ -994,7 +1004,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         ("publication_sequence".to_string(), "BIGINT: deterministic original publication order".to_string()),
         ("publication_id".to_string(), "STRING: stable original publication identity".to_string()),
         ("materialization_id".to_string(), "STRING: identity of this write; also the Delta commit userMetadata".to_string()),
-        ("observed_commit_timestamp".to_string(), "TIMESTAMP: timestamp of the Delta commit read from DESCRIBE HISTORY".to_string()),
+        ("observed_commit_timestamp".to_string(), "TIMESTAMP: _commit_timestamp of the commit that inserted the publication (change data feed)".to_string()),
         ("max_as_of".to_string(), "TIMESTAMP: largest as_of among consumer request rows".to_string()),
     ]);
     let notes = vec![
