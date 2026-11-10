@@ -22,6 +22,7 @@ from typing import Any
 from . import describe
 from .analyze import Analysis, Output
 
+ROW_KINDS = ("aggregate", "recency", "lookup")
 CORE_CAPS = ["core.aggregate", "core.expression", "core.revision_reconstruction", "core.as_of_join", "core.source_as_known"]
 AVAILABILITY_HINTS = ("available_at", "ingested_at", "_ingested_at", "loaded_at", "_loaded_at", "_commit_timestamp", "arrival_ts", "received_at", "created_at_ingest")
 REGISTRY_HINTS = ("registry", "dim_", "_dim", "customers", "accounts", "devices", "users", "entities")
@@ -157,13 +158,23 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         return {"project": None, "report": r.to_dict()}
     entity_id = _ident(_decide(decisions, "entity.id", re.sub(r"_id$", "", keys[-1]), "Entity named after its most specific key", r))
     tenant = _decide(decisions, "entity.tenant_key", next((k for k in keys if re.search(r"tenant|org|account", k)), None), "Tenant key detected by name (null = single-tenant)", r)
-    if analysis.window is None:
-        r.ask("window", "No event-time window was found in WHERE (col >= :as_of - INTERVAL ... AND col < :as_of). What window does each feature use?")
+    # Each row-level output uses its own window when it narrows the shared WHERE window.
+    row_outputs = [o for o in analysis.outputs if o.kind in ROW_KINDS]
+    windows = {o.name: o.window or analysis.window for o in row_outputs}
+    if not row_outputs or any(v is None for v in windows.values()):
+        r.ask("window", "No event-time window was found in WHERE (col >= :as_of - INTERVAL ... AND col < :as_of) or in the output's FILTER/CASE. What window does each feature use?", [o.name for o in row_outputs if windows[o.name] is None])
         return {"project": None, "report": r.to_dict()}
-    w = analysis.window
-    if w.lookback_seconds is None:
-        r.ask("window.lookback", "The window has no lower bound; unbounded history is not a portable feature window. Give a lookback.")
+    if any(v.lookback_seconds is None for v in windows.values()):
+        r.ask("window.lookback", "The window has no lower bound; unbounded history is not a portable feature window. Give a lookback.", [n for n, v in windows.items() if v.lookback_seconds is None])
         return {"project": None, "report": r.to_dict()}
+    event_columns = {(v.alias, v.event_column) for v in windows.values()}
+    if len(event_columns) != 1:
+        r.ask("window.event_time", f"Outputs bound different event-time columns {sorted(event_columns)}; a source has one event time. Which column is it?")
+        return {"project": None, "report": r.to_dict()}
+    w = analysis.window or next(iter(windows.values()))
+    for o in analysis.outputs:
+        for n in o.notes:
+            r.assume(f"outputs.{o.name}", "legacy semantics", n)
     # --- population source: one row per entity
     pop_table = decisions.get("population", {}).get("table")
     if pop_table is None:
@@ -211,45 +222,64 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         {"source": pop_sid, "column": pop_event, "roles": ["event_time", "population"], "description": "Population membership time."},
         {"source": pop_sid, "column": pop_avail, "roles": ["availability_time", "population"], "description": "Population availability time."},
     ]
+    lookback_of: dict[str, int] = {}
+    window_of: dict[str, dict] = {}
     for o in analysis.outputs:
-        if o.kind not in ("aggregate", "expression"):
+        if o.kind not in ROW_KINDS + ("expression",):
             continue
         col = describe.column(target, o.name)
         try:
             out_ty = describe.logical_type(col["type"]) if col else None
         except ValueError:
             out_ty = None
-        if o.kind == "aggregate":
+        if o.kind in ROW_KINDS:
+            ow = windows[o.name]
+            window_of[o.name] = {"lookback_seconds": ow.lookback_seconds, "lower": ow.lower, "upper": ow.upper or "exclusive"}
             value = _rename_inputs(o.value, amap)
             vcols = _cols_of(value, set())
             fcols = _cols_of(o.filter, set())
-            used_cols |= vcols | fcols
+            ocols = {x["column"] for x in o.order_by or []}
+            used_cols |= vcols | fcols | ocols
             filt = _rename_inputs(o.filter, amap)
             if shared_filter is not None:
                 filt = shared_filter if filt is None else {"kind": "call", "operator": "and", "args": [shared_filter, filt]}
-            if out_ty is None:
-                vt = describe.logical_type(describe.column(fact, next(iter(vcols)))["type"]) if vcols else "integer"
-                out_ty = {"count": "integer", "count_distinct": "integer", "mean": "number"}.get(o.operation, vt)
-            if o.operation in ("count", "count_distinct") or o.coalesce_zero:
-                empty = {"action": "value", "value": 0 if out_ty == "integer" else 0.0}
-            else:
+            common = {"input": alias, "joins": [], "group_by": [{"input": alias, "column": k, "entity_key": k} for k in keys], "filter": filt}
+            if o.kind == "recency":
+                out_ty = "integer"
                 empty = {"action": "null"}
-            transform = {
-                "kind": "aggregate", "input": alias, "joins": [],
-                "group_by": [{"input": alias, "column": k, "entity_key": k} for k in keys],
-                "filter": filt, "operation": o.operation,
-                "value": value if o.operation not in ("count", "count_distinct") else None,
-                "distinct_by": [value] if o.operation == "count_distinct" else [], "nulls": "ignore",
-            }
+                transform = {"kind": "recency", **common, "event_time": o.event_column, "unit": "second", "rounding": "floor"}
+                missing_null_input = "propagate"
+            elif o.kind == "lookup":
+                if out_ty is None:
+                    out_ty = describe.logical_type(describe.column(fact, next(iter(vcols)))["type"]) if vcols else "string"
+                empty = {"action": "null"}
+                transform = {"kind": "lookup", **common, "value": value, "order_by": [{**x, "input": amap.get(x["input"], x["input"])} for x in o.order_by], "on_tie": "error"}
+                missing_null_input = "propagate"
+            else:
+                if out_ty is None:
+                    vt = describe.logical_type(describe.column(fact, next(iter(vcols)))["type"]) if vcols else "integer"
+                    out_ty = {"count": "integer", "count_distinct": "integer", "mean": "number"}.get(o.operation, vt)
+                if o.operation in ("count", "count_distinct") or o.coalesce_zero:
+                    empty = {"action": "value", "value": 0 if out_ty == "integer" else 0.0}
+                else:
+                    empty = {"action": "null"}
+                transform = {
+                    "kind": "aggregate", **common, "operation": o.operation,
+                    "value": value if o.operation not in ("count", "count_distinct") else None,
+                    "distinct_by": [value] if o.operation == "count_distinct" else [], "nulls": "ignore",
+                }
+                missing_null_input = "ignore"
+            ordering = ocols - {w.event_column}
             lineage_sources = key_lineage + [
-                {"source": fact_sid, "column": w.event_column, "roles": ["event_time"], "description": "Event time bounding the window."},
+                {"source": fact_sid, "column": w.event_column, "roles": ["event_time"] + (["ordering"] if w.event_column in ocols else []), "description": "Event time bounding the window."},
                 {"source": fact_sid, "column": fact_avail, "roles": ["availability_time"], "description": "Availability cutoff."},
-            ] + [{"source": fact_sid, "column": c, "roles": ["value"], "description": f"Aggregated value {c}."} for c in sorted(vcols)] + [
+            ] + [{"source": fact_sid, "column": c, "roles": ["value"], "description": f"{'Looked-up' if o.kind == 'lookup' else 'Aggregated'} value {c}."} for c in sorted(vcols)] + [
+                {"source": fact_sid, "column": c, "roles": ["ordering"], "description": f"Lookup ordering {c}."} for c in sorted(ordering)
+            ] + [
                 {"source": fact_sid, "column": c, "roles": ["filter"], "description": f"Filter column {c}."} for c in sorted(fcols | _cols_of(shared_filter, set()))
             ] + pop_lineage
-            inputs = [{"alias": alias, "source": fact_sid, "columns": sorted(set(keys) | {w.event_column, fact_avail} | vcols | fcols | _cols_of(shared_filter, set()) | set(fact_pk))}]
+            inputs = [{"alias": alias, "source": fact_sid, "columns": sorted(set(keys) | {w.event_column, fact_avail} | vcols | fcols | ocols | _cols_of(shared_filter, set()) | set(fact_pk))}]
             deps: list = []
-            missing_null_input = "ignore"
         else:
             transform = {"kind": "expression", "expression": _rename_feature_refs(o.expression, fid)}
             out_ty = out_ty or "number"
@@ -258,6 +288,9 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
             inputs = []
             deps = [{"feature": fid(d), "version": "1.0.0", "alignment": "same_entity_as_of"} for d in o.depends_on]
             missing_null_input = "propagate"
+            # A derived feature spans the widest window of its inputs.
+            window_of[o.name] = max((window_of[d] for d in o.depends_on if d in window_of), key=lambda x: x["lookback_seconds"], default={"lookback_seconds": w.lookback_seconds, "lower": w.lower, "upper": w.upper or "exclusive"})
+        lookback_of[o.name] = window_of[o.name]["lookback_seconds"]
         desc = (col or {}).get("comment") or f"Reverse-engineered from `{o.sql}` in the legacy feature code."
         feature = {
             "id": fid(o.name), "version": "1.0.0", "name": o.name.replace("_", " ").capitalize(),
@@ -265,16 +298,16 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
             "inputs": inputs, "dependencies": deps,
             "time": {
                 "timezone": "UTC", "knowledge_mode": "source_as_known",
-                "window": {"lookback_seconds": w.lookback_seconds, "lower": w.lower, "upper": w.upper},
+                "window": window_of[o.name],
                 "availability": {"cutoff": "as_of", "upper": "inclusive"},
                 "publication": {"delay_seconds": 0},
             },
             "transform": transform,
-            "output": {"type": out_ty, "nullable": True, "unit": (col or {}).get("tags", {}).get("unit"), "description": desc, "constraints": {}, "numeric_tolerance": {"absolute": 0, "relative": 1e-9 if out_ty == "number" else 0}},
+            "output": {"type": out_ty, "nullable": True, "unit": (col or {}).get("tags", {}).get("unit") or ("second" if o.kind == "recency" else None), "description": desc, "constraints": {"minimum": 0} if o.kind == "recency" else {}, **({"numeric_tolerance": {"absolute": 0, "relative": 1e-9 if out_ty == "number" else 0}} if out_ty in ("integer", "number") else {})},
             "lineage": {"sources": lineage_sources, "dependencies": [{"feature": d["feature"], "version": "1.0.0", "description": "Input of the derived expression."} for d in deps], "code": None},
             "missingness": {"empty": empty, "null_input": missing_null_input, "insufficient_history": "null", "source_unavailable": "null", "execution_failure": "error"},
             "quality": {"checks": [{"kind": "finite", "severity": "error"}] if out_ty in ("integer", "number") else [], "on_violation": "error"},
-            "history": {"required_seconds": w.lookback_seconds, "coverage": "contiguous", "earliest_as_of": earliest},
+            "history": {"required_seconds": lookback_of[o.name], "coverage": "contiguous", "earliest_as_of": earliest},
             "acceptance": {"suites": [f"{fs_id}_characterization"], "description": "Structural and characterization cases drafted by featlas_reverse; goldens of characterization cases are the legacy table's outputs."},
         }
         features.append(feature)
@@ -307,7 +340,7 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         "entities": [entity], "sources": srcs, "relationships": [], "features": features, "feature_sets": [feature_set],
         "consumers": [_consumer(fs_id, entity_id, keys, owner)],
         "deployments": [],
-        "acceptance_suites": [_suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r)],
+        "acceptance_suites": [_suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r, {x["id"]: [c["name"] for c in x["columns"]] for x in srcs})],
     }
     project["deployments"] = [_deployment(decisions, fs_id, entity, srcs, {pop_sid: pop_table, fact_sid: fact_table}, features, target, owner, r)]
     return {"project": project, "report": r.to_dict()}
@@ -340,7 +373,7 @@ def _status(sid: str, start: str, end: str) -> dict:
     return {"source": sid, "state": "available", "coverage_start": start, "coverage_end": end}
 
 
-def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: Report) -> dict:
+def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: Report, source_columns: dict[str, list[str]]) -> dict:
     """Structural case (empty population) for every feature, plus characterization samples."""
     as_of = decisions.get("structural_as_of") or "2026-06-01T00:00:00Z"
     caps = CORE_CAPS
@@ -381,7 +414,8 @@ def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: 
                 "description": "Characterization: the expected values are the legacy feature table's outputs for these entities at this as_of (SEM-TEST-002: independent implementation). Review states (ok/empty) by hand.",
                 "feature": {"id": f["id"], "version": "1.0.0"}, "as_of": s["as_of"],
                 "population_rows": [{k: row[k] for k in keys} for row in s["legacy_rows"]],
-                "source_rows": {pop_sid: s["source_rows"][pop_sid], fact_sid: s["source_rows"][fact_sid]},
+                # Sample rows are projected onto the drafted source contract (only the columns the code reads).
+                "source_rows": {sid: [{c: row.get(c) for c in source_columns[sid]} for row in s["source_rows"][sid]] for sid in (pop_sid, fact_sid)},
                 "context": {"mode": "source_as_known", "capabilities": caps, "source_status": [_status(pop_sid, earliest, s.get("coverage_end", s["as_of"])), _status(fact_sid, earliest, s.get("coverage_end", s["as_of"]))]},
                 "expected": {"rows": rows},
             })

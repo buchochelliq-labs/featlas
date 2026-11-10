@@ -22,13 +22,40 @@ GROUP BY <entity keys>
 
 * Aggregates: `COUNT(*)`, `COUNT(x)`, `COUNT(DISTINCT x)`, `SUM`, `AVG`, `MIN`, `MAX`.
 * Filters per column: `FILTER (WHERE c)`, `CASE WHEN c THEN x END`, or shared `WHERE` conjuncts.
+* **Per-column windows.** A window bound inside a column's filter —
+  `COUNT(*) FILTER (WHERE ts >= :as_of - INTERVAL 7 DAYS)` or
+  `SUM(CASE WHEN ts >= :as_of - INTERVAL 14 DAYS THEN x END)` — becomes that feature's own
+  `time.window`, intersected with the shared `WHERE` window (rows must pass both: the narrower
+  lower bound wins; a wider one is noted). The bound must be on the same event-time column.
+  A bound that ends before `as_of` (`ts < :as_of - INTERVAL 7 DAYS`) has no spec form: windows
+  end at `as_of`; it is reported unsupported.
+* **Recency.** `TIMESTAMPDIFF(SECOND, MAX(ts), :as_of)` becomes `kind: recency` (unit `second`,
+  rounding `floor`, output `integer` with minimum 0, empty window → `null`); a filter on the
+  `MAX` (`FILTER`/`CASE`) becomes the recency filter. `unix_timestamp(:as_of) -
+  unix_timestamp(MAX(ts))` and the `CAST(... AS BIGINT)` form are accepted with a recorded
+  assumption: they floor each side before subtracting, so they equal the spec only when event
+  times are whole seconds. `ts` must be the window's event-time column.
+  `DATEDIFF` (calendar-day boundaries) and `TIMESTAMPDIFF` in other units are unsupported: no
+  spec form reproduces them exactly.
+* **Lookups.** `MAX_BY(value, ts)` / `MIN_BY(value, ts)` become `kind: lookup` with
+  `order_by: [{column: ts, direction: desc|asc}]` and `on_tie: error`. The report records that
+  legacy `MAX_BY` skips rows whose ordering value is null and picks an arbitrary row on ties,
+  where the spec rejects both (`NULL_ORDER_KEY`, `LOOKUP_TIE`); the two agree when the ordering
+  column is non-null and unique per entity in the window.
+* **CTEs.** A CTE of the form `SELECT <columns, expressions or *> FROM <table> [WHERE ...]` is
+  inlined: the reference becomes the table (keeping the outer alias), the CTE's `WHERE` joins the
+  outer `WHERE` (the `ON` clause for a joined CTE), and `expr AS name` projections replace outer
+  references to `name`. Chains of such CTEs resolve in order. A CTE with `GROUP BY`, joins,
+  `DISTINCT`, `LIMIT`, window functions, set operations, or recursion stays and is reported
+  unsupported with the reason.
 * Derived outputs that combine other outputs (`a / b`, `a / NULLIF(b, 0)`, `COALESCE(...)`)
-  become expression features with dependencies.
+  become expression features with dependencies; a derived feature's window is the widest of its
+  inputs'. A derived output over an output that could not be translated is reported too.
 * Interval units `SECOND`, `MINUTE`, `HOUR`, `DAY`, `WEEK` become elapsed seconds.
 * Anything else (non-equi joins, `HAVING`, window functions, UDFs…) is returned in
   `unsupported` with its SQL fragment. The skill tells the agent to translate each by hand
-  (relationships, `recency`/`lookup`, a learned/custom contract) or drop it with a reason — never
-  leave a legacy column silently unmapped.
+  (relationships, a learned/custom contract) or drop it with a reason — never leave a legacy
+  column silently unmapped.
 
 `featlas-reverse analyze <sql>` prints what was understood without drafting.
 
