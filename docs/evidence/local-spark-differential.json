@@ -6,6 +6,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -26,6 +27,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -46,6 +48,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -66,13 +69,13 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": "DUPLICATE_CONFLICT",
       "spark_code": "DUPLICATE_CONFLICT",
       "spark_codes": [
-        "DUPLICATE_CONFLICT",
         "DUPLICATE_CONFLICT"
       ],
       "status": "passed",
-      "reason": "DUPLICATE_CONFLICT (assertion fl_fault_events_ai_primary_key_duplicates)",
+      "reason": "DUPLICATE_CONFLICT (DUPLICATE_CONFLICT: Contract assertion fl_fault_events_ai_primary_key_duplicates returned rows)",
       "project": "01_fault_count.yaml",
       "deployment": "fault_prod"
     },
@@ -81,6 +84,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -101,6 +105,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -121,6 +126,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -141,6 +147,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -161,6 +168,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -257,6 +265,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -277,6 +286,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -297,6 +307,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -317,6 +328,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -337,6 +349,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -357,6 +370,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -377,12 +391,13 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": "MULTIPLE_MATCHES",
       "spark_code": "MULTIPLE_MATCHES",
       "spark_codes": [
         "MULTIPLE_MATCHES"
       ],
       "status": "passed",
-      "reason": "MULTIPLE_MATCHES (assertion fl_feature_device_hot_reading_count_24h_reading_to_device_threshold_multiple_matches)",
+      "reason": "MULTIPLE_MATCHES (MULTIPLE_MATCHES: Contract assertion fl_feature_device_hot_reading_count_24h_reading_to_device_threshold_multiple_matches returned rows)",
       "project": "02_historical_temperature.yaml",
       "deployment": "temperature_prod"
     },
@@ -391,6 +406,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -411,6 +427,7 @@
       "feature": "device.hot_reading_count_24h",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -439,6 +456,7 @@
       "feature": "customer.spend_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -459,6 +477,7 @@
       "feature": "customer.spend_30d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -479,6 +498,7 @@
       "feature": "customer.recent_spend_ratio",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -499,6 +519,7 @@
       "feature": "customer.recent_spend_ratio",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -519,6 +540,7 @@
       "feature": "customer.recent_spend_ratio",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -539,6 +561,7 @@
       "feature": "customer.recent_spend_ratio",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -567,6 +590,7 @@
       "feature": "device.last_fault_age_seconds",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -587,6 +611,7 @@
       "feature": "device.last_fault_age_seconds",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -607,6 +632,7 @@
       "feature": "device.latest_fault_classification",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -627,12 +653,13 @@
       "feature": "device.latest_fault_classification",
       "core": "passed",
       "core_reason": "",
+      "core_code": "LOOKUP_TIE",
       "spark_code": "LOOKUP_TIE",
       "spark_codes": [
         "LOOKUP_TIE"
       ],
       "status": "passed",
-      "reason": "LOOKUP_TIE (assertion fl_feature_device_latest_fault_classification_ties)",
+      "reason": "LOOKUP_TIE (LOOKUP_TIE: Contract assertion fl_feature_device_latest_fault_classification_ties returned rows)",
       "project": "05_lookup_and_recency.yaml",
       "deployment": "lookup_prod"
     },
@@ -641,6 +668,7 @@
       "feature": "device.latest_fault_classification",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -661,6 +689,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -681,6 +710,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -701,6 +731,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -721,13 +752,13 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": "DUPLICATE_CONFLICT",
       "spark_code": "DUPLICATE_CONFLICT",
       "spark_codes": [
-        "DUPLICATE_CONFLICT",
         "DUPLICATE_CONFLICT"
       ],
       "status": "passed",
-      "reason": "DUPLICATE_CONFLICT (assertion fl_fault_events_ai_primary_key_duplicates)",
+      "reason": "DUPLICATE_CONFLICT (DUPLICATE_CONFLICT: Contract assertion fl_fault_events_ai_primary_key_duplicates returned rows)",
       "project": "06_store_migration.yaml",
       "deployment": "fault_prod"
     },
@@ -736,6 +767,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -756,6 +788,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -776,6 +809,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -796,6 +830,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {
@@ -816,6 +851,7 @@
       "feature": "device.fault_count_7d",
       "core": "passed",
       "core_reason": "",
+      "core_code": null,
       "spark_rows": [
         {
           "entity_keys": {

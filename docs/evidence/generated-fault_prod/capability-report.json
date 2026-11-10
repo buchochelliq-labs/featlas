@@ -8,7 +8,7 @@
     "id": "fault_prod",
     "version": "1.0.0"
   },
-  "assessed_at": "2026-11-09T20:34:48Z",
+  "assessed_at": "2026-11-09T22:12:22Z",
   "execution_scope": "external_target",
   "adapters": [
     {

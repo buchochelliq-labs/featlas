@@ -91,7 +91,6 @@ macro_rules! loaded {
     };
 }
 
-
 fn fmt_of(path: &Path) -> featlas_core::parse::Format {
     featlas_core::parse::Format::from_path(&path.to_string_lossy())
 }
@@ -314,7 +313,11 @@ pub fn check_report(report: &Path, project: &Path) -> Result<ExitCode, String> {
         Ok(v) => {
             let ok = v["consistent"] == json!(true);
             print_json(&v);
-            Ok(if ok { ExitCode::SUCCESS } else { ExitCode::from(1) })
+            Ok(if ok {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            })
         }
         Err(e) => emit("check-report", Err(e)),
     }
@@ -391,10 +394,26 @@ pub fn evaluate(path: &Path, case_id: &str, format: OutFormat) -> Result<ExitCod
     })
 }
 
-pub fn coverage(path: &Path, deployment: &str, feature_set: &str, as_of: &str, status: &Path) -> Result<ExitCode, String> {
+pub fn coverage(
+    path: &Path,
+    deployment: &str,
+    feature_set: &str,
+    as_of: &str,
+    status: &Path,
+) -> Result<ExitCode, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let statuses = read_json(status)?;
-    emit("coverage", featlas_api::coverage(&bytes, fmt_of(path), deployment, feature_set, as_of, &statuses))
+    emit(
+        "coverage",
+        featlas_api::coverage(
+            &bytes,
+            fmt_of(path),
+            deployment,
+            feature_set,
+            as_of,
+            &statuses,
+        ),
+    )
 }
 
 pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, String> {
@@ -404,7 +423,13 @@ pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, S
         Err(e) => {
             if let Some(diags) = e.detail.as_array() {
                 for d in diags {
-                    println!("{} {} [{}]: {}", d["severity"].as_str().unwrap_or(""), d["code"].as_str().unwrap_or(""), d["rule"].as_str().unwrap_or(""), d["message"].as_str().unwrap_or(""));
+                    println!(
+                        "{} {} [{}]: {}",
+                        d["severity"].as_str().unwrap_or(""),
+                        d["code"].as_str().unwrap_or(""),
+                        d["rule"].as_str().unwrap_or(""),
+                        d["message"].as_str().unwrap_or("")
+                    );
                 }
             }
             println!("Not generated: {e}");
@@ -417,13 +442,24 @@ pub fn generate(path: &Path, deployment: &str, out: &Path) -> Result<ExitCode, S
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&target, content.as_str().unwrap_or("")).map_err(|e| format!("{}: {e}", target.display()))?;
+        std::fs::write(&target, content.as_str().unwrap_or(""))
+            .map_err(|e| format!("{}: {e}", target.display()))?;
     }
     let mut manifest = gen["manifest"].clone();
     manifest["generator"]["cli"] = json!(env!("CARGO_PKG_VERSION"));
-    manifest["generator"]["executable_sha256"] = json!(featlas_adapters::local::executable_sha256());
-    std::fs::write(out.join("manifest.json"), serde_json::to_string_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
-    println!("Generated {} files under {}; execution_ready={}", files.len() + 1, out.display(), manifest["execution_ready"]);
+    manifest["generator"]["executable_sha256"] =
+        json!(featlas_adapters::local::executable_sha256());
+    std::fs::write(
+        out.join("manifest.json"),
+        serde_json::to_string_pretty(&manifest).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+    println!(
+        "Generated {} files under {}; execution_ready={}",
+        files.len() + 1,
+        out.display(),
+        manifest["execution_ready"]
+    );
     Ok(ExitCode::SUCCESS)
 }
 
@@ -431,7 +467,10 @@ pub fn consume(path: &Path, request: &Path, records: Option<&Path>) -> Result<Ex
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let req = read_json(request)?;
     let recs = records.map(read_json).transpose()?;
-    emit("consume", featlas_api::consume(&bytes, fmt_of(path), &req, recs.as_ref()))
+    emit(
+        "consume",
+        featlas_api::consume(&bytes, fmt_of(path), &req, recs.as_ref()),
+    )
 }
 
 pub fn migration_plan(
@@ -466,5 +505,8 @@ pub fn migration_plan(
 pub fn label(path: &Path, consumer: &str, input: &Path) -> Result<ExitCode, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let li = read_json(input)?;
-    emit("label", featlas_api::labels(&bytes, fmt_of(path), consumer, &li))
+    emit(
+        "label",
+        featlas_api::labels(&bytes, fmt_of(path), consumer, &li),
+    )
 }

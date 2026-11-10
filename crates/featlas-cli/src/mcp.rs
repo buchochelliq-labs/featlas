@@ -67,7 +67,11 @@ fn call(name: &str, args: &Value) -> Value {
         v["ok"] = json!(ok);
         v
     };
-    let format = if args["format"] == "json" { Format::Json } else { Format::Yaml };
+    let format = if args["format"] == "json" {
+        Format::Json
+    } else {
+        Format::Yaml
+    };
     let doc = args["document"].as_str().unwrap_or("").as_bytes();
     let s = |k: &str| args[k].as_str().unwrap_or("").to_string();
     // Same featlas-api functions as the CLI and the Python bindings (transport parity).

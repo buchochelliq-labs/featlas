@@ -11,10 +11,10 @@ SHA-256 `347e812228d72faa5140ea50344bc4dfef8a6772669cc5eaa2411c2031d9d042`).
 | Check | Result |
 | --- | --- |
 | Supplied kit: `verify_bundle.py`, `verify_manifest.py` (Python 3.12, PyYAML 6.0.3, jsonschema 4.26.0, referencing 0.37.0) | PASS: 12 schemas, 7 projects, 50/50 fixtures, 3 adapter cases not executed, 127 tests, manifest 52/52 |
-| `cargo test --release` (rustc 1.97.0) | 62 tests passed, 0 failed |
+| `cargo test --release` (rustc 1.97.0) | 66 tests passed, 0 failed |
 | `fe-spec test` on all 7 examples | 50 passed, 0 failed, 3 not executed (adapter_required suite of example 04) |
 | `fe-spec validate` on 7 examples + 7 derived projects | all PASS (parse, schema, references) |
-| Python bindings (`maturin develop --release`, PyO3 0.30, abi3 ≥3.12) | 15 binding tests passed, including byte-identical fixture results and logical hashes vs the CLI |
+| Python bindings (`maturin develop --release`, PyO3 0.30, abi3 ≥3.12) | 15 binding tests passed, including byte-identical fixture results and logical hashes vs the CLI; full Python suite 69 passed (46 differential, 2 multi-violation, 1 rejection, 5 Delta publication, 15 bindings) |
 | Local Apache Spark differential (`pyspark==4.0.1`, OpenJDK 21, local[1]) | 47 passed: 46 reference cases from projects 01, 02, 03, 05, 06 executed through generated Spark SQL (source-as-known cases) or generated consumer-read SQL + core consumer API (replay cases) and compared with goldens **and** the core; 1 rejection test (custom contract not generated) |
 | Capability reports | positive local (`execution_ready: true`, scope `local_reference`); Databricks `unverified` (scopes `static`/`declaration`, `execution_ready: false`); custom contract `unsupported` |
 | Kit sample report vs example 06 | flagged `REPORT_REQUIRED_CAPABILITY_MISSING` for the planner-derived `core.scheduling` requirement |
@@ -42,7 +42,7 @@ spec. Findings and resolutions:
 | C4 | Label key types not checked | Fixed: `ENTITY_KEY_TYPE`; null request keys rejected |
 | C5 | Label `available_time_column` ignored | Fixed: mismatch is now an error (`LABEL_AVAILABILITY_COLUMN`) |
 | C6 | Join errors masked insufficient history differently from the kit | Fixed: transform stages skipped when coverage is not established; sources still reconstructed; regression test |
-| C7 | Tenant-join check relies on identical column names | **Open** (narrowed claim; documented in findings) |
+| C7 | Tenant-join check relies on identical column names | **Fixed** (follow-up): tenant columns derived from the tenant key's `group_by` mapping and join key pairs; metamorphic test renames the dimension tenant column to `org_id`. Residual limit: pairing the tenant with a non-tenant dimension column of the same type is undetectable without column-level tenant metadata |
 | C8 | Recency could use a non-window column | Fixed: `RECENCY_EVENT_TIME` |
 | C9 | Range checks via lossy i64→f64 | Fixed: exact comparison |
 | C10 | `%YAML` directive accepted; `1e-400` underflow | Fixed: `PARSE_DIRECTIVE`, `PARSE_NUMBER_RANGE` |
@@ -58,8 +58,27 @@ spec. Findings and resolutions:
 | D10 | Commit timestamp string timezone | Fixed: `unix_micros` round trip |
 | D11 | Unavailable population / stale views in reused sessions | Fixed: fail fast `SOURCE_UNAVAILABLE`; drop `fl_*` temp views at prepare |
 | D12 | View-name collisions after sanitizing ids | Fixed: generation error |
-| D13 | First-reported code may differ from the core when several violations co-occur | **Open**; differential harness accepts the expected code among reported codes |
+| D13 | First-reported code may differ from the core when several violations co-occur | **Fixed** (follow-up): one canonical precedence in both engines (see `DECISIONS.md` D8); harness requires Spark's first code to equal the expected code; two multi-violation differential tests |
+
+### Follow-up re-review of the fixes (independent reviewer, frozen commit 4aa5516)
+
+| # | Finding | Resolution |
+| --- | --- | --- |
+| R1 | Integer `mean` widened inputs to binary64 before the exact path (core vs Spark disagreed for values above 2^53) | Fixed: aggregate inputs widen to the value expression's own type; regression `rereview_integer_mean_is_exact` |
+| R2 | An evidence-pending publication outranked a later recorded correction in source-as-known reads | Fixed: live reads order by (as_of, sequence) — the declared tie-breaker — never by missing evidence; replay order unchanged; `rereview_pending_publication_never_outranks_a_later_sequence` |
+| R3 | One unavailable input hid conflicts in another available input (core vs Spark) | Fixed by the canonical-order change (all available sources reconstructed first); `rereview_unavailable_dimension_does_not_hide_fact_conflicts` |
+| R4 | Retry path recomputed before looking up the committed publication; reported the wrong identities; matched on publication_id only | Fixed: lookup first, require one (materialization, sequence, as_of) group matching the request, report the stored identities, source pins only for the computing run; exercised on local Delta (below) |
+| R5 | Stale-view cleanup dropped every `fl_*` view in the session | Fixed: only this artifact's views are dropped |
+| R6 | Per-row re-type-checking cost | Fixed: per-evaluation memo of static types per expression node |
+| R7 | Generated SQL grows quickly for deeply nested number expressions (finite guards repeat sub-expressions) | **Open** (low): bounded by the nesting limit of 24; a CTE/lateral-column rewrite is future work |
+
+**Publication protocol on local Delta Lake** (`python/tests/test_local_delta_publication.py`,
+delta-spark 4.0.0): one MERGE commit per publication, `published_at` equal to the observed MERGE
+commit instant, replay invisible one microsecond before it, idempotent retry with no second commit
+reporting the original identities, identity-conflict rejection, recovery after a crash between
+commit and evidence (live reads serve the pending snapshot; replay does not until evidence is
+recorded), and the table-identity check — 5 tests passing. Unity Catalog constraints, three-part
+names and in-commit timestamps are not exercised locally.
 
 D3, D7, D8, D10 and D11 changes are exercised only partially locally (fixture runs use relation
-overrides, not live Delta tables); they remain part of the open live gate. A follow-up review
-of the fixes was not run in this session.
+overrides, not live Delta tables); they remain part of the open live gate. 

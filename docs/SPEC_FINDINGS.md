@@ -26,8 +26,11 @@ the vendored archive; each is resolved by an explicit implementation decision.
    equal rather than guessing which governs.
 7. **Tenant identity of differently named columns.** The schema marks tenant keys only on
    entities; a source column holding the tenant under another name is not machine-identifiable,
-   so the tenant-join check can only match by name. Limitation recorded; a typed column-level
-   tenant marker would be a language addition.
+   featlas therefore derives tenant columns from each feature's own declarations (the tenant
+   key's `group_by` column, then relationship key pairs along the join chain) and rejects joins
+   that drop the tenant. Residual limit: a relationship that pairs the tenant with a non-tenant
+   dimension column of the same type cannot be detected; a typed column-level tenant marker
+   would be a language addition.
 8. **Kit leniency.** The kit accepts YAML 1.1 plain scalars like `yes` as strings, checks
    interval validity only on key-matched dimension rows, and does not type-check fixture values
    inside expressions beyond Python semantics; featlas is stricter (all examples still pass).

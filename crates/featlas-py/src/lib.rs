@@ -12,7 +12,12 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 use serde_json::Value;
 
-pyo3::create_exception!(_native, FeatlasError, PyException, "A featlas core failure: args are (code, message, detail_json).");
+pyo3::create_exception!(
+    _native,
+    FeatlasError,
+    PyException,
+    "A featlas core failure: args are (code, message, detail_json)."
+);
 
 fn raise(e: api::ApiError) -> PyErr {
     FeatlasError::new_err((e.code.clone(), e.message.clone(), e.detail.to_string()))
@@ -57,13 +62,24 @@ fn plan(py: Python<'_>, document: &[u8], format: &str, deployment: &str) -> PyRe
 
 #[pyfunction]
 #[pyo3(signature = (document, format, deployment, assessed_at=None))]
-fn capabilities(py: Python<'_>, document: &[u8], format: &str, deployment: &str, assessed_at: Option<&str>) -> PyResult<String> {
+fn capabilities(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    deployment: &str,
+    assessed_at: Option<&str>,
+) -> PyResult<String> {
     let f = fmt(format)?;
     out(py.detach(|| api::capabilities(document, f, deployment, assessed_at, Vec::new())))
 }
 
 #[pyfunction]
-fn check_report(py: Python<'_>, report_json: &str, document: &[u8], format: &str) -> PyResult<String> {
+fn check_report(
+    py: Python<'_>,
+    report_json: &str,
+    document: &[u8],
+    format: &str,
+) -> PyResult<String> {
     let f = fmt(format)?;
     let report = json_arg(report_json)?;
     out(py.detach(|| api::check_report(&report, document, f)))
@@ -71,7 +87,12 @@ fn check_report(py: Python<'_>, report_json: &str, document: &[u8], format: &str
 
 #[pyfunction]
 #[pyo3(signature = (document, format, suite=None))]
-fn run_fixtures(py: Python<'_>, document: &[u8], format: &str, suite: Option<&str>) -> PyResult<String> {
+fn run_fixtures(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    suite: Option<&str>,
+) -> PyResult<String> {
     let f = fmt(format)?;
     out(py.detach(|| api::run_fixtures(document, f, suite)))
 }
@@ -83,7 +104,15 @@ fn evaluate_case(py: Python<'_>, document: &[u8], format: &str, case_id: &str) -
 }
 
 #[pyfunction]
-fn coverage(py: Python<'_>, document: &[u8], format: &str, deployment: &str, feature_set: &str, as_of: &str, statuses_json: &str) -> PyResult<String> {
+fn coverage(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    deployment: &str,
+    feature_set: &str,
+    as_of: &str,
+    statuses_json: &str,
+) -> PyResult<String> {
     let f = fmt(format)?;
     let statuses = json_arg(statuses_json)?;
     out(py.detach(|| api::coverage(document, f, deployment, feature_set, as_of, &statuses)))
@@ -92,14 +121,26 @@ fn coverage(py: Python<'_>, document: &[u8], format: &str, deployment: &str, fea
 /// Generate plan, capability report and adapter code in memory (no files written).
 #[pyfunction]
 #[pyo3(signature = (document, format, deployment, generated_at=None))]
-fn generate(py: Python<'_>, document: &[u8], format: &str, deployment: &str, generated_at: Option<&str>) -> PyResult<String> {
+fn generate(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    deployment: &str,
+    generated_at: Option<&str>,
+) -> PyResult<String> {
     let f = fmt(format)?;
     out(py.detach(|| api::generate(document, f, deployment, generated_at)))
 }
 
 #[pyfunction]
 #[pyo3(signature = (document, format, request_json, records_json=None))]
-fn consume(py: Python<'_>, document: &[u8], format: &str, request_json: &str, records_json: Option<&str>) -> PyResult<String> {
+fn consume(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    request_json: &str,
+    records_json: Option<&str>,
+) -> PyResult<String> {
     let f = fmt(format)?;
     let request = json_arg(request_json)?;
     let records = records_json.map(json_arg).transpose()?;
@@ -107,13 +148,25 @@ fn consume(py: Python<'_>, document: &[u8], format: &str, request_json: &str, re
 }
 
 #[pyfunction]
-fn migration_plan(py: Python<'_>, document: &[u8], format: &str, from_deployment: &str, to_deployment: &str) -> PyResult<String> {
+fn migration_plan(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    from_deployment: &str,
+    to_deployment: &str,
+) -> PyResult<String> {
     let f = fmt(format)?;
     out(py.detach(|| api::migration_plan(document, f, from_deployment, to_deployment)))
 }
 
 #[pyfunction]
-fn labels(py: Python<'_>, document: &[u8], format: &str, consumer: &str, input_json: &str) -> PyResult<String> {
+fn labels(
+    py: Python<'_>,
+    document: &[u8],
+    format: &str,
+    consumer: &str,
+    input_json: &str,
+) -> PyResult<String> {
     let f = fmt(format)?;
     let input = json_arg(input_json)?;
     out(py.detach(|| api::labels(document, f, consumer, &input)))

@@ -1,5 +1,8 @@
 name: ci
 on: [push, pull_request]
+# Python tests run via the `pytest` entry point, not `python -m pytest`: the latter puts python/ on
+# sys.path, so the source `featlas/` package (without the compiled _native module) would shadow
+# the installed wheel.
 jobs:
   rust:
     runs-on: ubuntu-latest
@@ -18,7 +21,7 @@ jobs:
       - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3
       - run: cargo build --release -p featlas-cli
       - run: cd python && maturin build --release --out dist && pip install dist/*.whl
-      - run: cd python && python -m pytest -q tests/test_native.py
+      - run: cd python && pytest -q tests/test_native.py
   spark-differential:
     runs-on: ubuntu-latest
     steps:
@@ -31,6 +34,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1
+      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1 delta-spark==4.0.0
       - run: cd python && maturin build --release --out dist && pip install dist/*.whl
-      - run: cd python && PYSPARK_PYTHON=$(which python) python -m pytest -q tests/test_local_spark_differential.py
+      - run: cd python && PYSPARK_PYTHON=$(which python) pytest -q tests/test_local_spark_differential.py tests/test_local_delta_publication.py

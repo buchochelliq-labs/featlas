@@ -108,3 +108,21 @@ collation, ANSI mode and `raise_error` behaviour on the pinned runtime.
 implementation, declared capabilities, a suite with cases for the feature and migration notes.
 No adapter in this release attests a custom/learned implementation, so such deployments are not
 plannable (`UNSUPPORTED_CAPABILITY`). `extensions` are never read by the planner or evaluator.
+
+## D8. Canonical diagnostic precedence (core and generated Spark SQL)
+
+When several contract violations co-occur, both engines report the first of:
+
+1. invalid source rows (sources in id order);
+2. reconstruction of the population source (primary-key duplicates, logical-key conflicts or
+   revision ties), then population duplicates;
+3. reconstruction of every feature's available input sources in plan order (primary input,
+   then join targets);
+4. per feature in dependency order: for each join in order — invalid intervals, null join keys,
+   one-to-one cardinality, multiple matches, unmatched rows (each scanned over all rows); then
+   reduce assertions over population entities — null input, null ordering key, lookup tie;
+   then runtime errors of that feature (overflow, division by zero, non-finite, empty error);
+5. snapshot assembly.
+
+The Python host executes assertions and materializes feature views in exactly this order, and
+the differential harness requires the first code to match.
