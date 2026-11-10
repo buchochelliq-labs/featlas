@@ -38,7 +38,8 @@ def apply_default_scopes() -> None:
     orig = Config.__init__
 
     def init(self, *a, **kw):
-        kw.setdefault("scopes", list(sc))
+        if not kw.get("scopes"):  # clients pass scopes=None explicitly
+            kw["scopes"] = list(sc)
         orig(self, *a, **kw)
         if self.scopes:
             self.as_dict()["scopes"] = tuple(self.scopes)

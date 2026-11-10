@@ -97,7 +97,7 @@ jobs:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST || vars.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
       DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-      DATABRICKS_SCOPES: ${{ vars.DATABRICKS_PLATFORM_SCOPES || 'databricks-connect jobs files unity-catalog pipelines model-serving model-serving-inference' }}
+      DATABRICKS_SCOPES: ${{ vars.DATABRICKS_PLATFORM_SCOPES || 'databricks-connect jobs files unity-catalog pipelines model-serving model-serving-inference mlflow' }}
       FEATLAS_SPARK: databricks
       FEATLAS_PLATFORM: "1"
       # The Feature Engineering client builds an MLflow client: use the workspace, not a local db.

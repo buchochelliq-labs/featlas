@@ -72,8 +72,8 @@ class OnlinePublisher:
             self._w = WorkspaceClient()
         return self._w
 
-    def _step(self, name: str, **kw: Any) -> None:
-        self.log.append({"step": name, "at": format_instant(_now()), **kw})
+    def _step(self, step: str, **kw: Any) -> None:
+        self.log.append({"step": step, "at": format_instant(_now()), **kw})
 
     # --- store and sync -------------------------------------------------------------------------
 

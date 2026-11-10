@@ -293,7 +293,7 @@ workflow), one run at a time, 45-minute timeout, GitHub environment `databricks-
 On `workflow_dispatch` (input `platform`, default true) a second job, `platform`, runs
 `tests/test_databricks_platform.py` against the same workspace with OAuth scopes from the
 environment variable `DATABRICKS_PLATFORM_SCOPES` (default `databricks-connect jobs files
-unity-catalog pipelines model-serving model-serving-inference`). The service principal's secret
+unity-catalog pipelines model-serving model-serving-inference mlflow`; the Feature Engineering client uses MLflow). The service principal's secret
 must allow those scopes, and the principal needs `CREATE VOLUME`, `READ VOLUME`, `WRITE VOLUME`
 and `CREATE FUNCTION` on `featlas.synthetic_raw` / `featlas.synthetic_features` in addition to
 the grants above. It builds an aarch64 (manylinux 2_28) and an x86_64 wheel, then:
