@@ -6,6 +6,7 @@ edition.workspace = true
 # rs-rich needs Rust 1.90; the libraries and Python bindings keep the workspace minimum.
 rust-version = "1.90"
 license.workspace = true
+publish = false
 
 [[bin]]
 name = "fe-spec"

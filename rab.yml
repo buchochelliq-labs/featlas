@@ -1,0 +1,76 @@
+# rab, the Release Asset Bundle (https://github.com/buchochelliq-labs/release-asset-bundle):
+# every package this repository publishes, its version, and the order to publish in. The kit is
+# installed under .github/rab/ (reinstall to update, never edit it).
+#
+#   python3 .github/rab/scripts/release.py check      CI: this file matches every manifest
+#   python3 .github/rab/scripts/release.py sync       copy bumped versions in from the manifests
+#   python3 .github/rab/scripts/release.py status     what is published, tagged or due
+#   python3 .github/rab/scripts/release.py tag        tag the release on main and wait for its run
+#
+# Nothing is published until someone runs `release.py tag` on main. The workspace crates are
+# not published to crates.io; they ship inside these two packages.
+
+release:
+  name_from: fe-spec
+
+packages:
+  # The fe-spec CLI (and its MCP stdio server) as binaries on a GitHub release.
+  - name: fe-spec
+    registry: github
+    manifest: crates/featlas-cli/Cargo.toml
+    version: "0.1.0"
+    tag: "fe-spec-v{version}"
+    checksums: SHA256SUMS
+    attest: true
+    paths:
+      - "crates/featlas-core/**"
+      - "crates/featlas-adapters/**"
+      - "crates/featlas-api/**"
+      - "crates/featlas-cli/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "README.md"
+    artifacts:
+      - kind: rust-binary
+        bin: fe-spec
+        crate: featlas-cli
+        include: [README.md]
+        test:
+          run: |
+            set -euo pipefail
+            tar -xzf "$FILES" -C "$RUNNER_TEMP"
+            b="$RUNNER_TEMP/fe-spec-v$VERSION-$TARGET/fe-spec"
+            "$b" --version | grep -F "$VERSION"
+            "$b" test spec/feature-engineering-spec-v0.2.0/examples/01_fault_count.yaml --format json > /dev/null
+          targets: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin]
+
+  # The Python package: PyO3 bindings (featlas._native, abi3, CPython >= 3.12) and the thin
+  # featlas_databricks host.
+  - name: featlas
+    registry: pypi
+    manifest: python/pyproject.toml
+    version: "0.1.0"
+    tag: "python-v{version}"
+    paths:
+      - "python/featlas/**"
+      - "python/featlas_databricks/**"
+      - "python/pyproject.toml"
+      - "crates/featlas-core/**"
+      - "crates/featlas-adapters/**"
+      - "crates/featlas-api/**"
+      - "crates/featlas-py/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+    artifacts:
+      - kind: maturin
+        targets:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-msvc
+        test:
+          run: |
+            set -euo pipefail
+            python -m pip install "$DIST"/featlas-*.whl
+            cd "$RUNNER_TEMP" && python -c "import featlas, featlas_databricks; print(featlas.Project)"
+          targets: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-pc-windows-msvc]

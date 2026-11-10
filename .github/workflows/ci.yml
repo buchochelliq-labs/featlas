@@ -1,19 +1,45 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # The release run (release.yml, rab) calls this workflow on the tagged commit.
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+permissions:
+  contents: read
 # Python tests run via the `pytest` entry point, not `python -m pytest`: the latter puts python/ on
 # sys.path, so the source `featlas/` package (without the compiled _native module) would shadow
 # the installed wheel.
 jobs:
+  release-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - run: python3 -m pip install --quiet pyyaml
+      - run: python3 .github/rab/scripts/release.py check
+      - run: python3 .github/rab/scripts/release.py vendored
   rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --release
   python-bindings:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
@@ -26,6 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:

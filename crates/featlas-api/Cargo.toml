@@ -4,6 +4,7 @@ description = "Transport-neutral JSON API over the featlas core and adapters (us
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 featlas-core = { path = "../featlas-core" }

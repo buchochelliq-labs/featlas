@@ -88,3 +88,12 @@ cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) pytest 
 # Regenerate docs/evidence (KIT_PYTHON / SPARK_PYTHON optional):
 ./tools/make_evidence.sh
 ```
+
+## Releases
+
+Releases use [rab, the Release Asset Bundle](https://github.com/buchochelliq-labs/release-asset-bundle)
+(installed under `.github/rab/`; reinstall to update, never edit). `rab.yml` declares two packages:
+the `fe-spec` binaries on a GitHub release and the `featlas` wheels on PyPI (the workspace crates
+are `publish = false`). CI runs `release.py check` and `release.py vendored`. Nothing is
+published until someone runs `python3 .github/rab/scripts/release.py tag` on `main`, after the
+`pypi` environment's trusted publisher is set up.
