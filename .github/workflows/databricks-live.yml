@@ -3,6 +3,8 @@ name: databricks-live
 # Live acceptance on Databricks (Free Edition, serverless) with the service principal stored in
 # the `databricks-free` environment. Expected environment secrets (or variables for the host):
 #   DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET
+# Optional environment variable DATABRICKS_SCOPES: the OAuth scopes the SP secret is bound to
+# (space separated). Without it the SDK requests `all-apis`, which a scoped secret rejects.
 # The SP needs USE CATALOG on `featlas` and USE SCHEMA, CREATE TABLE, SELECT, MODIFY on
 # `featlas.synthetic_raw` and `featlas.synthetic_features` (plus CREATE SCHEMA on the catalog if
 # those schemas do not exist yet). All tables created by a run carry the run id and are dropped.
@@ -34,6 +36,7 @@ jobs:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST || vars.DATABRICKS_HOST }}
       DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
       DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      DATABRICKS_SCOPES: ${{ vars.DATABRICKS_SCOPES }}
       FEATLAS_SPARK: databricks
       TZ: UTC
     steps:
@@ -44,6 +47,7 @@ jobs:
           [ -n "$DATABRICKS_CLIENT_ID" ] || missing="$missing DATABRICKS_CLIENT_ID"
           [ -n "$DATABRICKS_CLIENT_SECRET" ] || missing="$missing DATABRICKS_CLIENT_SECRET"
           if [ -n "$missing" ]; then echo "::error::Missing in environment databricks-free:$missing"; exit 1; fi
+          echo "Requested OAuth scopes: ${DATABRICKS_SCOPES:-all-apis (SDK default)}"
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5

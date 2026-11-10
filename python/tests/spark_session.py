@@ -22,13 +22,19 @@ def get_spark():
     """Local Spark (default) or, with FEATLAS_SPARK=databricks, Databricks serverless via Databricks Connect.
 
     Live mode authenticates with the Databricks SDK's unified auth environment variables
-    (DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET); nothing is read here.
+    (DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET); no credential is read here.
+    The SDK requests the OAuth scope ``all-apis`` unless scopes are set explicitly and has no
+    environment variable for them, so DATABRICKS_SCOPES (space/comma separated, non-secret) is
+    passed through for service-principal secrets bound to narrower scopes.
     """
     utc_process()
     if LIVE:
         from databricks.connect import DatabricksSession  # type: ignore
+        from databricks.sdk.core import Config  # type: ignore
 
-        s = DatabricksSession.builder.serverless(True).getOrCreate()
+        scopes = [s for s in os.environ.get("DATABRICKS_SCOPES", "").replace(",", " ").split() if s]
+        cfg = Config(serverless_compute_id="auto", **({"scopes": scopes} if scopes else {}))
+        s = DatabricksSession.builder.sdkConfig(cfg).getOrCreate()
         s.sql("SET TIME ZONE 'UTC'")
         return s
     from pyspark.sql import SparkSession
