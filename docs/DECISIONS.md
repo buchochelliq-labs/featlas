@@ -188,3 +188,53 @@ duplicated run of the same slot takes the host's retry path and writes nothing n
 created **paused**: deploying the bundle authorizes nothing; unpausing it is the publication
 approval. Deployment and runs have not been observed live (the capability stays `unverified`).
 
+
+## D15. Online store targets on Databricks (SEM-PORT-005, SEM-PORT-009, core.online_publication)
+
+An `online_store` output target is a single-surface deployment of its own (the offline replay
+history stays on the `offline_snapshot` deployment). The snapshot is computed exactly as for the
+offline table and staged by **one** Delta MERGE in a Unity Catalog feature table keyed by the
+entity keys plus `as_of TIMESERIES` (change data feed on): newer rows update, new entities
+insert, entities absent from a newer complete snapshot are deleted, a retry changes nothing, and
+an older snapshot is refused before computing (`SNAPSHOT_SUPERSEDED`). `featlas_databricks.online`
+then publishes the staging table to a Databricks Online Feature Store (`publish_table`,
+TRIGGERED) and observes visibility through a Feature Serving endpoint over a FeatureSpec of the
+staging table: `published_at` is the first instant at which every sampled key serves this
+publication's `publication_id`. The staging commit, a sync-pipeline success or a job end is never
+recorded as online visibility. Resource creation (store, online table, FeatureSpec, endpoint)
+needs explicit authorization. `core.serving_replay` on the online role is `unsupported`.
+Databricks documents that online stores need Lakebase without scale-to-zero while Free Edition's
+single Lakebase project is scale-to-zero; whether Free Edition accepts an online store is
+therefore an observation of the live platform run, not an assumption.
+
+## D16. Feature Views or Unity Catalog feature tables (adapter configuration `feature_api`)
+
+`feature_api: uc_feature_tables` computes and publishes every feature with generated Spark SQL.
+`feature_api: feature_views` additionally emits `databricks/<feature_set>/feature_views.json`:
+per member feature, an exact Feature View definition or the reasons it stays on the feature
+table. A feature maps only when the Feature View computes the same value: one append-only source
+without revisions or tombstones whose availability time **is** its event time (Feature Views
+select rows by event time; with a separate availability column, late rows would be counted), a
+`[as_of - lookback, as_of)` window (`RollingWindow`), no joins, `Count` (of a non-nullable key
+column) / `Sum` / `Avg` / `Min` / `Max` over a plain column with nulls ignored, or a lookup ordered
+by the event time (`Last` / `First`; ties are a recorded assumption because the spec fails on
+them), a spec filter lowered to `filter_condition`, and non-temporal entity keys. Distinct counts
+(only `ApproxCountDistinct` exists), recency, derived expressions, joins and custom/learned
+features never map. Feature states, quality policies and publication evidence are not represented
+by Feature Views and stay with featlas. Values are compared live (`create_training_set` against
+featlas' own snapshot) before relying on them; an empty window served as null where the spec
+declares a value is reported separately, never counted as equal.
+
+## D17. Feast as a store (dev.featlas:feast@0.1.0)
+
+Feast stores and retrieves; it does not compute. A Feast deployment computes snapshots with the
+Spark SQL lowering and `featlas_feast` publishes them: one parquet file per publication renamed
+into the feature view's source directory (a reader sees all of it or none), `published_at`
+observed by reading the publication back through Feast and kept beside the data, one publication
+per `as_of` (Feast cannot break ties between equal timestamps deterministically without a
+non-null created timestamp), feature view TTL = the bound consumer's `max_staleness_seconds`.
+Feast's point-in-time join and the featlas consumer API over the same records select the same
+publication (tested at, between, before and beyond publications). Online: `materialize` and
+`get_online_features`; Feast writes online rows in batches, so atomic online publication is
+`unverified`. Historical serving replay is `unsupported` (the join cannot filter by visibility).
+Evidence scope is `local_reference` (file offline store, SQLite online store).

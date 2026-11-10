@@ -17,13 +17,14 @@ unless you pass explicit publication flags.
 ## Adapter and configuration
 
 Deployments select `dev.featlas:databricks@0.1.0` with roles `compute`, `catalog`,
-`offline_store` and (declared only) `orchestrator`. Its configuration schema
+`offline_store`, `online_store` and `orchestrator`. Its configuration schema
 (`crates/featlas-adapters/src/databricks.rs`) requires:
 
 | Key | Value |
 | --- | --- |
 | `connection_profile` | Name of an externally managed Databricks unified-auth profile (pattern `^[A-Za-z0-9_.-]{1,64}$`); never a credential |
-| `feature_api` | `uc_feature_tables` (Unity Catalog feature tables via generated Spark SQL; Feature Views are not used) |
+| `feature_api` | `uc_feature_tables` (every feature on a Unity Catalog feature table) or `feature_views` (additionally, exact Feature View definitions for the features that map; see [Stores and feature APIs](stores.md#feature-views-feature_api-feature_views)) |
+| `online_store` (optional) | `{name, capacity, serving_endpoint}` of the Databricks Online Feature Store used by `online_store` targets ([Stores](stores.md#online-feature-store-and-feature-serving-role-online_store)) |
 | `execution` (optional) | `databricks_connect` or `spark_session` |
 
 Binding preflight (`check_bindings`) requires table locations with a two-part
@@ -286,6 +287,29 @@ workflow), one run at a time, 45-minute timeout, GitHub environment `databricks-
    (`FEATLAS_SPARK=databricks`), writing `databricks-differential.json`;
 5. run `tests/test_databricks_live.py`, writing `databricks-live.json`;
 6. upload `live-evidence/` as the artifact `databricks-live-evidence`.
+
+### The platform job
+
+On `workflow_dispatch` (input `platform`, default true) a second job, `platform`, runs
+`tests/test_databricks_platform.py` against the same workspace with OAuth scopes from the
+environment variable `DATABRICKS_PLATFORM_SCOPES` (default `databricks-connect jobs files
+unity-catalog pipelines model-serving model-serving-inference`). The service principal's secret
+must allow those scopes, and the principal needs `CREATE VOLUME`, `READ VOLUME`, `WRITE VOLUME`
+and `CREATE FUNCTION` on `featlas.synthetic_raw` / `featlas.synthetic_features` in addition to
+the grants above. It builds an aarch64 (manylinux 2_28) and an x86_64 wheel, then:
+
+* **scheduled job** — creates the generated `databricks/job.yml` of `fault_job` through the Jobs
+  API (`featlas_databricks.jobs.job_settings` substitutes only the bundle variables: wheel and
+  project in a Unity Catalog volume, source-status table), runs it once on demand, unpauses it
+  for one 5-minute slot to observe a `PERIODIC` run, pauses and deletes it, and checks the
+  slot-derived publications and their equality with an interactive run;
+* **online** — stages `fault_online`, publishes to the Online Feature Store `featlas-free`,
+  observes the publication at a Feature Serving endpoint and removes the endpoint, FeatureSpec,
+  online table and store;
+* **Feature Views** — compares `create_training_set` values of the mapped features with featlas'
+  snapshot on run-unique tables.
+
+Each step and any platform refusal is recorded in `platform-evidence/databricks-platform.json`.
 
 ## Evidence of run 42771706619
 
