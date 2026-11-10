@@ -1,0 +1,103 @@
+{
+  "table": "main.sales.orders",
+  "comment": "One row per order line event; corrections arrive as new rows with a later ingested_at.",
+  "owner": "sales-data",
+  "primary_key": [
+    "order_id"
+  ],
+  "tags": {
+    "domain": "sales"
+  },
+  "columns": [
+    {
+      "name": "order_id",
+      "type": "string",
+      "comment": "Order identifier.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "comment": "Tenant owning the order.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "comment": "Customer placing the order.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "ordered_at",
+      "type": "timestamp",
+      "comment": "When the order was placed.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "ingested_at",
+      "type": "timestamp",
+      "comment": "When the order row landed in the lakehouse.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "comment": "settled, pending, cancelled or returned.",
+      "nullable": true,
+      "tags": {}
+    },
+    {
+      "name": "amount_cents",
+      "type": "bigint",
+      "comment": "Order value in cents.",
+      "nullable": true,
+      "tags": {
+        "unit": "cents"
+      }
+    },
+    {
+      "name": "discount_cents",
+      "type": "bigint",
+      "comment": "Discount applied in cents.",
+      "nullable": true,
+      "tags": {
+        "unit": "cents"
+      }
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "comment": "web or store.",
+      "nullable": true,
+      "tags": {}
+    },
+    {
+      "name": "payment_method",
+      "type": "string",
+      "comment": "card, wallet or invoice.",
+      "nullable": true,
+      "tags": {}
+    },
+    {
+      "name": "shipping_days",
+      "type": "bigint",
+      "comment": "Days from order to delivery.",
+      "nullable": true,
+      "tags": {
+        "unit": "days"
+      }
+    },
+    {
+      "name": "is_test",
+      "type": "boolean",
+      "comment": "Synthetic test order.",
+      "nullable": false,
+      "tags": {}
+    }
+  ]
+}

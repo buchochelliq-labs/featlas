@@ -151,6 +151,17 @@ def test_2_publish_creates_uc_feature_table_and_records_evidence(env):
     pk = env["spark"].sql(f"SHOW CREATE TABLE {env['art']['output_table']}").collect()[0][0]
     REPORT["steps"]["primary_key_declared"] = "PRIMARY KEY" in pk.upper() and "TIMESERIES" in pk.upper()
     assert REPORT["steps"]["primary_key_declared"]
+    assert ev["budget"]["scan_bytes_upper_bound"] > 0 and ev["budget"]["scan_bytes_upper_bound"] <= ev["budget"]["max_scan_bytes"]
+    REPORT["steps"]["budget"] = ev["budget"]
+
+
+def test_8_retention_contract_is_checked_against_the_tables(env):
+    """The live project declares history back to 2026-01-01 for both sources; the seeded
+    fault_events rows start in June, so retention is reported as unproven (a warning: a later
+    first row does not show deletion), and nothing blocks."""
+    problems = run(env).retention_preflight()
+    REPORT["steps"]["retention_preflight"] = problems
+    assert [(p["code"], p["severity"], p["source"]) for p in problems] == [("RETENTION_UNPROVEN", "warning", "fault_events")]
 
 
 def test_3_consumer_reads_and_replay_visibility(env):

@@ -232,3 +232,34 @@ fn conflicting_label_revisions_fail() {
         "DUPLICATE_CONFLICT"
     );
 }
+
+/// The shared JSON goldens (also run on Spark by python/tests/test_local_spark_differential.py).
+#[test]
+fn shared_label_goldens() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(root.join("projects/labels/spend_training_dataset.json")).unwrap()).unwrap();
+    let p = load_path(&root.join(doc["project"].as_str().unwrap())).unwrap().0.unwrap().project;
+    for case in doc["cases"].as_array().unwrap() {
+        let mut source_rows = doc["source_rows"].as_array().unwrap().clone();
+        if let Some(extra) = case["extra_source_rows"].as_array() {
+            source_rows.extend(extra.iter().cloned());
+        }
+        let input: LabelInput = serde_json::from_value(json!({"rows": case["rows"], "source_rows": source_rows, "source_status": case["source_status"]})).unwrap();
+        let got = build_labels(&p, doc["consumer"].as_str().unwrap(), &input, &Limits::default());
+        let want = &case["expected"];
+        let id = case["id"].as_str().unwrap();
+        match (got, want.get("diagnostic")) {
+            (Err(e), Some(d)) => assert_eq!(json!(e.code), d["code"], "{id}"),
+            (Ok(ds), None) => {
+                let rows: Vec<Value> = ds.rows.iter().map(|r| json!({"request_index": r.request_index, "value": r.value, "state": r.state, "eligible_rows": r.eligible_rows})).collect();
+                assert_eq!(json!(rows), want["rows"], "{id}");
+                assert_eq!(ds.excluded.len(), want["excluded"].as_array().unwrap().len(), "{id}");
+                for (x, w) in ds.excluded.iter().zip(want["excluded"].as_array().unwrap()) {
+                    assert_eq!(json!(x.request_index), w["request_index"], "{id}");
+                    assert!(x.reason.contains(w["reason_contains"].as_str().unwrap()), "{id}: {}", x.reason);
+                }
+            }
+            (got, _) => panic!("{id}: {got:?} vs {want}"),
+        }
+    }
+}

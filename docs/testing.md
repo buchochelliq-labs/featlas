@@ -1,0 +1,73 @@
+# Testing and evidence
+
+**In plain terms:** featlas is tested against answers that people worked out by hand (the
+"goldens" shipped with the specification and a few added here). The same cases run through the
+Rust core, through the Python bindings and through the generated Spark SQL, and everything must
+agree. Test results that matter for a release are saved under `docs/evidence/`, tied to the exact
+commit and binary that produced them.
+
+## Suites
+
+| Suite | Command | What it covers |
+| --- | --- | --- |
+| Rust unit and integration tests | `cargo test --release` | Parser, time, values, expressions, canonical form (unit tests in `crates/featlas-core/src/*.rs`); `crates/featlas-core/tests/examples.rs` (all examples parse/validate; reference fixtures match goldens), `negative.rs` (negative cases with expected codes), `labels.rs` (label rules and shared label goldens); `crates/featlas-adapters/tests/rebinding.rs` (vendor-free core, logical identity under rebinding, store round trip); `crates/featlas-adapters/src/databricks_caps.rs` tests (lock consistency, evidence digests); `crates/featlas-cli/tests/cli.rs` (CLI and MCP) |
+| Python bindings | `cd python && pytest -q tests/test_native.py` | Module metadata, goldens through the bindings, typed errors with locations, exact file digests, logical identities under rebinding, in-memory generate, capabilities and labels, restricted JSON, transport parity with the CLI |
+| Local Spark differential | `cd python && PYSPARK_PYTHON=$(which python) pytest -q tests/test_local_spark_differential.py` | Reference cases of projects 01, 02, 03, 05, 06 and the three `projects/quality/` projects through the generated Spark SQL, compared with goldens **and** the core (values, states, first diagnostic, quality warnings); multi-violation precedence; custom-contract rejection; quarantine/warn host behaviour; label goldens through generated label SQL |
+| Local Delta publication | `pytest -q tests/test_local_delta_publication.py` | Publication protocol on delta-spark 4.0.0: one MERGE, commit-instant `published_at`, replay visibility, idempotent retry, identity conflict, crash recovery, table identity, evidence lookup over retained commits only |
+| Reverse engineering | `pytest -q tests/test_reverse.py tests/test_reverse_mcp.py` | [Reverse engineering → Evidence](reverse/index.md#evidence) |
+| Live Databricks | `.github/workflows/databricks-live.yml` | The differential suite on Databricks serverless and `tests/test_databricks_live.py` (Unity Catalog publication) — [Databricks guide](guides/databricks.md#the-live-workflow) |
+
+`tests/test_databricks_live.py` is skipped unless `FEATLAS_SPARK=databricks`;
+`tests/test_reverse.py` is skipped in live mode. Spark tests need Java 17+ (CI uses Temurin 21)
+and `pyspark==4.0.1`; Delta tests need `delta-spark==4.0.0`.
+
+!!! tip "Run pytest from `python/` with the extension built in place"
+    CI installs the wheel and runs the `pytest` entry point rather than `python -m pytest`,
+    because `python -m` would put `python/` on `sys.path` and the source `featlas/` package
+    (without the compiled `_native` module) would shadow the wheel (`ci.yml` comment).
+    `maturin develop --release` builds the extension into the source tree and avoids this.
+
+## CI (`.github/workflows/ci.yml`)
+
+| Job | Runs |
+| --- | --- |
+| `release-config` | `release.py check`, `release.py vendored`, `cmp LICENSE python/LICENSE` |
+| `rust` | `cargo test --release` |
+| `python-bindings` | build the CLI and wheel; `pytest -q tests/test_native.py tests/test_reverse_mcp.py` |
+| `spark-differential` | Java 21, pyspark 4.0.1, delta-spark 4.0.0, sqlglot; `pytest -q tests/test_local_spark_differential.py tests/test_local_delta_publication.py tests/test_reverse.py` |
+| `docs` | `zensical build --strict` for this site |
+
+The workflow also runs as `workflow_call` with a `ref` input, which the release workflow uses to
+test the tagged commit.
+
+## How goldens work
+
+* Golden expectations are read from the project and **never regenerated** by featlas
+  (`crates/featlas-core/src/fixtures.rs`, SEM-TEST-002). Changing the implementation must not
+  rewrite them.
+* Cases in `adapter_required` suites, or needing capabilities the evaluator lacks, are
+  `not_executed` with a reason, and are never counted as passes (SEM-CONF-001).
+* A case asserts either rows (full entity key, value, state) or a diagnostic code; a different
+  code is a failure.
+* Metamorphic checks (a future-available row must not change an earlier result; adding a tenant
+  must not change another tenant) are in `temporal_boundary_metamorphic_checks` and the tenant
+  tests (TRACEABILITY SEM-TEST-002).
+* Goldens added in this repository are hand-reasoned and documented in their generators:
+  `projects/quality/derive.py` (tenant_a 1 fault, tenant_b 2, range maximum 1) and
+  `projects/labels/spend_training_dataset.json`.
+* `projects/*.yaml` and `projects/live/*.yaml` are generated by `projects/derive.py` from the
+  vendored examples and copy their goldens unchanged.
+
+## Evidence files
+
+`tools/make_evidence.sh` regenerates `docs/evidence/` from the current checkout:
+`candidate.txt` (commit, dirty-file count, rustc, `fe-spec` version and SHA-256, `Cargo.lock`
+SHA-256, and with Spark the `_native` SHA-256), `cargo-test.txt`, fixture results per example,
+`validate.txt`, hashes, three capability reports, the kit sample-report check, the rejected
+synthetic-pin plan, the migration plan, `generated-fault_prod/`, optionally the kit verification
+(`KIT_PYTHON`) and the Python/Spark run (`SPARK_PYTHON`), and finally `SHA256SUMS`. Live evidence
+lives in `docs/evidence/databricks-live/` and is pinned by digest in the adapter lock.
+
+The recorded results and independent review resolutions are in [EVIDENCE.md](EVIDENCE.md); the
+rule-by-rule matrix is [TRACEABILITY.md](TRACEABILITY.md). Both predate quality policies, Spark
+labels and reverse engineering ([Status](status.md)).

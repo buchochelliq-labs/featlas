@@ -1,0 +1,110 @@
+{
+  "mapping": {
+    "web_orders_30d": {
+      "table": "main.features.customer_wide_featlas_channel",
+      "column": "web_orders_30d",
+      "state_column": "web_orders_30d_state",
+      "feature": "customer.web_orders_30d",
+      "group": "channel"
+    },
+    "store_orders_30d": {
+      "table": "main.features.customer_wide_featlas_channel",
+      "column": "store_orders_30d",
+      "state_column": "store_orders_30d_state",
+      "feature": "customer.store_orders_30d",
+      "group": "channel"
+    },
+    "web_share_30d": {
+      "table": "main.features.customer_wide_featlas_channel",
+      "column": "web_share_30d",
+      "state_column": "web_share_30d_state",
+      "feature": "customer.web_share_30d",
+      "group": "channel"
+    },
+    "max_shipping_days_30d": {
+      "table": "main.features.customer_wide_featlas_fulfilment",
+      "column": "max_shipping_days_30d",
+      "state_column": "max_shipping_days_30d_state",
+      "feature": "customer.max_shipping_days_30d",
+      "group": "fulfilment"
+    },
+    "avg_shipping_days_30d": {
+      "table": "main.features.customer_wide_featlas_fulfilment",
+      "column": "avg_shipping_days_30d",
+      "state_column": "avg_shipping_days_30d_state",
+      "feature": "customer.avg_shipping_days_30d",
+      "group": "fulfilment"
+    },
+    "card_payments_30d": {
+      "table": "main.features.customer_wide_featlas_payments",
+      "column": "card_payments_30d",
+      "state_column": "card_payments_30d_state",
+      "feature": "customer.card_payments_30d",
+      "group": "payments"
+    },
+    "wallet_payments_30d": {
+      "table": "main.features.customer_wide_featlas_payments",
+      "column": "wallet_payments_30d",
+      "state_column": "wallet_payments_30d_state",
+      "feature": "customer.wallet_payments_30d",
+      "group": "payments"
+    },
+    "orders_30d": {
+      "table": "main.features.customer_wide_featlas_purchasing",
+      "column": "orders_30d",
+      "state_column": "orders_30d_state",
+      "feature": "customer.orders_30d",
+      "group": "purchasing"
+    },
+    "distinct_orders_30d": {
+      "table": "main.features.customer_wide_featlas_purchasing",
+      "column": "distinct_orders_30d",
+      "state_column": "distinct_orders_30d_state",
+      "feature": "customer.distinct_orders_30d",
+      "group": "purchasing"
+    },
+    "returns_30d": {
+      "table": "main.features.customer_wide_featlas_returns",
+      "column": "returns_30d",
+      "state_column": "returns_30d_state",
+      "feature": "customer.returns_30d",
+      "group": "returns"
+    },
+    "return_rate_30d": {
+      "table": "main.features.customer_wide_featlas_returns",
+      "column": "return_rate_30d",
+      "state_column": "return_rate_30d_state",
+      "feature": "customer.return_rate_30d",
+      "group": "returns"
+    },
+    "settled_spend_30d": {
+      "table": "main.features.customer_wide_featlas_revenue",
+      "column": "settled_spend_30d",
+      "state_column": "settled_spend_30d_state",
+      "feature": "customer.settled_spend_30d",
+      "group": "revenue"
+    },
+    "avg_order_value_30d": {
+      "table": "main.features.customer_wide_featlas_revenue",
+      "column": "avg_order_value_30d",
+      "state_column": "avg_order_value_30d_state",
+      "feature": "customer.avg_order_value_30d",
+      "group": "revenue"
+    },
+    "max_order_value_30d": {
+      "table": "main.features.customer_wide_featlas_revenue",
+      "column": "max_order_value_30d",
+      "state_column": "max_order_value_30d_state",
+      "feature": "customer.max_order_value_30d",
+      "group": "revenue"
+    },
+    "discount_30d": {
+      "table": "main.features.customer_wide_featlas_revenue",
+      "column": "discount_30d",
+      "state_column": "discount_30d_state",
+      "feature": "customer.discount_30d",
+      "group": "revenue"
+    }
+  },
+  "compatibility_view_sql": "-- Compatibility view: the wide customer_wide shape over the split tables.\nCREATE OR REPLACE VIEW `main`.`features`.`customer_wide_featlas_compat` AS\nSELECT t0.`tenant_id`, t0.`customer_id`, t0.`feature_as_of`, t0.`web_orders_30d`, t0.`store_orders_30d`, t0.`web_share_30d`, t1.`max_shipping_days_30d`, t1.`avg_shipping_days_30d`, t2.`card_payments_30d`, t2.`wallet_payments_30d`, t3.`orders_30d`, t3.`distinct_orders_30d`, t4.`returns_30d`, t4.`return_rate_30d`, t5.`settled_spend_30d`, t5.`avg_order_value_30d`, t5.`max_order_value_30d`, t5.`discount_30d`\nFROM `main`.`features`.`customer_wide_featlas_channel` t0\nFULL OUTER JOIN `main`.`features`.`customer_wide_featlas_fulfilment` t1 ON t1.`tenant_id` = t0.`tenant_id` AND t1.`customer_id` = t0.`customer_id` AND t1.`feature_as_of` = t0.`feature_as_of`\nFULL OUTER JOIN `main`.`features`.`customer_wide_featlas_payments` t2 ON t2.`tenant_id` = t0.`tenant_id` AND t2.`customer_id` = t0.`customer_id` AND t2.`feature_as_of` = t0.`feature_as_of`\nFULL OUTER JOIN `main`.`features`.`customer_wide_featlas_purchasing` t3 ON t3.`tenant_id` = t0.`tenant_id` AND t3.`customer_id` = t0.`customer_id` AND t3.`feature_as_of` = t0.`feature_as_of`\nFULL OUTER JOIN `main`.`features`.`customer_wide_featlas_returns` t4 ON t4.`tenant_id` = t0.`tenant_id` AND t4.`customer_id` = t0.`customer_id` AND t4.`feature_as_of` = t0.`feature_as_of`\nFULL OUTER JOIN `main`.`features`.`customer_wide_featlas_revenue` t5 ON t5.`tenant_id` = t0.`tenant_id` AND t5.`customer_id` = t0.`customer_id` AND t5.`feature_as_of` = t0.`feature_as_of`"
+}

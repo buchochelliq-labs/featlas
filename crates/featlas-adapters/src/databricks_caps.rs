@@ -40,6 +40,7 @@ pub const COMPUTE_LOWERED: &[&str] = &[
     "core.as_of_join",
     "core.relationship_join",
     "core.source_as_known",
+    "core.label_construction",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -217,10 +218,9 @@ pub fn assess(role: Role, capability: &str, ctx: &AssessmentContext) -> Assessme
         (Role::Catalog, "core.source_read") => Assessment::unverified(EvidenceScope::Static, format!("Unity Catalog reads are generated as SELECT statements. {none_live}.")),
         (Role::OfflineStore, "core.atomic_publication") => Assessment::unverified(EvidenceScope::Static, format!("Single-statement Delta MERGE per feature-set snapshot plus change-data-feed commit evidence is generated. {none_live}.")),
         (Role::OfflineStore, "core.serving_replay") => Assessment::unverified(EvidenceScope::Static, format!("Replay reads require persisted published_at evidence. {none_live}.")),
-        (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Declaration, "Databricks job scheduling is not implemented in this version; manual runs only"),
+        (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Static, format!("A paused Databricks Asset Bundle job (databricks/job.yml: UTC Quartz schedule on the deployment grid, slot-derived idempotent publication identity, retries, max_concurrent_runs and timeout from budget/SLO) is generated; deploying and running it has not been observed. {none_live}.")),
         (Role::OnlineStore, _) => Assessment::unsupported("This adapter version provides no online_store role"),
         (_, c) if c.starts_with("learned.") || c.starts_with("custom.") => Assessment::unsupported(format!("{c} has no attested implementation in this adapter; custom/learned execution is not supported")),
-        (_, "core.label_construction") => Assessment::unsupported("Label dataset construction is not lowered to Spark in this version"),
         (_, "core.online_publication") => Assessment::unsupported("Online publication is not implemented"),
         (r, c) => Assessment::unsupported(format!("{c} is not provided for role {}", r.as_str())),
     }

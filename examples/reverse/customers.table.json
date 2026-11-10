@@ -1,0 +1,42 @@
+{
+  "table": "main.crm.customers",
+  "comment": "Customer registry: one row per tenant and customer.",
+  "owner": "crm-data",
+  "primary_key": [
+    "tenant_id",
+    "customer_id"
+  ],
+  "tags": {
+    "domain": "crm"
+  },
+  "columns": [
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "comment": "Tenant.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "comment": "Customer.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "registered_at",
+      "type": "timestamp",
+      "comment": "Signup time.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "ingested_at",
+      "type": "timestamp",
+      "comment": "When the row landed.",
+      "nullable": false,
+      "tags": {}
+    }
+  ]
+}

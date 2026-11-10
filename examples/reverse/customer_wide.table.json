@@ -1,0 +1,184 @@
+{
+  "table": "main.features.customer_wide",
+  "comment": "Legacy wide customer feature table (nightly).",
+  "owner": "ml-platform",
+  "primary_key": [
+    "tenant_id",
+    "customer_id",
+    "feature_ts"
+  ],
+  "timeseries_key": "feature_ts",
+  "columns": [
+    {
+      "name": "tenant_id",
+      "type": "string",
+      "comment": "Tenant.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "comment": "Customer.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "feature_ts",
+      "type": "timestamp",
+      "comment": "as_of.",
+      "nullable": false,
+      "tags": {}
+    },
+    {
+      "name": "orders_30d",
+      "type": "bigint",
+      "comment": "Orders in the last 30 days.",
+      "nullable": true,
+      "tags": {
+        "domain": "purchasing",
+        "business_unit": "commerce"
+      }
+    },
+    {
+      "name": "distinct_orders_30d",
+      "type": "bigint",
+      "comment": "Distinct orders in 30 days.",
+      "nullable": true,
+      "tags": {
+        "domain": "purchasing",
+        "business_unit": "commerce"
+      }
+    },
+    {
+      "name": "settled_spend_30d",
+      "type": "bigint",
+      "comment": "Settled spend in cents, 30 days.",
+      "nullable": true,
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "avg_order_value_30d",
+      "type": "double",
+      "comment": "Mean order value in cents.",
+      "nullable": true,
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "max_order_value_30d",
+      "type": "bigint",
+      "comment": "Largest order value in cents.",
+      "nullable": true,
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "web_orders_30d",
+      "type": "bigint",
+      "comment": "Web orders.",
+      "nullable": true,
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      }
+    },
+    {
+      "name": "store_orders_30d",
+      "type": "bigint",
+      "comment": "Store orders.",
+      "nullable": true,
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      }
+    },
+    {
+      "name": "returns_30d",
+      "type": "bigint",
+      "comment": "Returned orders.",
+      "nullable": true,
+      "tags": {
+        "domain": "returns",
+        "business_unit": "operations"
+      }
+    },
+    {
+      "name": "discount_30d",
+      "type": "bigint",
+      "comment": "Discounts in cents.",
+      "nullable": true,
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "card_payments_30d",
+      "type": "bigint",
+      "comment": "Card payments.",
+      "nullable": true,
+      "tags": {
+        "domain": "payments",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "wallet_payments_30d",
+      "type": "bigint",
+      "comment": "Wallet payments.",
+      "nullable": true,
+      "tags": {
+        "domain": "payments",
+        "business_unit": "finance"
+      }
+    },
+    {
+      "name": "max_shipping_days_30d",
+      "type": "bigint",
+      "comment": "Slowest delivery.",
+      "nullable": true,
+      "tags": {
+        "domain": "fulfilment",
+        "business_unit": "operations"
+      }
+    },
+    {
+      "name": "avg_shipping_days_30d",
+      "type": "double",
+      "comment": "Mean delivery days.",
+      "nullable": true,
+      "tags": {
+        "domain": "fulfilment",
+        "business_unit": "operations"
+      }
+    },
+    {
+      "name": "return_rate_30d",
+      "type": "double",
+      "comment": "returns / orders.",
+      "nullable": true,
+      "tags": {
+        "domain": "returns",
+        "business_unit": "operations"
+      }
+    },
+    {
+      "name": "web_share_30d",
+      "type": "double",
+      "comment": "web orders / orders.",
+      "nullable": true,
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      }
+    }
+  ]
+}

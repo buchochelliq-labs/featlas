@@ -308,7 +308,26 @@ pub struct Artifacts {
     pub output_table: String,
     /// Physical names of the five publication metadata fields of the output target.
     pub metadata_columns: PublicationColumns,
+    /// Deployment resource limits the host enforces where measurable (SEM-BUDGET-001).
+    pub budget: Budget,
+    /// Retention contracts the host verifies against the physical tables (SEM-DEPLOY-002).
+    pub retention: RetentionContract,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RetentionContract {
+    /// Per bound source: physical table, availability column and the declared earliest
+    /// reproducible instant.
+    pub sources: BTreeMap<String, SourceRetentionCheck>,
+    pub output_retention_seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceRetentionCheck {
+    pub table: String,
+    pub available_time: String,
+    pub earliest_reproducible_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -747,6 +766,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
     };
     let mut bind_sources = Vec::new();
     let mut expected_schemas = BTreeMap::new();
+    let mut retention_sources = BTreeMap::new();
     for sid in plan.logical.sources.keys() {
         let b = plan
             .bindings
@@ -783,6 +803,20 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             reads: vec![sid.clone()],
             view: None,
         });
+        let phys_avail = b
+            .column_mapping
+            .get(&s.available_time)
+            .and_then(Value::as_str)
+            .unwrap_or(&s.available_time)
+            .to_string();
+        retention_sources.insert(
+            sid.clone(),
+            SourceRetentionCheck {
+                table: table_name(&b.location)?,
+                available_time: phys_avail,
+                earliest_reproducible_at: s.earliest_reproducible_at.clone(),
+            },
+        );
         expected_schemas.insert(
             sid.clone(),
             json!({
@@ -1106,6 +1140,11 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         expected_source_schemas: expected_schemas,
         output_table,
         metadata_columns: target.metadata_columns.clone(),
+        budget: plan.bindings.budget.clone(),
+        retention: RetentionContract {
+            sources: retention_sources,
+            output_retention_seconds: p.deployment(&plan.bindings.deployment).map(|d| d.output_retention_seconds).unwrap_or(0),
+        },
         notes,
     })
 }
@@ -1785,4 +1824,236 @@ pub fn render_script(a: &Artifacts) -> String {
         )],
     );
     s
+}
+
+/// Spark SQL for one label consumer (SEM-LABEL-001/002).
+///
+/// The core decides maturity and completeness per request (`featlas_core::label::label_requests`)
+/// without reading data; the host registers the eligible requests as `fl_label_requests`
+/// (`fl_request_index`, entity keys, `fl_as_of`, `fl_dataset_cutoff`, `fl_horizon_end`) and runs,
+/// once per distinct dataset cutoff bound to `:as_of`, the label source reconstruction
+/// (availability <= cutoff, duplicates, revisions, tombstones) and the `values` query. Row-level
+/// failures are returned as data (`fl_error`) so the host reports them in request order, as the
+/// core does.
+#[derive(Debug, Clone, Serialize)]
+pub struct LabelArtifacts {
+    pub consumer: String,
+    pub consumer_version: String,
+    pub label_source: String,
+    pub requests_view: String,
+    pub request_columns: Vec<(String, String)>,
+    pub session: Vec<Statement>,
+    pub bind_sources: Vec<Statement>,
+    pub stages: Vec<Statement>,
+    pub checks: Vec<Check>,
+    pub values: Statement,
+    pub value_type: String,
+    pub expected_source_schemas: BTreeMap<String, Value>,
+    pub notes: Vec<String>,
+}
+
+pub fn lower_labels(plan: &Plan, p: &Project, consumer: &str) -> Result<LabelArtifacts, String> {
+    let c = p.consumer(consumer).ok_or_else(|| format!("Unknown consumer {consumer}"))?;
+    let label = c.label.as_ref().ok_or_else(|| format!("{consumer} declares no label"))?;
+    let fs = plan
+        .logical
+        .feature_sets
+        .iter()
+        .find(|f| f.id == c.feature_set.feature_set)
+        .ok_or_else(|| format!("Feature set {} is not in the plan", c.feature_set.feature_set))?;
+    if !plan.logical.sources.contains_key(&label.source) {
+        return Err(format!("Label source {} is not bound by this deployment", label.source));
+    }
+    let base = lower(plan, &fs.id, p)?;
+    let session = base.session.clone();
+    let bind_sources: Vec<Statement> = base
+        .bind_sources
+        .into_iter()
+        .filter(|b| b.name == format!("fl_raw_{}", safe(&label.source)))
+        .collect();
+    let expected_source_schemas = base
+        .expected_source_schemas
+        .into_iter()
+        .filter(|(k, _)| k == &label.source)
+        .collect();
+    let mut lw = Lowering { plan, fs, stages: Vec::new(), checks: Vec::new(), reconstructed: BTreeSet::new() };
+    let selected = lw.reconstruct(&label.source, Boundary::Inclusive);
+    let src = lw.source(&label.source);
+    let col_ty = |name: &str| src.columns.iter().find(|c| c.name == name).map(|c| c.ty);
+    let vty = col_ty(&label.value_column).ok_or_else(|| format!("Unknown label column {}", label.value_column))?;
+    let out_ty = match label.aggregation {
+        LabelAggregation::Count => LogicalType::Integer,
+        LabelAggregation::AnyTrue => LogicalType::Boolean,
+        _ => vty,
+    };
+    let entity = p.entity(&fs.population.entity).ok_or("Unknown entity")?;
+    let mut request_columns = vec![("fl_request_index".to_string(), "BIGINT".to_string())];
+    let mut on = Vec::new();
+    for k in &entity.keys {
+        let m = label.entity_keys.iter().find(|m| m.entity_key == k.name).ok_or_else(|| format!("Label maps no column to entity key {}", k.name))?;
+        request_columns.push((k.name.clone(), spark_type(k.ty).to_string()));
+        on.push(format!("s.{} = r.{}", quote(&m.column), quote(&k.name)));
+    }
+    for t in ["fl_as_of", "fl_dataset_cutoff", "fl_horizon_end"] {
+        request_columns.push((t.into(), "TIMESTAMP".into()));
+    }
+    let et = quote(&label.event_time_column);
+    let at = quote(&label.available_time_column);
+    let lower_cmp = boundary_op(label.lower, ">=", ">");
+    let upper_cmp = boundary_op(label.upper, "<=", "<");
+    let v = "e.fl_v";
+    let n = "count(e.fl_present)";
+    let nulls = format!("{n} > count({v})");
+    let (empty_value, empty_error) = match &label.empty {
+        EmptyPolicy::Error => ("NULL".to_string(), "'LABEL_EMPTY'"),
+        EmptyPolicy::Null => ("NULL".to_string(), "NULL"),
+        EmptyPolicy::Value { value } => (literal_json(value, out_ty), "NULL"),
+    };
+    let (value, error) = match label.aggregation {
+        LabelAggregation::Count => (n.to_string(), "NULL".to_string()),
+        LabelAggregation::AnyTrue => (
+            format!("CASE WHEN max(CASE WHEN {v} THEN 1 ELSE 0 END) = 1 THEN true WHEN {nulls} THEN NULL ELSE false END"),
+            "NULL".into(),
+        ),
+        LabelAggregation::Max => (format!("CASE WHEN {nulls} THEN NULL ELSE max({v}) END"), "NULL".into()),
+        LabelAggregation::Sum if vty == LogicalType::Integer => {
+            // Exact: DECIMAL(38,0) accumulation; overflow is an error (as data), never a wrapped value.
+            let dec = format!("sum(CAST({v} AS DECIMAL(38,0)))");
+            let fits = format!("{dec} BETWEEN -9223372036854775808 AND 9223372036854775807");
+            (
+                format!("CASE WHEN {nulls} THEN NULL WHEN {fits} THEN CAST({dec} AS BIGINT) END"),
+                format!("CASE WHEN {nulls} THEN NULL WHEN NOT ({fits}) THEN 'NUMERIC_OVERFLOW' END"),
+            )
+        }
+        LabelAggregation::Sum => (
+            format!("CASE WHEN {nulls} THEN NULL ELSE sum(CAST({v} AS DOUBLE)) END"),
+            format!("CASE WHEN {nulls} THEN NULL WHEN isnan(sum(CAST({v} AS DOUBLE))) OR abs(sum(CAST({v} AS DOUBLE))) = double('Infinity') THEN 'NON_FINITE_RESULT' END"),
+        ),
+        LabelAggregation::Latest => (
+            "max(CASE WHEN e.fl_rank = 1 THEN e.fl_v END)".into(),
+            "CASE WHEN count(CASE WHEN e.fl_rank = 1 THEN 1 END) > 1 THEN 'LABEL_TIE' END".into(),
+        ),
+    };
+    let rank = if label.aggregation == LabelAggregation::Latest {
+        format!(", rank() OVER (PARTITION BY r.fl_request_index ORDER BY s.{et} DESC, s.{at} DESC) AS fl_rank")
+    } else {
+        String::new()
+    };
+    let sql = format!(
+        "WITH req AS (SELECT * FROM fl_label_requests WHERE fl_dataset_cutoff = :as_of),\n\
+         e AS (\n  SELECT r.fl_request_index AS fl_ri, s.{val} AS fl_v, 1 AS fl_present{rank}\n  FROM req r JOIN {selected} s ON {on}\n   AND s.{et} {lower_cmp} r.fl_as_of AND s.{et} {upper_cmp} r.fl_horizon_end\n)\n\
+         SELECT r.fl_request_index AS request_index, {n} AS eligible_rows,\n\
+           CASE WHEN {n} = 0 THEN 'empty' ELSE 'ok' END AS fl_state,\n\
+           CAST(CASE WHEN {n} = 0 THEN {empty_value} ELSE {value} END AS {sty}) AS fl_value,\n\
+           CASE WHEN {n} = 0 THEN {empty_error} ELSE {error} END AS fl_error\n\
+         FROM req r LEFT JOIN e ON e.fl_ri = r.fl_request_index\n\
+         GROUP BY r.fl_request_index ORDER BY r.fl_request_index",
+        val = quote(&label.value_column),
+        on = on.join(" AND "),
+        sty = spark_type(out_ty),
+    );
+    // Spark forbids parameter markers in CREATE VIEW: register bound SELECTs instead.
+    for st in lw.stages.iter_mut() {
+        as_view(st);
+    }
+    Ok(LabelArtifacts {
+        consumer: c.id.clone(),
+        consumer_version: c.version.clone(),
+        label_source: label.source.clone(),
+        requests_view: "fl_label_requests".into(),
+        request_columns,
+        session,
+        bind_sources,
+        stages: lw.stages,
+        checks: lw.checks,
+        values: Statement {
+            name: format!("fl_label_values_{}", safe(&c.id)),
+            purpose: format!("{}: {:?} over [as_of, as_of + {}s) of {} as known at the dataset cutoff (:as_of)", c.id, label.aggregation, label.horizon_seconds, label.source),
+            sql,
+            reads: vec![label.source.clone()],
+            view: None,
+        },
+        value_type: spark_type(out_ty).into(),
+        expected_source_schemas,
+        notes: vec![
+            "Maturity, completeness and exclusion are decided by the core (label_requests); this SQL computes values for eligible requests only.".into(),
+            "Feature filters are never applied to labels; the label source is reconstructed independently at each dataset cutoff.".into(),
+        ],
+    })
+}
+
+/// A Databricks Asset Bundle job (`resources.jobs`) running each feature set of a scheduled
+/// deployment (SEM-DEPLOY-003, `core.scheduling`). JSON is valid bundle YAML.
+///
+/// * The trigger is a Quartz cron in UTC on the deployment's interval grid
+///   (`every_seconds`, `offset_seconds`); intervals that are not whole minutes dividing an hour,
+///   whole hours dividing a day, or exactly one day are refused.
+/// * Each task derives `as_of` from the trigger time floored to that grid, and its publication
+///   identity from `as_of` (`publication_id = <deployment>/<feature set>/<as_of>`, sequence =
+///   epoch seconds), so a retried run republishes nothing (the host's retry path).
+/// * Retries, `max_concurrent_runs` (budget) and `timeout_seconds` (SLO) are explicit.
+/// * The job is created **paused**: deploying the bundle authorizes nothing; unpausing it is the
+///   explicit publication approval for `environment`.
+pub fn job_bundle(plan: &Plan, d: &Deployment, project_id: &str) -> Result<Value, String> {
+    let Schedule::Interval { every_seconds, offset_seconds } = d.schedule else {
+        return Err("Deployment schedule is manual; no job is generated".into());
+    };
+    if d.execution.orchestrator.is_none() {
+        return Err("A scheduled deployment must select an orchestrator (SEM-PORT-002)".into());
+    }
+    let (e, o) = (every_seconds, offset_seconds.rem_euclid(every_seconds.max(1)));
+    let cron = if e == 86400 {
+        format!("{} {} {} * * ?", o % 60, (o / 60) % 60, o / 3600)
+    } else if e % 3600 == 0 && 86400 % e == 0 {
+        format!("{} {} {}/{} * * ?", o % 60, (o / 60) % 60, o / 3600, e / 3600)
+    } else if e % 60 == 0 && 3600 % e == 0 {
+        format!("{} {}/{} * * * ?", o % 60, o / 60, e / 60)
+    } else {
+        return Err(format!("every_seconds {e} is not expressible as a UTC Quartz schedule (whole minutes dividing an hour, whole hours dividing a day, or one day)"));
+    };
+    let job_key = format!("featlas_{}", safe(&d.id));
+    let tasks: Vec<Value> = plan
+        .logical
+        .feature_sets
+        .iter()
+        .map(|fs| {
+            json!({
+                "task_key": safe(&fs.id),
+                "environment_key": "featlas",
+                "max_retries": 2,
+                "min_retry_interval_millis": 60000,
+                "retry_on_timeout": false,
+                "python_wheel_task": {
+                    "package_name": "featlas",
+                    "entry_point": "featlas-databricks",
+                    "parameters": [
+                        "${var.project_path}", "--deployment", d.id, "--feature-set", fs.id,
+                        "--as-of-from-trigger", "{{job.trigger.time.iso_datetime}}",
+                        "--grid-seconds", e.to_string(), "--offset-seconds", o.to_string(),
+                        "--status-table", "${var.source_status_table}",
+                        "--publish", "--environment", d.environment,
+                        "--approved-by", format!("databricks-job:{job_key}"),
+                        "--materialization-id", "{{job.run_id}}-{{task.run_id}}",
+                    ],
+                },
+            })
+        })
+        .collect();
+    Ok(json!({
+        "variables": {
+            "project_path": {"description": "Workspace path of the exact project file this job runs (its sha256 must equal the plan's)."},
+            "featlas_wheel": {"description": "Workspace/Volume path of the featlas wheel built from the verified candidate."},
+            "source_status_table": {"description": "Three-part name of the source-status evidence table (source, state, coverage_start, coverage_end, observed_at)."},
+        },
+        "resources": {"jobs": {job_key.clone(): {
+            "name": format!("featlas {} ({project_id})", d.id),
+            "description": format!("Generated by {IMPLEMENTATION}@{VERSION} from plan {}. Paused on creation: unpausing is the publication approval for environment {}.", plan.plan_digest, d.environment),
+            "max_concurrent_runs": d.budget.max_concurrent_runs,
+            "timeout_seconds": d.slo.max_compute_seconds,
+            "schedule": {"quartz_cron_expression": cron, "timezone_id": "UTC", "pause_status": "PAUSED"},
+            "tags": {"featlas_deployment": d.id, "featlas_deployment_identity": plan.bindings.deployment_identity, "featlas_plan_digest": plan.plan_digest},
+            "environments": [{"environment_key": "featlas", "spec": {"client": "2", "dependencies": ["${var.featlas_wheel}"]}}],
+            "tasks": tasks,
+        }}},
+    }))
 }

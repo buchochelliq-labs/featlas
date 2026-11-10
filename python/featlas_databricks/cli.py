@@ -16,7 +16,34 @@ import tempfile
 
 from .core import Core
 from .errors import FeatlasError
-from .runner import PublicationAuthorization, SnapshotRun
+from .runner import PublicationAuthorization, SnapshotRun, format_instant, parse_instant
+
+
+def as_of_from_trigger(trigger: str, grid_seconds: int, offset_seconds: int) -> str:
+    """The scheduled as_of for a job trigger time: the trigger floored to the deployment's
+    interval grid (epoch + offset + k * grid). Retries of the same run get the same as_of."""
+    t = parse_instant(trigger)
+    secs = int(t.timestamp())
+    k = (secs - offset_seconds) // grid_seconds
+    from datetime import datetime, timezone
+
+    return format_instant(datetime.fromtimestamp(k * grid_seconds + offset_seconds, tz=timezone.utc))
+
+
+def statuses_from_table(spark, table: str, as_of: str) -> list[dict]:
+    """Latest source-status evidence per source observed at or before as_of (read-only)."""
+    rows = spark.sql(
+        f"SELECT source, state, coverage_start, coverage_end FROM {table} WHERE observed_at <= :as_of "
+        "QUALIFY row_number() OVER (PARTITION BY source ORDER BY observed_at DESC) = 1",
+        args={"as_of": parse_instant(as_of)},
+    ).collect()
+    out = []
+    for r in rows:
+        s = {"source": r["source"], "state": r["state"]}
+        if r["state"] == "available":
+            s.update(coverage_start=format_instant(r["coverage_start"]), coverage_end=format_instant(r["coverage_end"]))
+        out.append(s)
+    return out
 
 
 def _spark(profile: str):
@@ -32,8 +59,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("project")
     ap.add_argument("--deployment", required=True)
     ap.add_argument("--feature-set", required=True)
-    ap.add_argument("--as-of", required=True, help="UTC instant ending in Z")
-    ap.add_argument("--status", required=True, help="JSON file of source-status evidence records")
+    when = ap.add_mutually_exclusive_group(required=True)
+    when.add_argument("--as-of", help="UTC instant ending in Z")
+    when.add_argument("--as-of-from-trigger", help="job trigger time; as_of is it floored to --grid-seconds/--offset-seconds")
+    ap.add_argument("--grid-seconds", type=int)
+    ap.add_argument("--offset-seconds", type=int, default=0)
+    status = ap.add_mutually_exclusive_group(required=True)
+    status.add_argument("--status", help="JSON file of source-status evidence records")
+    status.add_argument("--status-table", help="table of source-status evidence (source, state, coverage_start, coverage_end, observed_at)")
     ap.add_argument("--publish", action="store_true")
     ap.add_argument("--environment")
     ap.add_argument("--approved-by")
@@ -48,16 +81,32 @@ def main(argv: list[str] | None = None) -> int:
     gen = core.generate(args.project, args.deployment, tempfile.mkdtemp(prefix="featlas-gen-"))
     art = gen["artifacts"][args.feature_set]
     adapter = next(a for a in gen["plan"]["bindings"]["adapters"] if a["id"] == gen["plan"]["bindings"]["execution"]["compute"])
-    statuses = json.load(open(args.status, encoding="utf-8"))
+    if args.as_of_from_trigger:
+        if not args.grid_seconds:
+            raise SystemExit("--as-of-from-trigger needs --grid-seconds")
+        args.as_of = as_of_from_trigger(args.as_of_from_trigger, args.grid_seconds, args.offset_seconds)
+    spark = _spark(adapter["configuration"]["connection_profile"])
+    statuses = statuses_from_table(spark, args.status_table, args.as_of) if args.status_table else json.load(open(args.status, encoding="utf-8"))
     unavailable = {s["source"] for s in statuses if s["state"] == "unavailable"}
     coverage = core.coverage(args.project, args.deployment, args.feature_set, args.as_of, statuses)
-    spark = _spark(adapter["configuration"]["connection_profile"])
     pop = next(fs["population"]["source"] for fs in gen["plan"]["logical"]["feature_sets"] if fs["id"] == args.feature_set)
     run = SnapshotRun(spark, art, args.as_of, coverage, unavailable, population_source=pop)
     problems = run.preflight_sources()
     if problems:
         print(json.dumps({"preflight": "failed", "problems": problems}, indent=2))
         return 1
+    retention = run.retention_preflight()
+    blocking = [p for p in retention if p.get("severity") == "error"]
+    if blocking:
+        print(json.dumps({"preflight": "failed", "problems": retention}, indent=2))
+        return 1
+    for p in retention:
+        print(json.dumps({"preflight_warning": p}), file=sys.stderr)
+    if args.publish and not args.publication_id:
+        # Scheduled runs: the identity is a function of (deployment, feature set, as_of), so a
+        # retried or duplicated run of the same slot is recognised as a retry, never a second write.
+        args.publication_id = f"{args.deployment}/{args.feature_set}/{args.as_of}"
+        args.publication_sequence = int(parse_instant(args.as_of).timestamp())
     try:
         if not args.publish:
             rows = run.run_to_snapshot({"publication_id": "dry-run", "publication_sequence": 0, "materialization_id": "dry-run"})

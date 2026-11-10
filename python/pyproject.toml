@@ -16,13 +16,16 @@ classifiers = ["Programming Language :: Rust", "Programming Language :: Python :
 databricks = ["databricks-sdk", "databricks-connect"]
 local = ["pyspark==4.0.1", "delta-spark==4.0.0"]
 test = ["pytest", "PyYAML==6.0.3"]
+# Reverse engineering (featlas_reverse): SQL analysis and YAML output.
+reverse = ["sqlglot==30.30.0", "PyYAML==6.0.3"]
 
 [project.scripts]
 featlas-databricks = "featlas_databricks.cli:main"
+featlas-reverse = "featlas_reverse.cli:main"
 
 [tool.maturin]
 manifest-path = "../crates/featlas-py/Cargo.toml"
 module-name = "featlas._native"
 python-source = "."
-python-packages = ["featlas_databricks"]
+python-packages = ["featlas_databricks", "featlas_reverse"]
 features = []

@@ -1,0 +1,3164 @@
+spec_version: '0.2.0'
+kind: FeatureEngineeringProject
+metadata:
+  id: customer_wide_reverse
+  name: main.features.customer_wide (reverse-engineered)
+  version: '0.1.0'
+  description: Specification drafted by featlas_reverse from main.features.customer_wide and its code;
+    review every assumption in the drafting report before marking it reviewed.
+  owners:
+  - ml-platform
+  status: draft
+  tags:
+  - reverse-engineered
+entities:
+- id: customer
+  version: '1.0.0'
+  name: Customer
+  description: One customer as identified by tenant_id, customer_id in main.features.customer_wide.
+  owner: ml-platform
+  keys:
+  - name: tenant_id
+    type: string
+    source_column: tenant_id
+    is_tenant: true
+    description: tenant_id (from main.crm.customers).
+  - name: customer_id
+    type: string
+    source_column: customer_id
+    is_tenant: false
+    description: customer_id (from main.crm.customers).
+  population:
+    source: customers
+    mode: as_of_keys
+    event_time_upper: inclusive
+    availability_upper: inclusive
+    deletion_policy: exclude_deleted
+sources:
+- id: customers
+  version: '1.0.0'
+  name: main.crm.customers
+  description: 'Customer registry: one row per tenant and customer.'
+  owner: crm-data
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: customer_id
+    type: string
+    description: Customer.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: registered_at
+    type: timestamp
+    description: Signup time.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: ingested_at
+    type: timestamp
+    description: When the row landed.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - tenant_id
+  - customer_id
+  record_semantics:
+    kind: append_only
+    duplicate_policy: reject
+    logical_key:
+    - tenant_id
+    - customer_id
+  time:
+    event_time: registered_at
+    available_time: ingested_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: Completeness must be supplied by a source-status observation; an empty table proves
+        no coverage.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Physical table main.crm.customers read by the legacy feature code.
+    code: null
+    upstream_columns:
+    - column: tenant_id
+      origin: main.crm.customers.tenant_id
+      description: Tenant.
+    - column: customer_id
+      origin: main.crm.customers.customer_id
+      description: Customer.
+    - column: registered_at
+      origin: main.crm.customers.registered_at
+      description: Signup time.
+    - column: ingested_at
+      origin: main.crm.customers.ingested_at
+      description: When the row landed.
+- id: orders
+  version: '1.0.0'
+  name: main.sales.orders
+  description: One row per order line event; corrections arrive as new rows with a later ingested_at.
+  owner: sales-data
+  columns:
+  - name: order_id
+    type: string
+    description: Order identifier.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: tenant_id
+    type: string
+    description: Tenant owning the order.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: customer_id
+    type: string
+    description: Customer placing the order.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: ordered_at
+    type: timestamp
+    description: When the order was placed.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: ingested_at
+    type: timestamp
+    description: When the order row landed in the lakehouse.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: status
+    type: string
+    description: settled, pending, cancelled or returned.
+    nullable: true
+    unit: null
+    classification: internal
+  - name: amount_cents
+    type: integer
+    description: Order value in cents.
+    nullable: true
+    unit: cents
+    classification: internal
+  - name: discount_cents
+    type: integer
+    description: Discount applied in cents.
+    nullable: true
+    unit: cents
+    classification: internal
+  - name: channel
+    type: string
+    description: web or store.
+    nullable: true
+    unit: null
+    classification: internal
+  - name: payment_method
+    type: string
+    description: card, wallet or invoice.
+    nullable: true
+    unit: null
+    classification: internal
+  - name: shipping_days
+    type: integer
+    description: Days from order to delivery.
+    nullable: true
+    unit: days
+    classification: internal
+  - name: is_test
+    type: boolean
+    description: Synthetic test order.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - order_id
+  record_semantics:
+    kind: append_only
+    duplicate_policy: reject
+    logical_key:
+    - order_id
+  time:
+    event_time: ordered_at
+    available_time: ingested_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: Completeness must be supplied by a source-status observation; an empty table proves
+        no coverage.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Physical table main.sales.orders read by the legacy feature code.
+    code: null
+    upstream_columns:
+    - column: order_id
+      origin: main.sales.orders.order_id
+      description: Order identifier.
+    - column: tenant_id
+      origin: main.sales.orders.tenant_id
+      description: Tenant owning the order.
+    - column: customer_id
+      origin: main.sales.orders.customer_id
+      description: Customer placing the order.
+    - column: ordered_at
+      origin: main.sales.orders.ordered_at
+      description: When the order was placed.
+    - column: ingested_at
+      origin: main.sales.orders.ingested_at
+      description: When the order row landed in the lakehouse.
+    - column: status
+      origin: main.sales.orders.status
+      description: settled, pending, cancelled or returned.
+    - column: amount_cents
+      origin: main.sales.orders.amount_cents
+      description: Order value in cents.
+    - column: discount_cents
+      origin: main.sales.orders.discount_cents
+      description: Discount applied in cents.
+    - column: channel
+      origin: main.sales.orders.channel
+      description: web or store.
+    - column: payment_method
+      origin: main.sales.orders.payment_method
+      description: card, wallet or invoice.
+    - column: shipping_days
+      origin: main.sales.orders.shipping_days
+      description: Days from order to delivery.
+    - column: is_test
+      origin: main.sales.orders.is_test
+      description: Synthetic test order.
+relationships: []
+features:
+- id: customer.orders_30d
+  version: '1.0.0'
+  name: Orders 30d
+  description: Orders in the last 30 days.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Orders in the last 30 days.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.distinct_orders_30d
+  version: '1.0.0'
+  name: Distinct orders 30d
+  description: Distinct orders in 30 days.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: count_distinct
+    value: null
+    distinct_by:
+    - kind: column
+      input: orders
+      column: order_id
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Distinct orders in 30 days.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: order_id
+      roles:
+      - value
+      description: Aggregated value order_id.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.settled_spend_30d
+  version: '1.0.0'
+  name: Settled spend 30d
+  description: Settled spend in cents, 30 days.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - amount_cents
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - status
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: status
+        - kind: literal
+          type: string
+          value: settled
+    operation: sum
+    value:
+      kind: column
+      input: orders
+      column: amount_cents
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Settled spend in cents, 30 days.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: amount_cents
+      roles:
+      - value
+      description: Aggregated value amount_cents.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: orders
+      column: status
+      roles:
+      - filter
+      description: Filter column status.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.avg_order_value_30d
+  version: '1.0.0'
+  name: Avg order value 30d
+  description: Mean order value in cents.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - amount_cents
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: mean
+    value:
+      kind: column
+      input: orders
+      column: amount_cents
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: number
+    nullable: true
+    unit: null
+    description: Mean order value in cents.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 1.0e-09
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: amount_cents
+      roles:
+      - value
+      description: Aggregated value amount_cents.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.max_order_value_30d
+  version: '1.0.0'
+  name: Max order value 30d
+  description: Largest order value in cents.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - amount_cents
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: max
+    value:
+      kind: column
+      input: orders
+      column: amount_cents
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Largest order value in cents.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: amount_cents
+      roles:
+      - value
+      description: Aggregated value amount_cents.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.web_orders_30d
+  version: '1.0.0'
+  name: Web orders 30d
+  description: Web orders.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - channel
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: channel
+        - kind: literal
+          type: string
+          value: web
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Web orders.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: channel
+      roles:
+      - filter
+      description: Filter column channel.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.store_orders_30d
+  version: '1.0.0'
+  name: Store orders 30d
+  description: Store orders.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - channel
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: channel
+        - kind: literal
+          type: string
+          value: store
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Store orders.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: channel
+      roles:
+      - filter
+      description: Filter column channel.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.returns_30d
+  version: '1.0.0'
+  name: Returns 30d
+  description: Returned orders.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - status
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: status
+        - kind: literal
+          type: string
+          value: returned
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Returned orders.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: orders
+      column: status
+      roles:
+      - filter
+      description: Filter column status.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.discount_30d
+  version: '1.0.0'
+  name: Discount 30d
+  description: Discounts in cents.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - discount_cents
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: sum
+    value:
+      kind: column
+      input: orders
+      column: discount_cents
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Discounts in cents.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: discount_cents
+      roles:
+      - value
+      description: Aggregated value discount_cents.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.card_payments_30d
+  version: '1.0.0'
+  name: Card payments 30d
+  description: Card payments.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - payment_method
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: payment_method
+        - kind: literal
+          type: string
+          value: card
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Card payments.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: orders
+      column: payment_method
+      roles:
+      - filter
+      description: Filter column payment_method.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.wallet_payments_30d
+  version: '1.0.0'
+  name: Wallet payments 30d
+  description: Wallet payments.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - payment_method
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: is_test
+        - kind: literal
+          type: boolean
+          value: false
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: orders
+          column: payment_method
+        - kind: literal
+          type: string
+          value: wallet
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Wallet payments.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: orders
+      column: payment_method
+      roles:
+      - filter
+      description: Filter column payment_method.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.max_shipping_days_30d
+  version: '1.0.0'
+  name: Max shipping days 30d
+  description: Slowest delivery.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - shipping_days
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: max
+    value:
+      kind: column
+      input: orders
+      column: shipping_days
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: integer
+    nullable: true
+    unit: null
+    description: Slowest delivery.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: shipping_days
+      roles:
+      - value
+      description: Aggregated value shipping_days.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.avg_shipping_days_30d
+  version: '1.0.0'
+  name: Avg shipping days 30d
+  description: Mean delivery days.
+  owner: ml-platform
+  entity: customer
+  inputs:
+  - alias: orders
+    source: orders
+    columns:
+    - customer_id
+    - ingested_at
+    - is_test
+    - order_id
+    - ordered_at
+    - shipping_days
+    - tenant_id
+  dependencies: []
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: aggregate
+    input: orders
+    joins: []
+    group_by:
+    - input: orders
+      column: tenant_id
+      entity_key: tenant_id
+    - input: orders
+      column: customer_id
+      entity_key: customer_id
+    filter:
+      kind: call
+      operator: equal
+      args:
+      - kind: column
+        input: orders
+        column: is_test
+      - kind: literal
+        type: boolean
+        value: false
+    operation: mean
+    value:
+      kind: column
+      input: orders
+      column: shipping_days
+    distinct_by: []
+    nulls: ignore
+  output:
+    type: number
+    nullable: true
+    unit: null
+    description: Mean delivery days.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 1.0e-09
+  lineage:
+    sources:
+    - source: orders
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Entity key tenant_id.
+    - source: orders
+      column: customer_id
+      roles:
+      - entity_key
+      description: Entity key customer_id.
+    - source: orders
+      column: ordered_at
+      roles:
+      - event_time
+      description: Event time bounding the window.
+    - source: orders
+      column: ingested_at
+      roles:
+      - availability_time
+      description: Availability cutoff.
+    - source: orders
+      column: shipping_days
+      roles:
+      - value
+      description: Aggregated value shipping_days.
+    - source: orders
+      column: is_test
+      roles:
+      - filter
+      description: Filter column is_test.
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.return_rate_30d
+  version: '1.0.0'
+  name: Return rate 30d
+  description: returns / orders.
+  owner: ml-platform
+  entity: customer
+  inputs: []
+  dependencies:
+  - feature: customer.orders_30d
+    version: '1.0.0'
+    alignment: same_entity_as_of
+  - feature: customer.returns_30d
+    version: '1.0.0'
+    alignment: same_entity_as_of
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: expression
+    expression:
+      kind: call
+      operator: safe_divide
+      args:
+      - kind: feature
+        feature: customer.returns_30d
+        version: '1.0.0'
+      - kind: feature
+        feature: customer.orders_30d
+        version: '1.0.0'
+  output:
+    type: number
+    nullable: true
+    unit: null
+    description: returns / orders.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 1.0e-09
+  lineage:
+    sources:
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies:
+    - feature: customer.orders_30d
+      version: '1.0.0'
+      description: Input of the derived expression.
+    - feature: customer.returns_30d
+      version: '1.0.0'
+      description: Input of the derived expression.
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: propagate
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+- id: customer.web_share_30d
+  version: '1.0.0'
+  name: Web share 30d
+  description: web orders / orders.
+  owner: ml-platform
+  entity: customer
+  inputs: []
+  dependencies:
+  - feature: customer.orders_30d
+    version: '1.0.0'
+    alignment: same_entity_as_of
+  - feature: customer.web_orders_30d
+    version: '1.0.0'
+    alignment: same_entity_as_of
+  time:
+    timezone: UTC
+    knowledge_mode: source_as_known
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    publication:
+      delay_seconds: 0
+  transform:
+    kind: expression
+    expression:
+      kind: call
+      operator: safe_divide
+      args:
+      - kind: feature
+        feature: customer.web_orders_30d
+        version: '1.0.0'
+      - kind: feature
+        feature: customer.orders_30d
+        version: '1.0.0'
+  output:
+    type: number
+    nullable: true
+    unit: null
+    description: web orders / orders.
+    constraints: {}
+    numeric_tolerance:
+      absolute: 0
+      relative: 1.0e-09
+  lineage:
+    sources:
+    - source: customers
+      column: tenant_id
+      roles:
+      - entity_key
+      - population
+      description: Population key tenant_id.
+    - source: customers
+      column: customer_id
+      roles:
+      - entity_key
+      - population
+      description: Population key customer_id.
+    - source: customers
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Population membership time.
+    - source: customers
+      column: ingested_at
+      roles:
+      - availability_time
+      - population
+      description: Population availability time.
+    dependencies:
+    - feature: customer.orders_30d
+      version: '1.0.0'
+      description: Input of the derived expression.
+    - feature: customer.web_orders_30d
+      version: '1.0.0'
+      description: Input of the derived expression.
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: propagate
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-01-01T00:00:00Z'
+  acceptance:
+    suites:
+    - customer_wide_characterization
+    description: Structural and characterization cases drafted by featlas_reverse; goldens of characterization
+      cases are the legacy table's outputs.
+feature_sets:
+- id: customer_wide
+  version: '1.0.0'
+  name: Customer wide
+  description: Reverse-engineered from main.features.customer_wide.
+  owner: ml-platform
+  entity: customer
+  features:
+  - id: customer.orders_30d
+    version: '1.0.0'
+  - id: customer.distinct_orders_30d
+    version: '1.0.0'
+  - id: customer.settled_spend_30d
+    version: '1.0.0'
+  - id: customer.avg_order_value_30d
+    version: '1.0.0'
+  - id: customer.max_order_value_30d
+    version: '1.0.0'
+  - id: customer.web_orders_30d
+    version: '1.0.0'
+  - id: customer.store_orders_30d
+    version: '1.0.0'
+  - id: customer.returns_30d
+    version: '1.0.0'
+  - id: customer.discount_30d
+    version: '1.0.0'
+  - id: customer.card_payments_30d
+    version: '1.0.0'
+  - id: customer.wallet_payments_30d
+    version: '1.0.0'
+  - id: customer.max_shipping_days_30d
+    version: '1.0.0'
+  - id: customer.avg_shipping_days_30d
+    version: '1.0.0'
+  - id: customer.return_rate_30d
+    version: '1.0.0'
+  - id: customer.web_share_30d
+    version: '1.0.0'
+  publication: atomic
+consumers:
+- id: customer_wide_batch
+  version: '1.0.0'
+  name: customer_wide batch
+  description: Batch reads of the regenerated feature table (source-as-known).
+  owner: ml-platform
+  feature_set:
+    feature_set: customer_wide
+    version: '1.0.0'
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: customer_id
+    input_field: customer_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+  label: null
+  selection:
+    mode: source_as_known
+    tie_breaker: sequence
+  max_staleness_seconds: 86400
+  missing_value_policy: preserve_null
+deployments:
+- id: customer_wide_databricks
+  version: '1.0.0'
+  name: customer_wide on Databricks
+  description: Drafted by featlas_reverse; nothing is provisioned or published by this document.
+  owner: ml-platform
+  environment: development
+  adapters:
+  - id: databricks_platform
+    implementation: dev.featlas:databricks
+    version: '0.1.0'
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    - orchestrator
+    configuration:
+      connection_profile: default
+      feature_api: uc_feature_tables
+  execution:
+    compute: databricks_platform
+    catalog: databricks_platform
+    orchestrator: null
+  source_bindings:
+  - source: customers
+    version: '1.0.0'
+    adapter: databricks_platform
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - main
+      - crm
+      name: customers
+      format: delta
+    column_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+      registered_at: registered_at
+      ingested_at: ingested_at
+  - source: orders
+    version: '1.0.0'
+    adapter: databricks_platform
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - main
+      - sales
+      name: orders
+      format: delta
+    column_mapping:
+      order_id: order_id
+      tenant_id: tenant_id
+      customer_id: customer_id
+      ordered_at: ordered_at
+      ingested_at: ingested_at
+      status: status
+      amount_cents: amount_cents
+      discount_cents: discount_cents
+      channel: channel
+      payment_method: payment_method
+      shipping_days: shipping_days
+      is_test: is_test
+  output_targets:
+  - feature_set: customer_wide
+    version: '1.0.0'
+    adapter: databricks_platform
+    role: offline_store
+    write_mode: merge
+    location:
+      kind: table
+      namespace:
+      - main
+      - features
+      name: customer_wide_featlas
+      format: delta
+    entity_key_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+    feature_mapping:
+    - feature: customer.orders_30d
+      version: '1.0.0'
+      column: orders_30d
+      state_column: orders_30d_state
+    - feature: customer.distinct_orders_30d
+      version: '1.0.0'
+      column: distinct_orders_30d
+      state_column: distinct_orders_30d_state
+    - feature: customer.settled_spend_30d
+      version: '1.0.0'
+      column: settled_spend_30d
+      state_column: settled_spend_30d_state
+    - feature: customer.avg_order_value_30d
+      version: '1.0.0'
+      column: avg_order_value_30d
+      state_column: avg_order_value_30d_state
+    - feature: customer.max_order_value_30d
+      version: '1.0.0'
+      column: max_order_value_30d
+      state_column: max_order_value_30d_state
+    - feature: customer.web_orders_30d
+      version: '1.0.0'
+      column: web_orders_30d
+      state_column: web_orders_30d_state
+    - feature: customer.store_orders_30d
+      version: '1.0.0'
+      column: store_orders_30d
+      state_column: store_orders_30d_state
+    - feature: customer.returns_30d
+      version: '1.0.0'
+      column: returns_30d
+      state_column: returns_30d_state
+    - feature: customer.discount_30d
+      version: '1.0.0'
+      column: discount_30d
+      state_column: discount_30d_state
+    - feature: customer.card_payments_30d
+      version: '1.0.0'
+      column: card_payments_30d
+      state_column: card_payments_30d_state
+    - feature: customer.wallet_payments_30d
+      version: '1.0.0'
+      column: wallet_payments_30d
+      state_column: wallet_payments_30d_state
+    - feature: customer.max_shipping_days_30d
+      version: '1.0.0'
+      column: max_shipping_days_30d
+      state_column: max_shipping_days_30d_state
+    - feature: customer.avg_shipping_days_30d
+      version: '1.0.0'
+      column: avg_shipping_days_30d
+      state_column: avg_shipping_days_30d_state
+    - feature: customer.return_rate_30d
+      version: '1.0.0'
+      column: return_rate_30d
+      state_column: return_rate_30d_state
+    - feature: customer.web_share_30d
+      version: '1.0.0'
+      column: web_share_30d
+      state_column: web_share_30d_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: manual
+  refresh:
+    mode: full
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: false
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: databricks_platform
+      role: compute
+      capability: core.aggregate
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.expression
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: catalog
+      capability: core.source_read
+      reason: Required by the drafted features.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Required by the drafted features.
+  slo:
+    max_compute_seconds: 3600
+    max_staleness_seconds: 86400
+    max_error_rate: 0.0
+  budget:
+    currency: USD
+    max_daily_cost: 10
+    max_scan_bytes: 107374182400
+    max_output_rows: 100000000
+    max_memory_mib: 16384
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - row_count
+    - null_rate
+    - quality_failures
+    alert_owner: ml-platform
+  access:
+    read_principal: featlas.reader
+    write_principal: featlas.publisher
+    required_permissions:
+    - resource: customers
+      privilege: read
+    - resource: orders
+      privilege: read
+    - resource: customer_wide
+      privilege: write
+    purpose: Regenerate the reverse-engineered feature table.
+  output_retention_seconds: 31536000
+  consumer_bindings:
+  - consumer: customer_wide_batch
+    version: '1.0.0'
+    adapter: databricks_platform
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+acceptance_suites:
+- id: customer_wide_characterization
+  version: '1.0.0'
+  name: customer_wide characterization
+  description: 'Drafted by featlas_reverse: structural cases plus characterization cases from the legacy
+    table.'
+  runner: reference
+  cases:
+  - id: orders_30d_empty_population
+    name: 'Orders 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.orders_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: distinct_orders_30d_empty_population
+    name: 'Distinct orders 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.distinct_orders_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: settled_spend_30d_empty_population
+    name: 'Settled spend 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.settled_spend_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: avg_order_value_30d_empty_population
+    name: 'Avg order value 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.avg_order_value_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: max_order_value_30d_empty_population
+    name: 'Max order value 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.max_order_value_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: web_orders_30d_empty_population
+    name: 'Web orders 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.web_orders_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: store_orders_30d_empty_population
+    name: 'Store orders 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.store_orders_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: returns_30d_empty_population
+    name: 'Returns 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.returns_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: discount_30d_empty_population
+    name: 'Discount 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.discount_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: card_payments_30d_empty_population
+    name: 'Card payments 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.card_payments_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: wallet_payments_30d_empty_population
+    name: 'Wallet payments 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.wallet_payments_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: max_shipping_days_30d_empty_population
+    name: 'Max shipping days 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.max_shipping_days_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: avg_shipping_days_30d_empty_population
+    name: 'Avg shipping days 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.avg_shipping_days_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: return_rate_30d_empty_population
+    name: 'Return rate 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.return_rate_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
+  - id: web_share_30d_empty_population
+    name: 'Web share 30d: empty population'
+    description: 'Structural case: no registered entity yields no rows (not a zero).'
+    feature:
+      id: customer.web_share_30d
+      version: '1.0.0'
+    as_of: '2026-06-01T00:00:00Z'
+    population_rows: []
+    source_rows:
+      customers: []
+      orders: []
+    context:
+      mode: source_as_known
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      source_status:
+      - source: customers
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+      - source: orders
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-12-31T00:00:00Z'
+    expected:
+      rows: []
