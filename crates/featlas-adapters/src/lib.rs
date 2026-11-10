@@ -7,6 +7,7 @@
 //! Python host.
 
 pub mod databricks;
+pub mod databricks_caps;
 pub mod local;
 
 use featlas_core::capability::{AdapterDescriptor, AdapterRegistry};

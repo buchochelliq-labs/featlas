@@ -16,6 +16,7 @@ on:
   pull_request:
     paths:
       - "crates/featlas-adapters/src/databricks.rs"
+      - "crates/featlas-adapters/src/databricks_caps.rs"
       - "crates/featlas-core/src/**"
       - "python/featlas_databricks/**"
       - "python/tests/**"
@@ -65,6 +66,8 @@ jobs:
           python -m pip freeze | grep -iE "databricks|pyspark|featlas|protobuf|grpc" > live-evidence/pip-freeze.txt
           git rev-parse HEAD > live-evidence/commit.txt
           sha256sum target/release/fe-spec >> live-evidence/commit.txt
+          # The files a passing run vouches for (pinned in crates/featlas-adapters/src/databricks_lock.json).
+          sha256sum crates/featlas-adapters/src/databricks.rs python/featlas_databricks/runner.py > live-evidence/sources.sha256
       - name: Differential suite on Databricks serverless (generated SQL vs goldens and core)
         run: cd python && FEATLAS_DIFFERENTIAL_REPORT=../live-evidence/databricks-differential.json pytest -q -rA tests/test_local_spark_differential.py
       - name: Unity Catalog publication suite

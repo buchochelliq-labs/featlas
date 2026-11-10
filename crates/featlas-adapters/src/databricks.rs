@@ -1,9 +1,10 @@
-//! Azure Databricks adapter `dev.featlas:databricks@0.1.0`.
+//! Databricks adapter `dev.featlas:databricks@0.1.0` (Azure Databricks is the first target).
 //!
 //! Roles: compute (Spark SQL lowering of the canonical plan), catalog (Unity
 //! Catalog source reads), offline_store (Unity Catalog Delta feature tables),
 //! orchestrator (declared; job integration unverified). There is no
-//! online_store role in this version.
+//! online_store role in this version. Capability assessment lives in
+//! `databricks_caps.rs` and is driven by `databricks_lock.json`.
 //!
 //! This module only *generates* SQL text and statements. It performs no I/O,
 //! holds no credentials and imports no SDK. Execution happens in the thin
@@ -25,9 +26,7 @@
 //!   explicitly; number results are checked finite;
 //! * population left-joins aggregates so zero-event entities survive.
 
-use featlas_core::capability::{
-    AdapterDescriptor, Assessment, AssessmentContext, EvidenceScope, Status,
-};
+use featlas_core::capability::{AdapterDescriptor, Assessment, AssessmentContext};
 use featlas_core::diag::{Diagnostic, Stage};
 use featlas_core::model::*;
 use featlas_core::plan::{FeaturePlan, FeatureSetPlan, Plan, SourceNode, Step};
@@ -45,18 +44,6 @@ const ROLES: &[Role] = &[
 ];
 
 pub struct Databricks;
-
-/// Capabilities for which this version contains a lowering/statement generator.
-const COMPUTE_LOWERED: &[&str] = &[
-    "core.aggregate",
-    "core.recency",
-    "core.lookup",
-    "core.expression",
-    "core.revision_reconstruction",
-    "core.as_of_join",
-    "core.relationship_join",
-    "core.source_as_known",
-];
 
 impl AdapterDescriptor for Databricks {
     fn implementation(&self) -> &str {
@@ -90,33 +77,13 @@ impl AdapterDescriptor for Databricks {
         })
     }
     fn assess(&self, role: Role, capability: &str, ctx: &AssessmentContext) -> Assessment {
-        if let Some((_, _, _, ev)) = ctx
-            .live_evidence
-            .iter()
-            .find(|(a, r, c, _)| a == IMPLEMENTATION && *r == role && c == capability)
-        {
-            // Operator-supplied live evidence is recorded but its authenticity is not established here.
-            return Assessment { status: Status::Unverified, scope: EvidenceScope::LiveTarget, evidence: vec![ev.clone()], limitations: vec!["Live evidence reference supplied; status remains unverified until a reviewed differential acceptance run is pinned in the adapter lock".into()] };
-        }
-        let none_live = "No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open";
-        match (role, capability) {
-            (Role::Compute, c) if COMPUTE_LOWERED.contains(&c) => Assessment::unverified(EvidenceScope::Static, format!("Spark SQL lowering is generated and differential-tested on local Apache Spark only. {none_live}.")),
-            (Role::Catalog, "core.source_read") => Assessment::unverified(EvidenceScope::Static, format!("Unity Catalog reads are generated as SELECT statements; physical schema, history retention and permissions are not probed. {none_live}.")),
-            (Role::OfflineStore, "core.atomic_publication") => Assessment::unverified(EvidenceScope::Static, format!("Single-statement Delta MERGE per feature-set snapshot plus commit-history evidence is generated; atomic visibility is not observed. {none_live}.")),
-            (Role::OfflineStore, "core.serving_replay") => Assessment::unverified(EvidenceScope::Static, format!("Replay reads require persisted published_at evidence from Delta commit history; no historical ledger has been observed. {none_live}.")),
-            (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Declaration, "Databricks job scheduling is not implemented in this version; manual runs only"),
-            (Role::OnlineStore, _) => Assessment::unsupported("This adapter version provides no online_store role"),
-            (_, c) if c.starts_with("learned.") || c.starts_with("custom.") => Assessment::unsupported(format!("{c} has no attested implementation in this adapter; custom/learned execution is not supported")),
-            (_, "core.label_construction") => Assessment::unsupported("Label dataset construction is not lowered to Spark in this version"),
-            (_, "core.online_publication") => Assessment::unsupported("Online publication is not implemented"),
-            (r, c) => Assessment::unsupported(format!("{c} is not provided for role {}", r.as_str())),
-        }
+        crate::databricks_caps::assess(role, capability, ctx)
     }
     fn implementation_sha256(&self) -> Option<String> {
-        None
+        Some(crate::databricks_caps::implementation_sha256())
     }
     fn runtime_versions(&self) -> Map<String, Value> {
-        Map::new()
+        crate::databricks_caps::runtime_versions()
     }
     fn check_bindings(&self, p: &Project, d: &Deployment, adapter_id: &str) -> Vec<Diagnostic> {
         let mut out = Vec::new();
