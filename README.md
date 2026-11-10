@@ -27,7 +27,7 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
 | --- | --- |
 | Canonical core, fixtures (50/50 reference cases; 3 adapter-only cases not executed), negatives | Done, local evidence |
 | Databricks code generation | Done; differential-tested on **local Apache Spark 4.0.1** (46 cases) |
-| **Azure Databricks live acceptance** | **OPEN — not run.** No workspace/credentials/authorization were available. Every Databricks capability reports `unverified`; `execution_ready: false`. See `docs/DATABRICKS_RUNBOOK.md`. |
+| **Live Databricks acceptance** | **Passed on Databricks Free Edition (AWS, serverless)**, run 42771706619: differential 49/49 and Unity Catalog publication 7/7 (`docs/evidence/databricks-live/`). **Azure Databricks: not run.** Capability reports still say `unverified` until the adapter lock is pinned; `execution_ready: false`. |
 | Online store/serving, Feature Views, job scheduling | Not implemented (reported unsupported/unverified) |
 | Learned/custom execution | Unsupported by design (contracts validated, never executed) |
 | Storage rebinding | Boundary proof with an in-memory test double (example 06); not a second production store or a migration |
