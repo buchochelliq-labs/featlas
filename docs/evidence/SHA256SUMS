@@ -1,5 +1,5 @@
 12312647076ead3e6fb309c7feb018cb73e07d64cd98b057f85e579b499e9c2a  ./candidate.txt
-92bdfd997e468692de3fe93496be8e6cdb90984a758e9abcc8413887fa43173d  ./capability-report-databricks.json
+f363a257bbe8db595bb6ee3f13cce063170245e965ce19210c0df6579c92feba  ./capability-report-databricks.json
 97245151f665a6aefb799a38658d2c97cfe141e25dba250803ca73b5229bf134  ./capability-report-positive-local.json
 ed34e0526432a2fae1b9e6e9a9d64ab8ed1f2176da853629f3668e8044621efe  ./capability-report-rejecting-custom.json
 4763ea4685581e8463260af34eb9a282aeee7b6c5f710508a77545c548f30761  ./cargo-test.txt
@@ -15,6 +15,13 @@ e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437  ./databricks-l
 67ccaa302d55644270cf3afe7caecede8eb1a0ba61ac703331ce8f2c51405a3b  ./databricks-live/run-42816483568/pip-freeze.txt
 d140cac6cbf7ad0314c736bde90fc8397656556815713f50009dbd14cd41d5db  ./databricks-live/run-42816483568/pytest-summary.txt
 9b9dfe42ccd79621f7e6b01a6579ad5b0c4be22f4832562b02a35d26581f2558  ./databricks-live/run-42816483568/sources.sha256
+fd44c249bac5e68fb52abc6e5eea85f1a0750f32e5ca44b9869040ed29493e8b  ./databricks-live/run-42847828392/RUN.md
+8387cea2861b6b9f8b83c173a30906a04dba6230915d0e5206f1adb4fd4287ad  ./databricks-live/run-42847828392/commit.txt
+e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437  ./databricks-live/run-42847828392/databricks-differential.json
+4cd7b4c83af21b6f0bcfedb9aae43ce8492dbb51dec78c61a1eeb3dae6b81c11  ./databricks-live/run-42847828392/databricks-live.json
+ebd4f16eedb29fc5ee99363026662f4e76bedfa8420101ff6b591e940220428f  ./databricks-live/run-42847828392/pip-freeze.txt
+1e8796e72141cd38c50bc87b08acae5a15f9ed11b559e0430a8ccc7d7f4d2e30  ./databricks-live/run-42847828392/pytest-summary.txt
+50c9bbd9a96db9df308fd7ce0a1bd61025bb9c195f8a2c8f7a1cf0b9f10fffcf  ./databricks-live/run-42847828392/sources.sha256
 288d78cefb26e71ef8e5b737db23e4b0342686f7850df71aeb3769b0beb1cbad  ./fixtures-00_minimal_template.json
 bf37573abf09cc773cf4b561ea04f2679542a95ff54f0b812c3deb6959ef2480  ./fixtures-01_fault_count.json
 593dd1ce4607f85964f31f7af4c0425b1cf0e59ca91d5a8da8645639b001de83  ./fixtures-02_historical_temperature.json

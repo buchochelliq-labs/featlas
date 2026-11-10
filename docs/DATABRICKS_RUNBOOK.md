@@ -1,7 +1,7 @@
 # Databricks live acceptance runbook
 
 > **Status:** automated as `.github/workflows/databricks-live.yml`; passed on Databricks Free
-> Edition (AWS, serverless) in runs 42771706619 and 42816483568 — see `evidence/databricks-live/`. The
+> Edition (AWS, serverless) in runs 42771706619, 42816483568 and 42847828392 — see `evidence/databricks-live/`. The
 > Azure Databricks gate below is still open: no Azure workspace has been used.
 
 **Status: not executed.** This session had no Azure Databricks workspace, credentials or

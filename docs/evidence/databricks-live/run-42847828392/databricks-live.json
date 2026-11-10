@@ -1,0 +1,135 @@
+{
+  "run": "42847828392",
+  "project": "projects/live/01_fault_count.yaml",
+  "deployment": "fault_prod",
+  "steps": {
+    "preflight": [],
+    "publish": {
+      "table": "`featlas`.`synthetic_features`.`device_reliability_42847828392`",
+      "table_version": 1,
+      "commit_timestamp": "2026-11-10T16:14:54Z",
+      "publication_id": "pub-1-42847828392",
+      "publication_sequence": 1,
+      "materialization_id": "mat-1-42847828392",
+      "rows": 2,
+      "retry": false,
+      "retry_materialization_id": null,
+      "source_versions": {
+        "device_registry": 0,
+        "fault_events": 0
+      },
+      "budget": {
+        "max_scan_bytes": 1073741824,
+        "scan_bytes_upper_bound": 3735,
+        "per_source_bytes": {
+          "device_registry": 1666,
+          "fault_events": 2069
+        },
+        "max_output_rows": 1000000,
+        "overridden": false,
+        "not_enforced_by_host": [
+          "max_daily_cost (no cost signal available to the host)",
+          "max_memory_mib (serverless compute sizes itself)",
+          "max_concurrent_runs (enforced by the job's max_concurrent_runs / the workflow concurrency group)"
+        ],
+        "output_rows": 2
+      },
+      "quality_warnings": [],
+      "evidence_source": "change data feed (table_changes)",
+      "approved_by": "github-actions:databricks-live",
+      "environment": "databricks-free"
+    },
+    "primary_key_declared": true,
+    "budget": {
+      "max_scan_bytes": 1073741824,
+      "scan_bytes_upper_bound": 3735,
+      "per_source_bytes": {
+        "device_registry": 1666,
+        "fault_events": 2069
+      },
+      "max_output_rows": 1000000,
+      "overridden": false,
+      "not_enforced_by_host": [
+        "max_daily_cost (no cost signal available to the host)",
+        "max_memory_mib (serverless compute sizes itself)",
+        "max_concurrent_runs (enforced by the job's max_concurrent_runs / the workflow concurrency group)"
+      ],
+      "output_rows": 2
+    },
+    "retention_preflight": [
+      {
+        "code": "RETENTION_UNPROVEN",
+        "severity": "warning",
+        "rule": "SEM-DEPLOY-002",
+        "source": "fault_events",
+        "table": "`featlas`.`synthetic_raw`.`fault_events_42847828392`",
+        "declared_earliest_reproducible_at": "2026-01-01T00:00:00Z",
+        "oldest_retained": "2026-06-07T10:00:00Z"
+      }
+    ],
+    "consumer": {
+      "batch": [
+        [
+          "tenant_a",
+          1,
+          "pub-1-42847828392"
+        ],
+        [
+          "tenant_b",
+          2,
+          "pub-1-42847828392"
+        ]
+      ],
+      "replay_before_commit": [
+        [
+          "tenant_a",
+          null,
+          null
+        ],
+        [
+          "tenant_b",
+          null,
+          null
+        ]
+      ],
+      "replay_at_commit": [
+        [
+          "tenant_a",
+          1,
+          "pub-1-42847828392"
+        ],
+        [
+          "tenant_b",
+          2,
+          "pub-1-42847828392"
+        ]
+      ]
+    },
+    "retry": {
+      "retry": true,
+      "materialization_id": "mat-1-42847828392",
+      "inserting_commits": 1
+    },
+    "crash_recovery": "pending evidence served live, excluded from replay, recovered by retry"
+  },
+  "runtime": {
+    "spark_version": "4.2.0",
+    "databricks_current_version": {
+      "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+      "dbsql_version": null,
+      "u_build_hash": "2402da1732107aaa28913fd3b75b21dfc8a88fd4-dirty",
+      "r_build_hash": "4ecbf6876d408c4ff0833383043586dc944ac7c5"
+    },
+    "databricks_connect": "unknown"
+  },
+  "manifest": {
+    "plan_digest": "dbab13034711f9c254f7e9fe618220fb473129b176ecad48fa219ea76f4208d3",
+    "logical_plan_digest": "667733be32666af0c9a3a6e08ce0e1bf8a9ce01bcedf074ba4e1b998f44f1575",
+    "project_file_sha256": "bc30d8ba663a4712091d24d301a9831509387d4f152da6b4f8cfff2a48627f33"
+  },
+  "tables": [
+    "featlas.synthetic_raw.device_registry_42847828392",
+    "featlas.synthetic_raw.fault_events_42847828392",
+    "featlas.synthetic_features.device_reliability_42847828392"
+  ]
+}
