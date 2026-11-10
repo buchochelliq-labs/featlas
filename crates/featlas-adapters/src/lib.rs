@@ -8,6 +8,7 @@
 
 pub mod databricks;
 pub mod databricks_caps;
+pub mod feast;
 pub mod local;
 
 use featlas_core::capability::{AdapterDescriptor, AdapterRegistry};
@@ -24,6 +25,7 @@ impl Default for Registry {
                 Box::new(local::LocalReference),
                 Box::new(local::MemoryStoreAdapter),
                 Box::new(databricks::Databricks),
+                Box::new(feast::Feast),
             ],
         }
     }

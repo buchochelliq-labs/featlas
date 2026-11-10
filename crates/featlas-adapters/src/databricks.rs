@@ -307,6 +307,8 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize)]
 pub struct Artifacts {
     pub generator: String,
+    /// Implementation of the output target's store (`dev.featlas:databricks` or `dev.featlas:feast`).
+    pub store: String,
     pub plan_digest: String,
     pub logical_plan_digest: String,
     pub feature_set: String,
@@ -784,13 +786,17 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         .iter()
         .find(|a| a.id == target.adapter)
         .ok_or("Unknown output adapter")?;
-    if out_adapter.implementation != IMPLEMENTATION {
+    // Feast stores but does not compute: the snapshot is lowered here and published by the
+    // featlas_feast host; the Unity Catalog publication statements do not apply.
+    let external_store = out_adapter.implementation == crate::feast::IMPLEMENTATION;
+    if out_adapter.implementation != IMPLEMENTATION && !external_store {
         return Err(format!(
-            "Offline target uses {}; this lowering publishes only to {IMPLEMENTATION}",
-            out_adapter.implementation
+            "Output target uses {}; this lowering publishes to {IMPLEMENTATION} and computes snapshots for {}",
+            out_adapter.implementation,
+            crate::feast::IMPLEMENTATION
         ));
     }
-    let output_table = table_name(&target.location)?;
+    let output_table = if external_store { target.location.address() } else { table_name(&target.location)? };
     let mut safe_names = BTreeMap::new();
     for id in plan
         .logical
@@ -1183,7 +1189,14 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
     }
     let mut snapshot = snapshot;
     as_view(&mut snapshot);
+    let (create_table, publish, table_properties, evidence, consumer_read, expected_table_properties) = if external_store {
+        let na = |name: &str| Statement { name: name.into(), purpose: format!("Not used: {} publishes this target through its own host (featlas_feast)", crate::feast::IMPLEMENTATION), sql: String::new(), reads: vec![], view: None };
+        (na("create_feature_table"), na("publish_snapshot"), na("table_properties"), vec![na("commit_history"), na("record_published_at"), na("commit_candidates")], na("consumer_read"), BTreeMap::new())
+    } else {
+        (create_table, publish, table_properties, evidence, consumer_read, expected_table_properties)
+    };
     Ok(Artifacts {
+        store: out_adapter.implementation.clone(),
         generator: format!("{IMPLEMENTATION}@{VERSION}"),
         plan_digest: plan.plan_digest.clone(),
         logical_plan_digest: plan.logical_plan_digest.clone(),
@@ -1211,7 +1224,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             output_retention_seconds: p.deployment(&plan.bindings.deployment).map(|d| d.output_retention_seconds).unwrap_or(0),
         },
         surface: if online { "online_store" } else { "offline_snapshot" }.into(),
-        online: if online {
+        online: if online && !external_store {
             let cfg = out_adapter.configuration.get("online_store").ok_or("online_store target without adapter configuration online_store")?;
             let Location::Table { namespace, name, .. } = &target.location else { return Err("online staging target must be a table".into()) };
             Some(OnlineTarget {
