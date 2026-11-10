@@ -172,3 +172,30 @@ def test_late_arrival_is_a_reported_legacy_divergence(spark, inputs):
     assert {c["case"].split("_characterization")[0] for c in failed} >= {"orders_30d", "store_orders_30d"}
     for c in failed:
         assert "tenant_b" in json.dumps(c), "only the entity with the late row diverges"
+
+
+def test_conditional_sum_with_else_zero_keeps_zero_for_entities_without_matches():
+    """SUM(CASE WHEN c THEN x ELSE 0 END): an entity whose rows all fail c is 0, not null."""
+    a = analyze_sql("SELECT o.tenant_id, o.customer_id, SUM(CASE WHEN o.status = 'settled' THEN o.amount_cents ELSE 0 END) AS settled "
+                    "FROM main.sales.orders o WHERE o.ordered_at >= :as_of - INTERVAL 30 DAYS AND o.ordered_at < :as_of GROUP BY o.tenant_id, o.customer_id")
+    [o] = [x for x in a.outputs if x.kind == "aggregate"]
+    assert o.operation == "sum" and o.filter is not None and o.coalesce_zero
+
+
+def test_parity_sql_flags_one_sided_nulls_and_rows_missing_from_one_split_table(spark):
+    """Tolerance comparisons must count NULL-vs-value as a mismatch, and an entity absent from
+    one split table must be counted even when the union of keys still contains it."""
+    from featlas_reverse.parity import parity_sql
+
+    spark.createDataFrame([("t", "a", 1.0, 5), ("t", "b", 2.0, 6)], "tenant_id string, customer_id string, x double, y bigint").createOrReplaceTempView("p_legacy")
+    spark.createDataFrame([("t", "a", None), ("t", "b", 2.0)], "tenant_id string, customer_id string, x double").selectExpr("*", "TIMESTAMP '2026-06-01 00:00:00' AS feature_as_of").createOrReplaceTempView("p_new_x")
+    spark.createDataFrame([("t", "a", 5)], "tenant_id string, customer_id string, y bigint").selectExpr("*", "TIMESTAMP '2026-06-01 00:00:00' AS feature_as_of").createOrReplaceTempView("p_new_y")
+    spark.sql("SELECT *, TIMESTAMP '2026-06-01 00:00:00' AS feature_ts FROM p_legacy").createOrReplaceTempView("p_legacy_ts")
+    mapping = {"x": {"table": "main.f.p_new_x", "column": "x"}, "y": {"table": "main.f.p_new_y", "column": "y"}}
+    sql = parity_sql("main.f.legacy", "feature_ts", ["tenant_id", "customer_id"], mapping, "2026-06-01T00:00:00Z", tolerances={"x": {"absolute": 0, "relative": 1e-9}})
+    for fq, view in (("`main`.`f`.`legacy`", "p_legacy_ts"), ("`main`.`f`.`p_new_x`", "p_new_x"), ("`main`.`f`.`p_new_y`", "p_new_y")):
+        sql = sql.replace(fq, view)
+    r = spark.sql(sql).collect()[0].asDict()
+    assert r["mismatched_x"] == 1, "legacy 1.0 vs regenerated NULL is a mismatch"
+    assert r["missing_in_p_new_y"] == 1 and r["missing_in_p_new_x"] == 0
+    assert r["missing_in_new"] == 0, "the union alone would have hidden the missing row"

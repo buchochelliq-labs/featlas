@@ -352,11 +352,13 @@ class SnapshotRun:
     def retention_preflight(self) -> list[dict]:
         """Verify retention contracts against the physical tables (read-only).
 
-        * every source must physically retain rows back to its declared
-          ``earliest_reproducible_at`` (oldest availability time <= the declared instant), else
-          history the contract promises is gone (RETENTION_CONTRACT_VIOLATED);
-        * an existing output table must keep its change data feed on, which publication evidence
-          needs (CHANGE_DATA_FEED_DISABLED).
+        * ``severity: warning`` RETENTION_UNPROVEN — a source has no row at or before its
+          declared ``earliest_reproducible_at``. That is consistent with history having been
+          removed, but also with a source that simply started later, so it does not block a run;
+          it is recorded for review (the core already treats as_of values before the declared
+          instant as insufficient history);
+        * ``severity: error`` CHANGE_DATA_FEED_DISABLED — an existing output table must keep its
+          change data feed on, which publication evidence needs.
         """
         problems = []
         ret = self.artifacts.get("retention") or {}
@@ -366,13 +368,13 @@ class SnapshotRun:
             oldest = self._sql(f"oldest_{source}", f"SELECT min({_q(chk['available_time'])}) AS t FROM {chk['table']}").collect()[0]["t"]
             declared = parse_instant(chk["earliest_reproducible_at"]).replace(tzinfo=None)
             if oldest is not None and oldest.replace(tzinfo=None) > declared:
-                problems.append({"code": "RETENTION_CONTRACT_VIOLATED", "rule": "SEM-DEPLOY-002", "source": source, "table": chk["table"], "declared_earliest_reproducible_at": chk["earliest_reproducible_at"], "oldest_retained": format_instant(oldest)})
+                problems.append({"code": "RETENTION_UNPROVEN", "severity": "warning", "rule": "SEM-DEPLOY-002", "source": source, "table": chk["table"], "declared_earliest_reproducible_at": chk["earliest_reproducible_at"], "oldest_retained": format_instant(oldest)})
         try:
             props = {r["key"]: r["value"] for r in self._sql("table_properties", self.artifacts["table_properties"]["sql"]).collect()}
         except FeatlasError:
             props = None  # the output table does not exist yet; its DDL enables the change data feed
         if props is not None and props.get("delta.enableChangeDataFeed", "false").lower() != "true":
-            problems.append({"code": "CHANGE_DATA_FEED_DISABLED", "rule": "SEM-PORT-009", "table": self.artifacts["output_table"], "detail": "publication evidence is read from the change data feed"})
+            problems.append({"code": "CHANGE_DATA_FEED_DISABLED", "severity": "error", "rule": "SEM-PORT-009", "table": self.artifacts["output_table"], "detail": "publication evidence is read from the change data feed"})
         return problems
 
     def _evidence(self, name: str) -> dict:

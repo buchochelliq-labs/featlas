@@ -277,6 +277,10 @@ def _aggregate(name: str, e: exp.Expression, fact: str, sql: str) -> Output | No
         if isinstance(arg, exp.Case):
             cond, val = _case_filter(arg, allow_zero_else=out.operation == "sum")
             filt = cond if filt is None else exp.and_(filt, cond)
+            if out.operation == "sum" and isinstance(arg.args.get("default"), exp.Literal):
+                # SUM(CASE WHEN c THEN x ELSE 0 END): rows failing c add 0, so an entity whose rows
+                # all fail c is 0, not null: that is a filtered sum with empty value 0.
+                out.coalesce_zero = True
             arg = val
         out.value = to_expression(arg, fact, cols)
     else:

@@ -96,9 +96,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"preflight": "failed", "problems": problems}, indent=2))
         return 1
     retention = run.retention_preflight()
-    if retention:
+    blocking = [p for p in retention if p.get("severity") == "error"]
+    if blocking:
         print(json.dumps({"preflight": "failed", "problems": retention}, indent=2))
         return 1
+    for p in retention:
+        print(json.dumps({"preflight_warning": p}), file=sys.stderr)
     if args.publish and not args.publication_id:
         # Scheduled runs: the identity is a function of (deployment, feature set, as_of), so a
         # retried or duplicated run of the same slot is recognised as a retry, never a second write.

@@ -3,7 +3,8 @@
 ``parity_sql`` compares the legacy wide table with the regenerated table(s) at one as_of: rows
 present on only one side, and per column the number of rows whose values differ beyond the
 feature's declared tolerance (null-safe). Run it read-only; a clean result is
-``missing_in_new = missing_in_legacy = 0`` and every ``mismatched_*`` = 0.
+``missing_in_new = missing_in_legacy = 0``, every per-table ``missing_in_<table>`` = 0 and every
+``mismatched_*`` = 0.
 
 Differences are expected — and are findings, not bugs — where the legacy code was not
 point-in-time correct (it read rows that arrived after as_of) or treated empty windows
@@ -44,7 +45,8 @@ def parity_sql(legacy_table: str, legacy_as_of_column: str, keys: list[str], map
         o = f"l.{_q(legacy_col)}"
         tol = tolerances.get(legacy_col)
         if tol:
-            same = f"(({o} IS NULL AND {n} IS NULL) OR abs(CAST({o} AS DOUBLE) - CAST({n} AS DOUBLE)) <= greatest({tol.get('absolute', 0)}, {tol.get('relative', 0)} * abs(CAST({o} AS DOUBLE))))"
+            # A one-sided NULL is a mismatch: the comparison must be false, never NULL.
+            same = f"(({o} IS NULL AND {n} IS NULL) OR ({o} IS NOT NULL AND {n} IS NOT NULL AND abs(CAST({o} AS DOUBLE) - CAST({n} AS DOUBLE)) <= greatest({tol.get('absolute', 0)}, {tol.get('relative', 0)} * abs(CAST({o} AS DOUBLE)))))"
         else:
             same = f"({o} <=> {n})"
         checks.append(f"  sum(CASE WHEN l.{_q(keys[0])} IS NOT NULL AND k.{_q(keys[0])} IS NOT NULL AND NOT {same} THEN 1 ELSE 0 END) AS {_q('mismatched_' + legacy_col)}")
@@ -57,6 +59,8 @@ def parity_sql(legacy_table: str, legacy_as_of_column: str, keys: list[str], map
         f"  count(*) AS rows_compared,\n"
         f"  sum(CASE WHEN l.{_q(keys[0])} IS NULL THEN 1 ELSE 0 END) AS missing_in_legacy,\n"
         f"  sum(CASE WHEN k.{_q(keys[0])} IS NULL THEN 1 ELSE 0 END) AS missing_in_new,\n"
+        # Every regenerated table must carry the whole population: count absences per table.
+        + "".join(f"  sum(CASE WHEN l.{_q(keys[0])} IS NOT NULL AND {alias[t]}.{_q(keys[0])} IS NULL THEN 1 ELSE 0 END) AS {_q('missing_in_' + t.split('.')[-1])},\n" for t in tables)
         + ",\n".join(checks)
         + f"\nFROM all_keys a\nLEFT JOIN l ON " + " AND ".join(f"l.{_q(x)} = a.{_q(x)}" for x in keys)
         + "\nLEFT JOIN k ON " + " AND ".join(f"k.{_q(x)} = a.{_q(x)}" for x in keys)

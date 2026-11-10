@@ -9,11 +9,10 @@ unless you pass explicit publication flags.
 
 !!! warning "Status"
     Live acceptance passed on **Databricks Free Edition (AWS, serverless)**, run 42771706619.
-    **Azure Databricks has not been run.** Capability reports for this commit are `unverified`
-    with `execution_ready: false` until a new live run is pinned; quality policies and label
-    datasets on Spark have not been run on Databricks yet. Job scheduling, online serving and
-    Feature Views are not implemented; budget/retention preflight is in progress. Details:
-    [Status](../status.md).
+    **Azure Databricks has not been run.** Capabilities report `supported_native` only while the
+    adapter sources equal a run pinned in the adapter lock; otherwise `unverified`. Scheduling is
+    generated (a paused job) but not observed, so `execution_ready` is `false`. Online serving and
+    Feature Views are not implemented. Details: [Status](../status.md).
 
 ## Adapter and configuration
 

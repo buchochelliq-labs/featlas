@@ -157,10 +157,11 @@ def test_2_publish_creates_uc_feature_table_and_records_evidence(env):
 
 def test_8_retention_contract_is_checked_against_the_tables(env):
     """The live project declares history back to 2026-01-01 for both sources; the seeded
-    fault_events rows start in June, so that contract is (correctly) reported as violated."""
+    fault_events rows start in June, so retention is reported as unproven (a warning: a later
+    first row does not show deletion), and nothing blocks."""
     problems = run(env).retention_preflight()
     REPORT["steps"]["retention_preflight"] = problems
-    assert [(p["code"], p["source"]) for p in problems] == [("RETENTION_CONTRACT_VIOLATED", "fault_events")]
+    assert [(p["code"], p["severity"], p["source"]) for p in problems] == [("RETENTION_UNPROVEN", "warning", "fault_events")]
 
 
 def test_3_consumer_reads_and_replay_visibility(env):

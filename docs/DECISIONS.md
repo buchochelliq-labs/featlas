@@ -169,9 +169,11 @@ what it can measure and says what it cannot:
 * A larger budget needs `PublicationAuthorization.budget_override` (explicit, recorded).
 * `max_daily_cost`, `max_memory_mib`: no host signal; reported under `not_enforced_by_host`.
   `max_concurrent_runs` is enforced by the generated job (D14) or the workflow concurrency group.
-* Retention preflight: each source must physically retain rows back to its declared
-  `earliest_reproducible_at` (`RETENTION_CONTRACT_VIOLATED` otherwise), and an existing output
-  table must keep its change data feed (`CHANGE_DATA_FEED_DISABLED`). Declared retention already
+* Retention preflight: a source with no row at or before its declared `earliest_reproducible_at`
+  is a **warning** (`RETENTION_UNPROVEN`): a later first row is consistent with deleted history
+  but also with a source that simply started later, so it is recorded, not blocking. An existing
+  output table without its change data feed is an **error** (`CHANGE_DATA_FEED_DISABLED`) and
+  stops the run, because publication evidence is read from it. Declared retention already
   turns `as_of`s before `earliest_reproducible_at` into `insufficient_history` in the core.
 
 ## D14. Scheduling (SEM-DEPLOY-003, core.scheduling)
