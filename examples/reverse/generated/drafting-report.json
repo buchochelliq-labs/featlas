@@ -1,0 +1,169 @@
+{
+  "assumptions": [
+    {
+      "decision": "project.owner",
+      "value": "ml-platform",
+      "why": "Owner of the legacy table (or a placeholder)"
+    },
+    {
+      "decision": "source_ids.main.sales.orders",
+      "value": "orders",
+      "why": "Logical source id from the table name"
+    },
+    {
+      "decision": "entity.id",
+      "value": "customer",
+      "why": "Entity named after its most specific key"
+    },
+    {
+      "decision": "entity.tenant_key",
+      "value": "tenant_id",
+      "why": "Tenant key detected by name (null = single-tenant)"
+    },
+    {
+      "decision": "population.table",
+      "value": "main.crm.customers",
+      "why": "A provided table whose primary key equals the entity keys"
+    },
+    {
+      "decision": "source_ids.main.crm.customers",
+      "value": "customers",
+      "why": "Logical source id from the table name"
+    },
+    {
+      "decision": "sources.main.sales.orders.available_time",
+      "value": "ingested_at",
+      "why": "Column name suggests ingestion/availability time"
+    },
+    {
+      "decision": "sources.main.crm.customers.available_time",
+      "value": "ingested_at",
+      "why": "Column name suggests ingestion/availability time"
+    },
+    {
+      "decision": "earliest_as_of",
+      "value": "2026-01-01T00:00:00Z",
+      "why": "Earliest reproducible instant; set to the start of retained source history"
+    },
+    {
+      "decision": "feature_set.id",
+      "value": "customer_wide",
+      "why": "Feature set named after the legacy table"
+    },
+    {
+      "decision": "project.id",
+      "value": "customer_wide_reverse",
+      "why": "Project id"
+    },
+    {
+      "decision": "target.table",
+      "value": "main.features.customer_wide_featlas",
+      "why": "Regenerated table written next to the legacy one (the legacy table is kept for parity checks)"
+    },
+    {
+      "decision": "deployment.id",
+      "value": "customer_wide_databricks",
+      "why": "Deployment id"
+    },
+    {
+      "decision": "deployment.environment",
+      "value": "development",
+      "why": "Environment label"
+    }
+  ],
+  "questions": [
+    {
+      "decision": "samples",
+      "question": "No characterization samples: provide, for a few entities and one as_of, the source rows and the legacy table's output row (see the skill). Without them only structural cases exist.",
+      "options": [],
+      "blocking": false
+    }
+  ],
+  "unsupported": [],
+  "mapping": {
+    "orders_30d": {
+      "feature": "customer.orders_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(*) AS orders_30d"
+    },
+    "distinct_orders_30d": {
+      "feature": "customer.distinct_orders_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(DISTINCT o.order_id) AS distinct_orders_30d"
+    },
+    "settled_spend_30d": {
+      "feature": "customer.settled_spend_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COALESCE(SUM(CASE WHEN o.status = 'settled' THEN o.amount_cents END), 0) AS settled_spend_30d"
+    },
+    "avg_order_value_30d": {
+      "feature": "customer.avg_order_value_30d",
+      "version": "1.0.0",
+      "legacy_sql": "AVG(o.amount_cents) AS avg_order_value_30d"
+    },
+    "max_order_value_30d": {
+      "feature": "customer.max_order_value_30d",
+      "version": "1.0.0",
+      "legacy_sql": "MAX(o.amount_cents) AS max_order_value_30d"
+    },
+    "web_orders_30d": {
+      "feature": "customer.web_orders_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(*) FILTER(WHERE o.channel = 'web') AS web_orders_30d"
+    },
+    "store_orders_30d": {
+      "feature": "customer.store_orders_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(*) FILTER(WHERE o.channel = 'store') AS store_orders_30d"
+    },
+    "returns_30d": {
+      "feature": "customer.returns_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(CASE WHEN o.status = 'returned' THEN 1 END) AS returns_30d"
+    },
+    "discount_30d": {
+      "feature": "customer.discount_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COALESCE(SUM(o.discount_cents), 0) AS discount_30d"
+    },
+    "card_payments_30d": {
+      "feature": "customer.card_payments_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(CASE WHEN o.payment_method = 'card' THEN 1 END) AS card_payments_30d"
+    },
+    "wallet_payments_30d": {
+      "feature": "customer.wallet_payments_30d",
+      "version": "1.0.0",
+      "legacy_sql": "COUNT(CASE WHEN o.payment_method = 'wallet' THEN 1 END) AS wallet_payments_30d"
+    },
+    "max_shipping_days_30d": {
+      "feature": "customer.max_shipping_days_30d",
+      "version": "1.0.0",
+      "legacy_sql": "MAX(o.shipping_days) AS max_shipping_days_30d"
+    },
+    "avg_shipping_days_30d": {
+      "feature": "customer.avg_shipping_days_30d",
+      "version": "1.0.0",
+      "legacy_sql": "AVG(o.shipping_days) AS avg_shipping_days_30d"
+    },
+    "return_rate_30d": {
+      "feature": "customer.return_rate_30d",
+      "version": "1.0.0",
+      "legacy_sql": "returns_30d / NULLIF(orders_30d, 0) AS return_rate_30d"
+    },
+    "web_share_30d": {
+      "feature": "customer.web_share_30d",
+      "version": "1.0.0",
+      "legacy_sql": "web_orders_30d / NULLIF(orders_30d, 0) AS web_share_30d"
+    },
+    "tenant_id": {
+      "entity_key": "tenant_id"
+    },
+    "customer_id": {
+      "entity_key": "customer_id"
+    },
+    "feature_ts": {
+      "as_of": true
+    }
+  }
+}

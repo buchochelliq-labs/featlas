@@ -1,0 +1,641 @@
+{
+  "feature_set": "customer_wide",
+  "features": 15,
+  "profile": [
+    {
+      "feature": "customer.orders_30d",
+      "legacy_column": "orders_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "purchasing",
+        "business_unit": "commerce"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.distinct_orders_30d",
+      "legacy_column": "distinct_orders_30d",
+      "kind": "aggregate",
+      "operation": "count_distinct",
+      "tags": {
+        "domain": "purchasing",
+        "business_unit": "commerce"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "order_id"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.settled_spend_30d",
+      "legacy_column": "settled_spend_30d",
+      "kind": "aggregate",
+      "operation": "sum",
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "amount_cents"
+      ],
+      "filter_columns": [
+        "is_test",
+        "status"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "status"
+      ]
+    },
+    {
+      "feature": "customer.avg_order_value_30d",
+      "legacy_column": "avg_order_value_30d",
+      "kind": "aggregate",
+      "operation": "mean",
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "amount_cents"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.max_order_value_30d",
+      "legacy_column": "max_order_value_30d",
+      "kind": "aggregate",
+      "operation": "max",
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "amount_cents"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.web_orders_30d",
+      "legacy_column": "web_orders_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "channel",
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "channel"
+      ]
+    },
+    {
+      "feature": "customer.store_orders_30d",
+      "legacy_column": "store_orders_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "channel",
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "channel"
+      ]
+    },
+    {
+      "feature": "customer.returns_30d",
+      "legacy_column": "returns_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "returns",
+        "business_unit": "operations"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "is_test",
+        "status"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "status"
+      ]
+    },
+    {
+      "feature": "customer.discount_30d",
+      "legacy_column": "discount_30d",
+      "kind": "aggregate",
+      "operation": "sum",
+      "tags": {
+        "domain": "revenue",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "discount_cents"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.card_payments_30d",
+      "legacy_column": "card_payments_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "payments",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "is_test",
+        "payment_method"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "payment_method"
+      ]
+    },
+    {
+      "feature": "customer.wallet_payments_30d",
+      "legacy_column": "wallet_payments_30d",
+      "kind": "aggregate",
+      "operation": "count",
+      "tags": {
+        "domain": "payments",
+        "business_unit": "finance"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [],
+      "filter_columns": [
+        "is_test",
+        "payment_method"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": [
+        "payment_method"
+      ]
+    },
+    {
+      "feature": "customer.max_shipping_days_30d",
+      "legacy_column": "max_shipping_days_30d",
+      "kind": "aggregate",
+      "operation": "max",
+      "tags": {
+        "domain": "fulfilment",
+        "business_unit": "operations"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "shipping_days"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.avg_shipping_days_30d",
+      "legacy_column": "avg_shipping_days_30d",
+      "kind": "aggregate",
+      "operation": "mean",
+      "tags": {
+        "domain": "fulfilment",
+        "business_unit": "operations"
+      },
+      "owner": "ml-platform",
+      "sources": [
+        "orders"
+      ],
+      "value_columns": [
+        "shipping_days"
+      ],
+      "filter_columns": [
+        "is_test"
+      ],
+      "lookback_seconds": 2592000,
+      "depends_on": [],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.return_rate_30d",
+      "legacy_column": "return_rate_30d",
+      "kind": "expression",
+      "operation": null,
+      "tags": {
+        "domain": "returns",
+        "business_unit": "operations"
+      },
+      "owner": "ml-platform",
+      "sources": [],
+      "value_columns": [],
+      "filter_columns": [],
+      "lookback_seconds": 2592000,
+      "depends_on": [
+        "customer.orders_30d",
+        "customer.returns_30d"
+      ],
+      "family_filter_columns": []
+    },
+    {
+      "feature": "customer.web_share_30d",
+      "legacy_column": "web_share_30d",
+      "kind": "expression",
+      "operation": null,
+      "tags": {
+        "domain": "channel",
+        "business_unit": "marketing"
+      },
+      "owner": "ml-platform",
+      "sources": [],
+      "value_columns": [],
+      "filter_columns": [],
+      "lookback_seconds": 2592000,
+      "depends_on": [
+        "customer.orders_30d",
+        "customer.web_orders_30d"
+      ],
+      "family_filter_columns": []
+    }
+  ],
+  "strategies": [
+    {
+      "strategy": "tag:domain",
+      "assignment": {
+        "customer.orders_30d": "purchasing",
+        "customer.distinct_orders_30d": "purchasing",
+        "customer.settled_spend_30d": "revenue",
+        "customer.avg_order_value_30d": "revenue",
+        "customer.max_order_value_30d": "revenue",
+        "customer.web_orders_30d": "channel",
+        "customer.store_orders_30d": "channel",
+        "customer.returns_30d": "returns",
+        "customer.discount_30d": "revenue",
+        "customer.card_payments_30d": "payments",
+        "customer.wallet_payments_30d": "payments",
+        "customer.max_shipping_days_30d": "fulfilment",
+        "customer.avg_shipping_days_30d": "fulfilment",
+        "customer.return_rate_30d": "returns",
+        "customer.web_share_30d": "channel"
+      },
+      "metrics": {
+        "groups": 6,
+        "sizes": [
+          2,
+          2,
+          2,
+          2,
+          3,
+          4
+        ],
+        "smallest": 2,
+        "largest": 4,
+        "singletons": 0,
+        "cross_set_dependencies": 2,
+        "recomputed": [
+          {
+            "feature": "customer.return_rate_30d",
+            "depends_on": "customer.orders_30d",
+            "from_group": "purchasing",
+            "to_group": "returns"
+          },
+          {
+            "feature": "customer.web_share_30d",
+            "depends_on": "customer.orders_30d",
+            "from_group": "purchasing",
+            "to_group": "channel"
+          }
+        ],
+        "cohesion": 0.444,
+        "single_owner_groups": 6,
+        "unassigned": []
+      },
+      "score": 1.888,
+      "reasons": [
+        "2 derived input(s) recomputed in another table's job",
+        "cohesion 0.444, 6/6 groups with one owner/business unit"
+      ]
+    },
+    {
+      "strategy": "filter_family",
+      "assignment": {
+        "customer.orders_30d": "totals",
+        "customer.distinct_orders_30d": "totals",
+        "customer.settled_spend_30d": "status",
+        "customer.avg_order_value_30d": "totals",
+        "customer.max_order_value_30d": "totals",
+        "customer.web_orders_30d": "channel",
+        "customer.store_orders_30d": "channel",
+        "customer.returns_30d": "status",
+        "customer.discount_30d": "totals",
+        "customer.card_payments_30d": "payment_method",
+        "customer.wallet_payments_30d": "payment_method",
+        "customer.max_shipping_days_30d": "totals",
+        "customer.avg_shipping_days_30d": "totals",
+        "customer.return_rate_30d": "totals",
+        "customer.web_share_30d": "totals"
+      },
+      "metrics": {
+        "groups": 4,
+        "sizes": [
+          2,
+          2,
+          2,
+          9
+        ],
+        "smallest": 2,
+        "largest": 9,
+        "singletons": 0,
+        "cross_set_dependencies": 2,
+        "recomputed": [
+          {
+            "feature": "customer.return_rate_30d",
+            "depends_on": "customer.returns_30d",
+            "from_group": "status",
+            "to_group": "totals"
+          },
+          {
+            "feature": "customer.web_share_30d",
+            "depends_on": "customer.web_orders_30d",
+            "from_group": "channel",
+            "to_group": "totals"
+          }
+        ],
+        "cohesion": 0.66,
+        "single_owner_groups": 2,
+        "unassigned": []
+      },
+      "score": 1.57,
+      "reasons": [
+        "2 derived input(s) recomputed in another table's job",
+        "cohesion 0.66, 2/4 groups with one owner/business unit"
+      ]
+    },
+    {
+      "strategy": "tag:business_unit",
+      "assignment": {
+        "customer.orders_30d": "commerce",
+        "customer.distinct_orders_30d": "commerce",
+        "customer.settled_spend_30d": "finance",
+        "customer.avg_order_value_30d": "finance",
+        "customer.max_order_value_30d": "finance",
+        "customer.web_orders_30d": "marketing",
+        "customer.store_orders_30d": "marketing",
+        "customer.returns_30d": "operations",
+        "customer.discount_30d": "finance",
+        "customer.card_payments_30d": "finance",
+        "customer.wallet_payments_30d": "finance",
+        "customer.max_shipping_days_30d": "operations",
+        "customer.avg_shipping_days_30d": "operations",
+        "customer.return_rate_30d": "operations",
+        "customer.web_share_30d": "marketing"
+      },
+      "metrics": {
+        "groups": 4,
+        "sizes": [
+          2,
+          3,
+          4,
+          6
+        ],
+        "smallest": 2,
+        "largest": 6,
+        "singletons": 0,
+        "cross_set_dependencies": 2,
+        "recomputed": [
+          {
+            "feature": "customer.return_rate_30d",
+            "depends_on": "customer.orders_30d",
+            "from_group": "commerce",
+            "to_group": "operations"
+          },
+          {
+            "feature": "customer.web_share_30d",
+            "depends_on": "customer.orders_30d",
+            "from_group": "commerce",
+            "to_group": "marketing"
+          }
+        ],
+        "cohesion": 0.175,
+        "single_owner_groups": 4,
+        "unassigned": []
+      },
+      "score": 1.35,
+      "reasons": [
+        "2 derived input(s) recomputed in another table's job",
+        "cohesion 0.175, 4/4 groups with one owner/business unit"
+      ]
+    },
+    {
+      "strategy": "value_family",
+      "assignment": {
+        "customer.orders_30d": "counts",
+        "customer.distinct_orders_30d": "order_id",
+        "customer.settled_spend_30d": "amount_cents",
+        "customer.avg_order_value_30d": "amount_cents",
+        "customer.max_order_value_30d": "amount_cents",
+        "customer.web_orders_30d": "counts",
+        "customer.store_orders_30d": "counts",
+        "customer.returns_30d": "counts",
+        "customer.discount_30d": "discount_cents",
+        "customer.card_payments_30d": "counts",
+        "customer.wallet_payments_30d": "counts",
+        "customer.max_shipping_days_30d": "shipping_days",
+        "customer.avg_shipping_days_30d": "shipping_days",
+        "customer.return_rate_30d": "counts",
+        "customer.web_share_30d": "counts"
+      },
+      "metrics": {
+        "groups": 5,
+        "sizes": [
+          1,
+          1,
+          2,
+          3,
+          8
+        ],
+        "smallest": 1,
+        "largest": 8,
+        "singletons": 2,
+        "cross_set_dependencies": 0,
+        "recomputed": [],
+        "cohesion": 0.615,
+        "single_owner_groups": 4,
+        "unassigned": []
+      },
+      "score": -0.57,
+      "reasons": [
+        "2 group(s) smaller than 2",
+        "cohesion 0.615, 4/5 groups with one owner/business unit"
+      ]
+    },
+    {
+      "strategy": "window",
+      "assignment": {
+        "customer.orders_30d": "30d",
+        "customer.distinct_orders_30d": "30d",
+        "customer.settled_spend_30d": "30d",
+        "customer.avg_order_value_30d": "30d",
+        "customer.max_order_value_30d": "30d",
+        "customer.web_orders_30d": "30d",
+        "customer.store_orders_30d": "30d",
+        "customer.returns_30d": "30d",
+        "customer.discount_30d": "30d",
+        "customer.card_payments_30d": "30d",
+        "customer.wallet_payments_30d": "30d",
+        "customer.max_shipping_days_30d": "30d",
+        "customer.avg_shipping_days_30d": "30d",
+        "customer.return_rate_30d": "30d",
+        "customer.web_share_30d": "30d"
+      },
+      "metrics": {
+        "groups": 1,
+        "sizes": [
+          15
+        ],
+        "smallest": 15,
+        "largest": 15,
+        "singletons": 0,
+        "cross_set_dependencies": 0,
+        "recomputed": [],
+        "cohesion": 0.081,
+        "single_owner_groups": 0,
+        "unassigned": []
+      },
+      "score": -1000000000.0,
+      "reasons": [
+        "does not split"
+      ]
+    },
+    {
+      "strategy": "source",
+      "assignment": {
+        "customer.orders_30d": "orders",
+        "customer.distinct_orders_30d": "orders",
+        "customer.settled_spend_30d": "orders",
+        "customer.avg_order_value_30d": "orders",
+        "customer.max_order_value_30d": "orders",
+        "customer.web_orders_30d": "orders",
+        "customer.store_orders_30d": "orders",
+        "customer.returns_30d": "orders",
+        "customer.discount_30d": "orders",
+        "customer.card_payments_30d": "orders",
+        "customer.wallet_payments_30d": "orders",
+        "customer.max_shipping_days_30d": "orders",
+        "customer.avg_shipping_days_30d": "orders",
+        "customer.return_rate_30d": "orders",
+        "customer.web_share_30d": "orders"
+      },
+      "metrics": {
+        "groups": 1,
+        "sizes": [
+          15
+        ],
+        "smallest": 15,
+        "largest": 15,
+        "singletons": 0,
+        "cross_set_dependencies": 0,
+        "recomputed": [],
+        "cohesion": 0.081,
+        "single_owner_groups": 0,
+        "unassigned": []
+      },
+      "score": -1000000000.0,
+      "reasons": [
+        "does not split"
+      ]
+    }
+  ],
+  "recommended": "tag:domain",
+  "decision_required": "The recommendation is a heuristic over the metrics; the agent must confirm it against ownership, consumers and SLAs (see the split skill) and call apply_split."
+}

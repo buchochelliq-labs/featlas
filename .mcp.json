@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "featlas-reverse": {
+      "command": "python",
+      "args": ["-m", "featlas_reverse.mcp_server"]
+    },
+    "featlas": {
+      "command": "target/release/fe-spec",
+      "args": ["mcp", "serve"]
+    }
+  }
+}

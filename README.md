@@ -89,6 +89,38 @@ cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) pytest 
 ./tools/make_evidence.sh
 ```
 
+## Reverse engineering existing feature tables
+
+`python/featlas_reverse` (extra `reverse`: `pip install 'featlas[reverse]'`) turns an existing
+feature table and the SQL that builds it into a spec, splits a very wide feature table into smaller
+ones, and proves that tables regenerated from the spec reproduce the legacy table:
+
+```sh
+featlas-reverse draft --table wide.table.json --sql wide.sql --source orders.table.json \
+  --source customers.table.json --out spec.yaml --report drafting-report.json
+featlas-reverse split-analyze spec.yaml --feature-set customer_wide --table wide.table.json > split.json
+featlas-reverse split-apply spec.yaml --feature-set customer_wide --assignment split.json \
+  --strategy tag:domain --out split.yaml --mapping mapping.json
+featlas-reverse parity split.yaml --legacy-table main.features.customer_wide \
+  --legacy-as-of-column feature_ts --key tenant_id --key customer_id --as-of 2026-06-01T00:00:00Z
+```
+
+* The SQL analyzer (sqlglot, Databricks dialect) maps aggregates, filters (`FILTER`, `CASE WHEN`,
+  WHERE), windows and derived ratios to spec transforms and lists everything else as unsupported.
+* The drafter records every assumption and open question (population table, availability time,
+  empty semantics) in a report; drafts validate and pass their fixtures.
+* Characterization cases use the legacy table's own outputs as goldens. A late-arriving row the
+  legacy code read after `as_of` shows up as a reported divergence, not as silently changed values.
+* The split analysis scores tag (domain, business unit, owner...), filter-family, value-family,
+  window and source strategies; derived features may depend on another split table (their inputs
+  are recomputed from the same sources). The agent decides; see the skill.
+* Agents use it through the read-only MCP server `python -m featlas_reverse.mcp_server`
+  (registered in `.mcp.json`) and the skills in `.claude/skills/`: `featlas-reverse-engineer`,
+  `featlas-split-wide-table` and `featlas-regenerate`.
+* Worked example: `examples/reverse/` (inputs, `regenerate.sh`, `generated/` outputs). Evidence:
+  `python/tests/test_reverse.py` runs the legacy SQL on local Spark, regenerates the six split
+  tables through the generated Spark SQL and runs the parity SQL (no mismatches).
+
 ## Releases
 
 Releases use [rab, the Release Asset Bundle](https://github.com/buchochelliq-labs/release-asset-bundle)

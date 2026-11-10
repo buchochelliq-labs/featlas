@@ -46,10 +46,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3
+      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 sqlglot==30.30.0
       - run: cargo build --release -p featlas-cli
       - run: cd python && maturin build --release --out dist && pip install dist/*.whl
-      - run: cd python && pytest -q tests/test_native.py
+      - run: cd python && pytest -q tests/test_native.py tests/test_reverse_mcp.py
   spark-differential:
     runs-on: ubuntu-latest
     steps:
@@ -65,6 +65,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1 delta-spark==4.0.0
+      - run: python -m pip install "maturin>=1.16,<2" pytest PyYAML==6.0.3 pyspark==4.0.1 delta-spark==4.0.0 sqlglot==30.30.0
       - run: cd python && maturin build --release --out dist && pip install dist/*.whl
-      - run: cd python && PYSPARK_PYTHON=$(which python) pytest -q tests/test_local_spark_differential.py tests/test_local_delta_publication.py
+      - run: cd python && PYSPARK_PYTHON=$(which python) pytest -q tests/test_local_spark_differential.py tests/test_local_delta_publication.py tests/test_reverse.py

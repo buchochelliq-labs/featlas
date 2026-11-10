@@ -8,4 +8,4 @@ __pycache__/
 *.pyd
 /python/build/
 *.egg-info/
-.claude/
+.claude/worktrees/
