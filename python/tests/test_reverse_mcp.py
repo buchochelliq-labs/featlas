@@ -18,7 +18,7 @@ EX = ROOT / "examples/reverse"
 
 class Client:
     def __init__(self):
-        self.p = subprocess.Popen([sys.executable, "-m", "featlas_reverse.mcp_server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT / "python")
+        self.p = subprocess.Popen([sys.executable, "-m", "featlas_reverse.mcp_server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)  # not python/: the source featlas package there lacks the compiled _native module
         self.n = 0
 
     def call(self, method, params=None):

@@ -25,9 +25,9 @@ SHA-256 `347e812228d72faa5140ea50344bc4dfef8a6772669cc5eaa2411c2031d9d042`).
 | --- | --- | --- | --- |
 | 1 Canonical path | **Done** | local | Tenant-column-name heuristic (see findings) |
 | 2 Databricks slice | **Live acceptance passed on Databricks Free Edition (AWS, serverless); Azure Databricks not run** | live target (Free Edition): DBR 19.13 serverless, Spark 4.2.0, databricks-connect 17.3.15 | Differential 49/49 and UC publication 7/7 in run 42771706619 (`evidence/databricks-live/RUN.md`). Not observed: Azure Databricks, classic clusters, retention/VACUUM, scheduling. Adapter lock and capability statuses not yet updated. |
-| 3 Temporal/scalar conformance | **Done locally** for aggregate/recency/lookup/expression/joins/replay/labels | local core + local Spark | Labels not lowered to Spark; learned/custom execution unsupported; warn/quarantine unsupported |
+| 3 Temporal/scalar conformance | **Done locally** for aggregate/recency/lookup/expression/joins/replay/labels | local core + local Spark | Learned/custom execution unsupported by design. Labels on Spark and warn/quarantine quality policies were added later (DECISIONS D12; TRACEABILITY) |
 | 4 Separation & migration readiness | **Done (boundary proof)** | local test double | Not a second production store; migration plan only |
-| 5 CLI/MCP/operational | **Done locally** | local | Spark-side budget enforcement and live failure/retry tests open |
+| 5 CLI/MCP/operational | **Done locally** | local | Spark-side scan/output-row budgets added later (D13); live retry and crash-recovery tests ran in run 42771706619 |
 
 ## Independent reviews and resolutions
 

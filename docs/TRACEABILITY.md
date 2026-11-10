@@ -34,16 +34,16 @@ evidence; not satisfiable locally). Test names refer to `crates/*/tests/*.rs` an
 | SEM-LIN-001/002 | impl+test | role-level lineage completeness | `lineage_must_cover_roles` |
 | SEM-LIN-003 | partial | generation manifest, host evidence (declared vs observed) | live: open |
 | SEM-MISS-001..003 | impl+test | distinct states, coverage envelopes, outage | `known_empty`, `insufficient_history`, `source_outage`, coverage µs tests |
-| SEM-QUAL-001 | partial | error checks enforced; warn/quarantine → UNSUPPORTED_CAPABILITY | — |
+| SEM-QUAL-001 | impl+test (core, local Spark) | error/warn/quarantine in `eval.rs` `check_output` and generated quality statements (DECISIONS D12) | `projects/quality/*.yaml` fixtures; differential incl. warnings; `test_quarantine_reports_the_violating_rows_and_warn_keeps_values` |
 | SEM-FIT-001..003 | partial / unsupported (execution) | artifact/fitting checks (`FIT_SPLIT_MISMATCH`, windows); never executed | 04 preflight goldens |
 | SEM-CUSTOM-001/002 | impl+test (rejection) | no fetch/execute; unsupported capability blocks planning | `capability_reports_positive_and_rejecting`, LSD custom rejection |
 | SEM-CONS-001 | impl+test | consumer API request validation | `consumer_api_rejects_incomplete_or_foreign_requests` |
-| SEM-LABEL-001/002 | impl+test (local core) / unsupported (Databricks) | `label.rs` | `labels.rs` (8 tests) |
+| SEM-LABEL-001/002 | impl+test (core, local Spark) | `label.rs` (`label_requests`, `build_labels`); `databricks.rs` `lower_labels`; `featlas_databricks/labels.py` | `labels.rs` (9 tests incl. shared goldens); `test_generated_label_sql_matches_goldens_and_core` (7) |
 | SEM-FRESH-001/002 | partial | staleness and reject policy; lag metrics not measured | `replay_selection_rules` |
 | SEM-DEPLOY-001 | impl+test | binding completeness, pins | `deployment_binding_contracts` |
-| SEM-DEPLOY-002 | partial / open | credential-free config check; retention warnings; permissions not probed | live: open |
-| SEM-DEPLOY-003 | partial / open | publication authorization gate; idempotent MERGE; retries untested live | live: open |
-| SEM-BUDGET-001 | partial | evaluator work/time/row limits; MCP size/time limits; Spark budgets not enforced | — |
+| SEM-DEPLOY-002 | partial | credential-free config check; retention preflight (source history vs declared `earliest_reproducible_at`, output change data feed; DECISIONS D13); permissions not probed | `test_retention_preflight_checks_change_data_feed`; live `test_8_retention_contract_is_checked_against_the_tables` |
+| SEM-DEPLOY-003 | partial | publication authorization gate; idempotent MERGE; generated paused Databricks job with slot-derived publication identity (D14); job deployment not observed | live retry/crash tests; `test_scheduling.py` |
+| SEM-BUDGET-001 | partial | evaluator work/time/row limits; MCP limits; host enforces `max_scan_bytes` and `max_output_rows` with explicit override, reports cost/memory as not enforceable (D13) | `test_output_row_budget_stops_before_publication`; live scan-budget assertion |
 | SEM-PORT-001 | impl+test / **open (target gate)** | vendor-free core; Databricks adapter | `core_crate_has_no_vendor_dependencies`; Databricks live gate open |
 | SEM-PORT-002 | impl+test | registry resolution, config schema validation | `synthetic_adapter_pins_do_not_plan` |
 | SEM-PORT-003/004 | impl+test | mapping completeness/injectivity; case-insensitive collisions on Databricks | `deployment_binding_contracts`, rebinding round trip |
