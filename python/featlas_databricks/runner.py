@@ -214,6 +214,7 @@ class SnapshotRun:
             commit_mid, stored_sequence, stored_rows = row["m"], row["s"], row["n"]
         else:
             rows = self.run_to_snapshot(pub)
+            after_version = self._latest_version()
             # Best effort: label the commit with the materialization id. Serverless compute may
             # reject this conf; evidence lookup does not depend on it (change data feed below).
             labelled = True
@@ -230,10 +231,9 @@ class SnapshotRun:
                     except Exception:  # noqa: BLE001
                         pass
             commit_mid, stored_sequence, stored_rows = auth.materialization_id, auth.publication_sequence, len(rows)
-        commits = [h.asDict() for h in self._sql("commit_history", a["evidence"][0]["sql"], {"publication_id": auth.publication_id}).collect()]
-        if len(commits) != 1:
-            raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"Expected exactly one commit inserting publication {auth.publication_id}; found {len(commits)}. published_at stays NULL and replay cannot use this publication.")
-        commit = commits[0]
+        commit = self._inserting_commit(auth.publication_id, None if retry else after_version)
+        # Rows of a publication are only ever inserted by one MERGE (a retry never writes), so the
+        # inserting commit must hold every stored row.
         if commit["rows"] != stored_rows:
             raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"The inserting commit holds {commit['rows']} rows but the publication has {stored_rows}; the snapshot was not committed atomically")
         observed = commit["timestamp"]
@@ -257,6 +257,35 @@ class SnapshotRun:
             "environment": auth.environment,
             "statement_log": self.log,
         }
+
+    def _evidence(self, name: str) -> dict:
+        return next(st for st in self.artifacts["evidence"] if st["name"] == name)
+
+    def _history(self) -> list:
+        return [r.asDict() for r in self._sql("commit_candidates", self._evidence("commit_candidates")["sql"]).collect()]
+
+    def _latest_version(self) -> int:
+        return max(int(r["version"]) for r in self._history())
+
+    def _inserting_commit(self, publication_id: str, after_version: int | None) -> dict:
+        """The commit that inserted the publication's rows, read from the change data feed one
+        retained MERGE commit at a time (newest first). After a fresh write only commits newer
+        than ``after_version`` (the table version before the MERGE) are considered."""
+        candidates = sorted(
+            (int(r["version"]) for r in self._history() if r["operation"] == "MERGE" and (after_version is None or int(r["version"]) > after_version)),
+            reverse=True,
+        )
+        unreadable = []
+        for v in candidates:
+            try:
+                found = self._sql("commit_history", self._evidence("commit_history")["sql"], {"publication_id": publication_id, "from_version": v, "to_version": v}).collect()
+            except Exception as e:  # noqa: BLE001 - change data for this version may have been cleaned up
+                unreadable.append(f"{v}: {type(e).__name__}")
+                continue
+            if found:
+                return found[0].asDict()
+        why = f"; change data unreadable for versions {unreadable}" if unreadable else ""
+        raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"No retained MERGE commit inserts publication {publication_id} (checked {len(candidates)}){why}. published_at stays NULL and replay cannot use this publication.")
 
     def _meta(self, name: str) -> str:
         col = self.artifacts["metadata_columns"][name]

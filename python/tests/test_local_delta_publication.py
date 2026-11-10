@@ -145,3 +145,20 @@ def test_target_table_identity_is_checked(env):
         assert e.value.code == "TARGET_TABLE_MISMATCH"
     finally:
         spark.sql(f"ALTER TABLE {LOCAL_TABLE} SET TBLPROPERTIES ('featlas.feature_set_fingerprint' = '{env['art']['expected_table_properties']['featlas.feature_set_fingerprint']}')")
+
+
+def test_evidence_lookup_reads_only_retained_commits(env, monkeypatch):
+    """Evidence is read one retained MERGE commit at a time, never from version 0, and a commit
+    whose change data is unreadable (cleaned up by retention) is skipped, not fatal."""
+    art = env["art"]
+    sql = next(s["sql"] for s in art["evidence"] if s["name"] == "commit_history")
+    assert "table_changes(" in sql and ":from_version, :to_version)" in sql and ", 0)" not in sql
+    r = run(env)
+    real = r._history()
+    # A newer MERGE entry whose change data cannot be read stands in for expired history.
+    monkeypatch.setattr(r, "_history", lambda: [{"version": 10_000, "operation": "MERGE"}] + real)
+    ev = r.publish(auth("pub-1", 1, "mat-1-again"))
+    assert ev["retry"] is True and ev["materialization_id"] == "mat-1"
+    with pytest.raises(FeatlasError) as e:
+        r._inserting_commit("pub-1", after_version=max(int(h["version"]) for h in real))
+    assert e.value.code == "PUBLICATION_EVIDENCE_MISSING"

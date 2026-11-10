@@ -964,9 +964,9 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
     let evidence = vec![
         Statement {
             name: "commit_history".into(),
-            purpose: "Find, through the table's change data feed, the commit(s) that inserted this publication's rows; exactly one is required, and its timestamp is the observed visibility instant. Independent of session confs such as commit userMetadata.".into(),
+            purpose: "Read, through the table's change data feed over the bounded version range [:from_version, :to_version], the commit that inserted this publication's rows; its timestamp is the observed visibility instant. The range is a retained commit (see commit_candidates), so the read never needs expired history. Independent of session confs such as commit userMetadata.".into(),
             sql: format!(
-                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, 0) WHERE _change_type = 'insert' AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
+                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, :from_version, :to_version) WHERE _change_type = 'insert' AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
                 sql_string(&output_table),
                 quote(&mc.publication_id)
             ),
@@ -977,6 +977,13 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             name: "record_published_at".into(),
             purpose: "Record observed visibility evidence on the rows of this publication only (never fabricated from schedules or job time)".into(),
             sql: format!("UPDATE {output_table} SET {} = CAST(:observed_commit_timestamp AS TIMESTAMP) WHERE {} = :publication_id AND {} IS NULL", quote(&mc.published_at), quote(&mc.publication_id), quote(&mc.published_at)), reads: vec![], view: None },
+        Statement {
+            name: "commit_candidates".into(),
+            purpose: "The table's retained commit history; the host reads commit_history one retained MERGE commit at a time (newest first, after the pre-publication version on a fresh write), so evidence lookup never depends on history that log or change-data retention has removed".into(),
+            sql: format!("DESCRIBE HISTORY {output_table}"),
+            reads: vec![],
+            view: None,
+        },
     ];
     let consumer_read = Statement {
         name: "consumer_read".into(),

@@ -127,7 +127,11 @@ def consume(env, consumer: str, requested_at: str) -> list:
 
 
 def inserting_commits(env, pid: str) -> list:
-    return env["spark"].sql(env["art"]["evidence"][0]["sql"], args={"publication_id": f"{pid}-{RUN}"}).collect()
+    """Every retained MERGE commit that inserted rows of the publication (change data feed)."""
+    spark, art = env["spark"], env["art"]
+    stmt = {s["name"]: s["sql"] for s in art["evidence"]}
+    versions = [int(r["version"]) for r in spark.sql(stmt["commit_candidates"]).collect() if r["operation"] == "MERGE"]
+    return [row for v in versions for row in spark.sql(stmt["commit_history"], args={"publication_id": f"{pid}-{RUN}", "from_version": v, "to_version": v}).collect()]
 
 
 def test_1_preflight_physical_schemas(env):

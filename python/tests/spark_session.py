@@ -34,6 +34,10 @@ def get_spark():
 
         scopes = [s for s in os.environ.get("DATABRICKS_SCOPES", "").replace(",", " ").split() if s]
         cfg = Config(serverless_compute_id="auto", **({"scopes": scopes} if scopes else {}))
+        if cfg.scopes:
+            # Databricks Connect caches sessions keyed by a hash of the SDK config's values, and
+            # the SDK stores scopes as a list (unhashable). The SDK only joins/iterates them.
+            cfg.as_dict()["scopes"] = tuple(cfg.scopes)
         s = DatabricksSession.builder.sdkConfig(cfg).getOrCreate()
         s.sql("SET TIME ZONE 'UTC'")
         return s
