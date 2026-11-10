@@ -21,14 +21,14 @@ import pytest
 pytest.importorskip("pyspark")
 yaml = pytest.importorskip("yaml")
 
-from spark_session import HAVE_DELTA, get_spark  # noqa: E402
+from spark_session import HAVE_DELTA, LIVE, get_spark  # noqa: E402
 
 from featlas_databricks.core import Core  # noqa: E402
 from featlas_databricks.differential import _jsonable, register_source  # noqa: E402
 from featlas_databricks.errors import FeatlasError  # noqa: E402
 from featlas_databricks.runner import PublicationAuthorization, SnapshotRun, parse_instant  # noqa: E402
 
-pytestmark = pytest.mark.skipif(not HAVE_DELTA, reason="delta-spark not installed")
+pytestmark = pytest.mark.skipif(LIVE or not HAVE_DELTA, reason="local Delta only (delta-spark installed, not a live run)")
 
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = str(ROOT / "projects/01_fault_count.yaml")
@@ -88,7 +88,7 @@ def consume(env, consumer: str, requested_at: str) -> list:
 def test_publish_records_commit_evidence_and_replays(env):
     spark = env["spark"]
     ev = run(env).publish(auth("pub-1", 1, "mat-1"))
-    assert ev["rows"] == 2 and ev["retry"] is False and ev["operation"] == "MERGE"
+    assert ev["rows"] == 2 and ev["retry"] is False and ev["table_version"] == merge_commits(env["spark"])[0]["version"]
     assert len(merge_commits(spark)) == 1
     published = {r["published_at"] for r in read_records(spark)}
     assert published == {ev["commit_timestamp"]}, "published_at is the observed MERGE commit instant"
@@ -145,3 +145,20 @@ def test_target_table_identity_is_checked(env):
         assert e.value.code == "TARGET_TABLE_MISMATCH"
     finally:
         spark.sql(f"ALTER TABLE {LOCAL_TABLE} SET TBLPROPERTIES ('featlas.feature_set_fingerprint' = '{env['art']['expected_table_properties']['featlas.feature_set_fingerprint']}')")
+
+
+def test_evidence_lookup_reads_only_retained_commits(env, monkeypatch):
+    """Evidence is read one retained MERGE commit at a time, never from version 0, and a commit
+    whose change data is unreadable (cleaned up by retention) is skipped, not fatal."""
+    art = env["art"]
+    sql = next(s["sql"] for s in art["evidence"] if s["name"] == "commit_history")
+    assert "table_changes(" in sql and ":from_version, :to_version)" in sql and ", 0)" not in sql
+    r = run(env)
+    real = r._history()
+    # A newer MERGE entry whose change data cannot be read stands in for expired history.
+    monkeypatch.setattr(r, "_history", lambda: [{"version": 10_000, "operation": "MERGE"}] + real)
+    ev = r.publish(auth("pub-1", 1, "mat-1-again"))
+    assert ev["retry"] is True and ev["materialization_id"] == "mat-1"
+    with pytest.raises(FeatlasError) as e:
+        r._inserting_commit("pub-1", after_version=max(int(h["version"]) for h in real))
+    assert e.value.code == "PUBLICATION_EVIDENCE_MISSING"

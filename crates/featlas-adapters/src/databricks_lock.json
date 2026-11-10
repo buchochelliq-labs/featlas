@@ -1,0 +1,44 @@
+{
+  "schema": "featlas.adapter-lock/v1",
+  "adapter": "dev.featlas:databricks",
+  "adapter_version": "0.1.0",
+  "note": "Written only from observed live runs (docs/evidence/databricks-live/). A run vouches for the adapter only while the files in sources_sha256 are byte-identical to the ones it tested.",
+  "verified_runs": [
+    {
+      "run_id": "42771706619",
+      "run_url": "https://github.com/buchochelliq-labs/featlas/actions/runs/42771706619",
+      "artifact_sha256": "3c76096038fa6672a7947801097751a0768d8baecf614b89c1e2cbde9d2957de",
+      "tested_commit": "5e9d94e8f258e38206a294ac0ee4fd653a78c6d9",
+      "observed_at": "2026-11-10T07:51:26Z",
+      "target": {
+        "product": "Databricks Free Edition",
+        "cloud": "aws",
+        "compute": "serverless",
+        "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+        "spark_version": "4.2.0",
+        "unity_catalog": true
+      },
+      "client": {"databricks-connect": "17.3.15", "databricks-sdk": "0.164.0", "python": "3.12.16"},
+      "sources_sha256": {
+        "crates/featlas-adapters/src/databricks.rs": "1847f7c2f6078ff5e460bddfe02c9fa30c8d31cf23da8a9be8b01e794d240aa8",
+        "python/featlas_databricks/runner.py": "44be9ac4df5cee7d738bc9307f9515625f5733579c4852e9c305ebeaae4e16fb"
+      },
+      "evidence": {
+        "differential": {"path": "docs/evidence/databricks-live/databricks-differential.json", "sha256": "7a318bbf201708412a9b2cd34fa91764a2f85c097bfd7f672bd7d88837be780a", "summary": "49 passed: 46 reference cases (projects 01, 02, 03, 05, 06) vs goldens and core, 2 precedence, 1 rejection; fixture sources as session temp views"},
+        "publication": {"path": "docs/evidence/databricks-live/databricks-live.json", "sha256": "ad0e314985a92634388f5ecdf876cf837adf41ad15c6836d8b34f213344c2cf7", "summary": "7 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, CDF commit evidence, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"}
+      },
+      "verified": [
+        {"role": "compute", "capability": "core.aggregate", "evidence": "differential"},
+        {"role": "compute", "capability": "core.recency", "evidence": "differential"},
+        {"role": "compute", "capability": "core.lookup", "evidence": "differential"},
+        {"role": "compute", "capability": "core.expression", "evidence": "differential"},
+        {"role": "compute", "capability": "core.revision_reconstruction", "evidence": "differential"},
+        {"role": "compute", "capability": "core.as_of_join", "evidence": "differential"},
+        {"role": "compute", "capability": "core.source_as_known", "evidence": "differential"},
+        {"role": "catalog", "capability": "core.source_read", "evidence": "publication"},
+        {"role": "offline_store", "capability": "core.atomic_publication", "evidence": "publication"},
+        {"role": "offline_store", "capability": "core.serving_replay", "evidence": "publication"}
+      ]
+    }
+  ]
+}

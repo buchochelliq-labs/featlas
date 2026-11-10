@@ -12,7 +12,9 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
   (test double) and `dev.featlas:databricks` (Spark SQL lowering, Unity Catalog statements).
 * **`crates/featlas-api`** — transport-neutral JSON API; the CLI, the MCP server and the Python
   bindings all call it, so every transport returns identical results.
-* **`crates/featlas-cli`** — the `fe-spec` CLI and a read-only MCP stdio server.
+* **`crates/featlas-cli`** — the `fe-spec` CLI and a read-only MCP stdio server. Text output is
+  rendered with [rs-rich](https://crates.io/crates/rs-rich) (colour only on a terminal; `NO_COLOR`
+  honoured); `--format json` and MCP output are unaffected. Needs Rust ≥ 1.90.
 * **`crates/featlas-py`** — PyO3 bindings, built by maturin into the `featlas._native` extension
   (abi3, CPython ≥ 3.12).
 * **`python/featlas`** — the Python package: `Project` wrapper over the native core.
@@ -25,7 +27,7 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
 | --- | --- |
 | Canonical core, fixtures (50/50 reference cases; 3 adapter-only cases not executed), negatives | Done, local evidence |
 | Databricks code generation | Done; differential-tested on **local Apache Spark 4.0.1** (46 cases) |
-| **Azure Databricks live acceptance** | **OPEN — not run.** No workspace/credentials/authorization were available. Every Databricks capability reports `unverified`; `execution_ready: false`. See `docs/DATABRICKS_RUNBOOK.md`. |
+| **Live Databricks acceptance** | **Passed on Databricks Free Edition (AWS, serverless)**, run 42771706619: differential 49/49 and Unity Catalog publication 7/7 (`docs/evidence/databricks-live/`). **Azure Databricks: not run.** Capability reports still say `unverified` until the adapter lock is pinned; `execution_ready: false`. |
 | Online store/serving, Feature Views, job scheduling | Not implemented (reported unsupported/unverified) |
 | Learned/custom execution | Unsupported by design (contracts validated, never executed) |
 | Storage rebinding | Boundary proof with an in-memory test double (example 06); not a second production store or a migration |
@@ -86,3 +88,17 @@ cd python && maturin develop --release && PYSPARK_PYTHON=$(which python) pytest 
 # Regenerate docs/evidence (KIT_PYTHON / SPARK_PYTHON optional):
 ./tools/make_evidence.sh
 ```
+
+## Releases
+
+Releases use [rab, the Release Asset Bundle](https://github.com/buchochelliq-labs/release-asset-bundle)
+(installed under `.github/rab/`; reinstall to update, never edit). `rab.yml` declares two packages:
+the `fe-spec` binaries on a GitHub release and the `featlas` wheels on PyPI (the workspace crates
+are `publish = false`). CI runs `release.py check` and `release.py vendored`. Nothing is
+published until someone runs `python3 .github/rab/scripts/release.py tag` on `main`, after the
+`pypi` environment's trusted publisher is set up.
+
+## License
+
+Apache License 2.0; see [`LICENSE`](LICENSE). The vendored specification under `spec/` keeps
+its own terms.

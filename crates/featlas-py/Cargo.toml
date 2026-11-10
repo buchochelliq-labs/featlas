@@ -4,6 +4,7 @@ description = "Python bindings (PyO3) for the featlas core: module featlas._nati
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [lib]
 name = "_native"

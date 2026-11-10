@@ -1,0 +1,206 @@
+# The buchochelliq-labs release workflow (rab, the Release Asset Bundle), installed by
+# `release.py install` when the repository had none. It is the repository's
+# own file: keep the publish jobs for the registries in rab.yml (what
+# gets built comes from its `artifacts`), and edit it as needed. featlas
+# publishes to GitHub Releases (fe-spec binaries) and PyPI (featlas) only, so
+# the other registries' jobs are removed. Everything
+# under .github/rab/ is the installed kit and is not edited.
+#
+# `python3 .github/rab/scripts/release.py tag` on the default branch
+# pushes the tags; the release tag starts this run, which checks it once, runs
+# CI once on the tagged commit, builds, publishes what is not yet published,
+# and then uses each package as a stranger would.
+#
+# Third-party actions are pinned to commits (the version is in the comment).
+name: release
+
+on:
+  push:
+    tags: ["release-*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: An existing release tag (release-X.Y.Z) to run again
+        required: true
+      verify_only:
+        description: >-
+          Verify only: every package is already published (a run that failed
+          after uploading); check them again and upload nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # One release at a time; never cancel one that may be half published.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.gate.outputs.sha }}
+      release: ${{ steps.gate.outputs.release }}
+      selection: ${{ steps.gate.outputs.selection }}
+      verify-only: ${{ steps.gate.outputs.verify-only }}
+      github: ${{ steps.gate.outputs.github }}
+      crates-io: ${{ steps.gate.outputs.crates-io }}
+      pypi: ${{ steps.gate.outputs.pypi }}
+      npm: ${{ steps.gate.outputs.npm }}
+      vscode: ${{ steps.gate.outputs.vscode }}
+      homebrew: ${{ steps.gate.outputs.homebrew }}
+      chocolatey: ${{ steps.gate.outputs.chocolatey }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - id: gate
+        uses: ./.github/rab/gate
+        with:
+          tag: ${{ inputs.tag || github.ref_name }}
+          verify-only: ${{ inputs.verify_only == true }}
+
+  # The repository's own CI on the tagged commit: ci.yml needs
+  # `on: workflow_call` with a `ref` input it checks out. (Rename `ref` here
+  # if your ci.yml calls it something else.)
+  ci:
+    needs: gate
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.gate.outputs.sha }}
+
+  # Builds what rab.yml's `artifacts` declare, for the packages due,
+  # from the tagged commit: one job per artifact and target, each running the
+  # artifact's `test` (if any) on what it built. Skipped in a verify-only run.
+  build:
+    needs: [gate, ci]
+    if: needs.gate.outputs.verify-only != 'true'
+    permissions:
+      contents: read
+      actions: read   # a ci-artifact reads this repository's CI artifacts
+    uses: ./.github/workflows/rab-build.yml
+    with:
+      sha: ${{ needs.gate.outputs.sha }}
+      selection: ${{ needs.gate.outputs.selection }}
+
+  publish-github:
+    needs: [gate, ci, build]
+    # After a successful build; in a verify-only run, after CI (build skipped).
+    if: >-
+      !cancelled() && needs.gate.outputs.github == 'true' && needs.ci.result == 'success'
+      && (needs.build.result == 'success'
+          || (needs.build.result == 'skipped' && needs.gate.outputs.verify-only == 'true'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Only used by a package with `attest: true` (its build provenance).
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install --quiet pyyaml
+      - if: needs.gate.outputs.verify-only != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release--*
+          path: dist
+      - uses: ./.github/rab/publish-github
+        with:
+          selection: ${{ needs.gate.outputs.selection }}
+          verify-only: ${{ needs.gate.outputs.verify-only }}
+
+  publish-pypi:
+    needs: [gate, ci, build]
+    if: >-
+      !cancelled() && needs.gate.outputs.pypi == 'true' && needs.ci.result == 'success'
+      && (needs.build.result == 'success'
+          || (needs.build.result == 'skipped' && needs.gate.outputs.verify-only == 'true'))
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install --quiet pyyaml
+      - if: needs.gate.outputs.verify-only != 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release--*
+          path: dist
+      - uses: ./.github/rab/publish-pypi
+        with:
+          selection: ${{ needs.gate.outputs.selection }}
+          verify-only: ${{ needs.gate.outputs.verify-only }}
+
+  # The run's release record, release-record.json, uploaded as the artifact
+  # `release-record`: the release, its commit, and each package's outcome,
+  # files and registry URL, for a coordinator (`gh run download <run> -n
+  # release-record`). It runs whatever happened before it, so a run that
+  # failed halfway still says what it published. Keep every publish job in
+  # its `needs`.
+  record:
+    needs: [gate, ci, build, publish-github, publish-pypi]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      # As in the build workflow: the release tag must still name the commit
+      # the gate checked before anything from the checkout runs. (When the
+      # gate failed there is no such commit; the record then says so.)
+      - name: Check the tag still names the gated commit
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: |
+          at=$(git rev-parse HEAD)
+          if [ -n "$SHA" ] && [ "$at" != "$SHA" ]; then
+            echo "::error::$TAG is at $at, not $SHA, the commit the gate checked; no record is written"
+            exit 1
+          fi
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install --quiet pyyaml
+      # The files each package was built into, for their SHA-256.
+      - if: needs.build.result != 'skipped'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release--*
+          path: dist
+      - env:
+          # Reads a private repository's GitHub releases (contents: read).
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          SHA: ${{ needs.gate.outputs.sha }}
+          SELECTION: ${{ needs.gate.outputs.selection }}
+          VERIFY_ONLY: ${{ needs.gate.outputs.verify-only }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: >-
+          python3 .github/rab/scripts/release.py record --tag "$TAG" --sha "$SHA"
+          --selection "$SELECTION" --verify-only "$VERIFY_ONLY" --needs "$NEEDS" --out release-record.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-record
+          path: release-record.json
+          if-no-files-found: error

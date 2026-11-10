@@ -4,6 +4,7 @@ description = "Canonical semantic core: parsing, validation, hashing, planning a
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 serde.workspace = true

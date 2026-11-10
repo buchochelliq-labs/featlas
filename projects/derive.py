@@ -58,13 +58,21 @@ def databricks_lookup(text: str) -> str:
     return text[:end] + block + text[end:]
 
 
+LIVE_CATALOG = "featlas"
+
+
 def main() -> None:
+    (ROOT / "projects" / "live").mkdir(exist_ok=True)
     for src in sorted(EXAMPLES.glob("0*.yaml")):
         text = rewrite(src.read_text(encoding="utf-8"))
         if src.name == "05_lookup_and_recency.yaml":
             text = databricks_lookup(text)
         header = f"# Derived from spec/feature-engineering-spec-v0.2.0/examples/{src.name} by projects/derive.py.\n# Only deployment adapter pins/local output formats differ (05 also gains lookup_prod); logical contracts are unchanged.\n"
         (ROOT / "projects" / src.name).write_text(header + text, encoding="utf-8")
+        # Live variant: the same project with Unity Catalog tables in the live test catalog.
+        live = text.replace("\n      - example_catalog\n", f"\n      - {LIVE_CATALOG}\n")
+        live_header = header + f"# Live variant: Unity Catalog namespace example_catalog -> {LIVE_CATALOG} (deployment bindings only).\n"
+        (ROOT / "projects" / "live" / src.name).write_text(live_header + live, encoding="utf-8")
 
 
 if __name__ == "__main__":

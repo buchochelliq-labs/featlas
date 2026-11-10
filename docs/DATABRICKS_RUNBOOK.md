@@ -1,4 +1,8 @@
-# Azure Databricks live acceptance runbook (mandatory target gate — OPEN)
+# Databricks live acceptance runbook
+
+> **Status:** automated as `.github/workflows/databricks-live.yml`; passed on Databricks Free
+> Edition (AWS, serverless) in run 42771706619 — see `evidence/databricks-live/RUN.md`. The
+> Azure Databricks gate below is still open: no Azure workspace has been used.
 
 **Status: not executed.** This session had no Azure Databricks workspace, credentials or
 authorization. Nothing here has run on Databricks. Generated code has been executed only on

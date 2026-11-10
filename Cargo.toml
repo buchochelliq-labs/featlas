@@ -19,3 +19,5 @@ sha2 = "0.10"
 hex = "0.4"
 regex = "1"
 clap = { version = "4", features = ["derive"] }
+# Terminal rendering for the CLI's text output (buchochelliq-labs rs-rich, a Rust port of Python rich).
+rich = { package = "rs-rich", version = "=0.0.15", default-features = false }

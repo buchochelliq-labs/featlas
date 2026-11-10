@@ -24,7 +24,7 @@ SHA-256 `347e812228d72faa5140ea50344bc4dfef8a6772669cc5eaa2411c2031d9d042`).
 | Milestone | Status | Evidence scope | Remaining limits |
 | --- | --- | --- | --- |
 | 1 Canonical path | **Done** | local | Tenant-column-name heuristic (see findings) |
-| 2 Azure Databricks slice | **Code complete; live gate OPEN** | generated SQL executed on local Apache Spark only | No workspace, credentials or authorization in this session. Not run on Databricks; no UC table created; no SDK/runtime lock; publication protocol unobserved. See `DATABRICKS_RUNBOOK.md`. |
+| 2 Databricks slice | **Live acceptance passed on Databricks Free Edition (AWS, serverless); Azure Databricks not run** | live target (Free Edition): DBR 19.13 serverless, Spark 4.2.0, databricks-connect 17.3.15 | Differential 49/49 and UC publication 7/7 in run 42771706619 (`evidence/databricks-live/RUN.md`). Not observed: Azure Databricks, classic clusters, retention/VACUUM, scheduling. Adapter lock and capability statuses not yet updated. |
 | 3 Temporal/scalar conformance | **Done locally** for aggregate/recency/lookup/expression/joins/replay/labels | local core + local Spark | Labels not lowered to Spark; learned/custom execution unsupported; warn/quarantine unsupported |
 | 4 Separation & migration readiness | **Done (boundary proof)** | local test double | Not a second production store; migration plan only |
 | 5 CLI/MCP/operational | **Done locally** | local | Spark-side budget enforcement and live failure/retry tests open |

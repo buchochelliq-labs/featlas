@@ -6,6 +6,7 @@
 
 mod commands;
 mod mcp;
+mod render;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

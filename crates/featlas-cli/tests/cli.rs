@@ -305,3 +305,46 @@ fn mcp_server_is_strict_and_read_only() {
     drop(stdin);
     child.wait().unwrap();
 }
+
+/// Text output is rendered by rs-rich: piped output carries no ANSI escapes, one-line
+/// summaries stay on one line, and project values are printed literally (markup escaped).
+#[test]
+fn text_output_is_plain_when_piped() {
+    let (code, out) = run(&["validate", &example("01_fault_count.yaml")]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        !out.contains('\u{1b}'),
+        "no ANSI escapes when piped: {out:?}"
+    );
+    let last = out.lines().last().unwrap();
+    assert!(
+        last.starts_with("PASS: ") && last.ends_with("not evaluated by validate"),
+        "{out}"
+    );
+    let (code, out) = run(&["test", &example("01_fault_count.yaml")]);
+    assert_eq!(code, 0, "{out}");
+    assert!(!out.contains('\u{1b}'));
+    assert!(
+        out.contains("PASS")
+            && out
+                .lines()
+                .last()
+                .unwrap()
+                .starts_with("executed=13 passed=13 failed=0"),
+        "{out}"
+    );
+    let (code, out) = run(&[
+        "plan",
+        &project("01_fault_count.yaml"),
+        "--deployment",
+        "fault_prod",
+        "--format",
+        "text",
+    ]);
+    assert_eq!(code, 0, "{out}");
+    assert!(
+        out.contains("Capability checks: fault_prod")
+            && out.ends_with("plannable=true execution_ready=false\n"),
+        "{out}"
+    );
+}

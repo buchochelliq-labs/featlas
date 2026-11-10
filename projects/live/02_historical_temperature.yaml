@@ -1,0 +1,1804 @@
+# Derived from spec/feature-engineering-spec-v0.2.0/examples/02_historical_temperature.yaml by projects/derive.py.
+# Only deployment adapter pins/local output formats differ (05 also gains lookup_prod); logical contracts are unchanged.
+# Live variant: Unity Catalog namespace example_catalog -> featlas (deployment bindings only).
+# Complete FeatureEngineeringProject, specification 0.2.0.
+# Synthetic contracts only; no adapters are installed or resources provisioned.
+spec_version: 0.2.0
+kind: FeatureEngineeringProject
+metadata:
+  id: temperature_history_example
+  name: Historical temperature feature
+  version: 1.0.0
+  description: Synthetic versioned facts and historical dimensions demonstrating source-availability reconstruction
+    before event-time filters and tenant-safe valid-time joins.
+  owners:
+  - example.feature-engineering
+  status: draft
+  tags:
+  - synthetic
+  - specification-example
+entities:
+- id: device
+  version: 1.0.0
+  name: Device
+  description: A registered device identified by the full tenant-scoped composite key.
+  owner: example.analytics
+  keys:
+  - name: tenant_id
+    type: string
+    description: Tenant isolation boundary.
+    source_column: tenant_id
+    is_tenant: true
+  - name: device_id
+    type: string
+    description: Tenant-local device identifier.
+    source_column: device_id
+    is_tenant: false
+  population:
+    source: device_registry
+    mode: as_of_keys
+    event_time_upper: inclusive
+    availability_upper: inclusive
+    deletion_policy: exclude_deleted
+sources:
+- id: device_registry
+  version: 1.0.0
+  name: Device registry
+  description: One immutable registration row per tenant and device; registration defines population membership
+    after it is observed. Decommissioning would require a versioned population source in a new source
+    version.
+  owner: example.data-platform
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant boundary; the same local entity ID may exist in different tenants.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Device identifier unique only within one tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: registered_at
+    type: timestamp
+    description: Business instant when this entity joined the population.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Instant this registration became visible to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - tenant_id
+  - device_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - tenant_id
+    - device_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: registered_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: tenant_id
+      origin: synthetic.device_registry.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant boundary; the same local entity ID may
+        exist in different tenants.'
+    - column: device_id
+      origin: synthetic.device_registry.device_id
+      description: 'Created as a synthetic fixture field: Device identifier unique only within one tenant.'
+    - column: registered_at
+      origin: synthetic.device_registry.registered_at
+      description: 'Created as a synthetic fixture field: Business instant when this entity joined the
+        population.'
+    - column: available_at
+      origin: synthetic.device_registry.available_at
+      description: 'Created as a synthetic fixture field: Instant this registration became visible to
+        the feature system.'
+    code: null
+- id: temperature_readings
+  version: 1.0.0
+  name: Versioned temperature readings
+  description: Each reading_id is a logical observation. Available revisions can correct the event timestamp,
+    value, or retract the reading. Select its latest available revision before any time-window or value
+    filter.
+  owner: example.data-platform
+  columns:
+  - name: reading_id
+    type: string
+    description: Stable logical sensor reading identity across corrections.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: revision_no
+    type: integer
+    description: Strictly increasing revision ordinal within a reading_id.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: tenant_id
+    type: string
+    description: Tenant owning the sensor.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Tenant-local sensor identifier.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: observed_at
+    type: timestamp
+    description: Correctable business instant when the temperature was measured.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Instant this exact correction became visible to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: is_deleted
+    type: boolean
+    description: A true selected revision retracts the entire logical reading.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: temperature_c
+    type: number
+    description: Measured temperature in degrees Celsius; null means an unusable measurement.
+    nullable: true
+    unit: degree_Celsius
+    classification: internal
+  primary_key:
+  - reading_id
+  - revision_no
+  record_semantics:
+    kind: versioned
+    logical_key:
+    - reading_id
+    duplicate_policy: collapse_identical
+    revision:
+      order_by:
+      - column: revision_no
+        direction: desc
+      selection: latest_available
+      tombstone_column: is_deleted
+      tombstone_value: true
+  time:
+    event_time: observed_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: reading_id
+      origin: synthetic.temperature_readings.reading_id
+      description: 'Created as a synthetic fixture field: Stable logical sensor reading identity across
+        corrections.'
+    - column: revision_no
+      origin: synthetic.temperature_readings.revision_no
+      description: 'Created as a synthetic fixture field: Strictly increasing revision ordinal within
+        a reading_id.'
+    - column: tenant_id
+      origin: synthetic.temperature_readings.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant owning the sensor.'
+    - column: device_id
+      origin: synthetic.temperature_readings.device_id
+      description: 'Created as a synthetic fixture field: Tenant-local sensor identifier.'
+    - column: observed_at
+      origin: synthetic.temperature_readings.observed_at
+      description: 'Created as a synthetic fixture field: Correctable business instant when the temperature
+        was measured.'
+    - column: available_at
+      origin: synthetic.temperature_readings.available_at
+      description: 'Created as a synthetic fixture field: Instant this exact correction became visible
+        to the feature system.'
+    - column: is_deleted
+      origin: synthetic.temperature_readings.is_deleted
+      description: 'Created as a synthetic fixture field: A true selected revision retracts the entire
+        logical reading.'
+    - column: temperature_c
+      origin: synthetic.temperature_readings.temperature_c
+      description: 'Created as a synthetic fixture field: Measured temperature in degrees Celsius; null
+        means an unusable measurement.'
+    code: null
+- id: device_threshold_history
+  version: 1.0.0
+  name: Historical device thresholds
+  description: Bitemporal device threshold intervals. Stable interval_id identifies one logical interval
+    across corrections to its boundaries; distinct interval IDs preserve legitimate earlier and later
+    intervals.
+  owner: example.data-platform
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant boundary, paired with device_id in every dimension join.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: device_id
+    type: string
+    description: Tenant-local device identity.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: interval_id
+    type: string
+    description: Stable device-scoped identity of one valid-time interval, unchanged when either boundary
+      is corrected.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: valid_from
+    type: timestamp
+    description: Inclusive business-time interval start, which can be corrected in a later revision.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: valid_to
+    type: timestamp
+    description: Exclusive business-time interval end; null denotes an open-ended interval.
+    nullable: true
+    unit: null
+    classification: internal
+  - name: revision_no
+    type: integer
+    description: Strictly increasing correction ordinal for this stable interval_id.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Earliest instant this interval revision was readable by the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: is_deleted
+    type: boolean
+    description: A selected true revision removes this logical interval.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: critical_threshold_c
+    type: number
+    description: Temperature at or above this threshold is classified as hot for the interval.
+    nullable: false
+    unit: degree_Celsius
+    classification: internal
+  primary_key:
+  - tenant_id
+  - device_id
+  - interval_id
+  - revision_no
+  record_semantics:
+    kind: versioned
+    logical_key:
+    - tenant_id
+    - device_id
+    - interval_id
+    duplicate_policy: collapse_identical
+    revision:
+      order_by:
+      - column: revision_no
+        direction: desc
+      selection: latest_available
+      tombstone_column: is_deleted
+      tombstone_value: true
+  time:
+    event_time: valid_from
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: tenant_id
+      origin: synthetic.device_threshold_history.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant boundary, paired with device_id in every
+        dimension join.'
+    - column: device_id
+      origin: synthetic.device_threshold_history.device_id
+      description: 'Created as a synthetic fixture field: Tenant-local device identity.'
+    - column: interval_id
+      origin: synthetic.device_threshold_history.interval_id
+      description: 'Created as a synthetic fixture field: Stable device-scoped identity of one valid-time
+        interval, unchanged when either boundary is corrected.'
+    - column: valid_from
+      origin: synthetic.device_threshold_history.valid_from
+      description: 'Created as a synthetic fixture field: Inclusive business-time interval start, which
+        can be corrected in a later revision.'
+    - column: valid_to
+      origin: synthetic.device_threshold_history.valid_to
+      description: 'Created as a synthetic fixture field: Exclusive business-time interval end; null denotes
+        an open-ended interval.'
+    - column: revision_no
+      origin: synthetic.device_threshold_history.revision_no
+      description: 'Created as a synthetic fixture field: Strictly increasing correction ordinal for this
+        stable interval_id.'
+    - column: available_at
+      origin: synthetic.device_threshold_history.available_at
+      description: 'Created as a synthetic fixture field: Earliest instant this interval revision was
+        readable by the feature system.'
+    - column: is_deleted
+      origin: synthetic.device_threshold_history.is_deleted
+      description: 'Created as a synthetic fixture field: A selected true revision removes this logical
+        interval.'
+    - column: critical_threshold_c
+      origin: synthetic.device_threshold_history.critical_threshold_c
+      description: 'Created as a synthetic fixture field: Temperature at or above this threshold is classified
+        as hot for the interval.'
+    code: null
+relationships:
+- id: reading_to_device_threshold
+  version: 1.0.0
+  name: Reading to historical device threshold
+  description: Join each reading to its tenant-scoped device threshold valid at the reading event instant,
+    using only threshold revisions available at feature as_of.
+  owner: example.device-operations
+  from:
+    source: temperature_readings
+    columns:
+    - tenant_id
+    - device_id
+  to:
+    source: device_threshold_history
+    columns:
+    - tenant_id
+    - device_id
+  cardinality: many_to_one
+  join_type: left
+  null_keys: error
+  unmatched: preserve_null
+  multiple_matches: error
+  temporal:
+    mode: as_of
+    reference: left_event_time
+    valid_from: valid_from
+    valid_to: valid_to
+    lower: inclusive
+    upper: exclusive
+    available_time_cutoff: feature_as_of
+features:
+- id: device.hot_reading_count_24h
+  version: 1.0.0
+  name: Hot readings in 24 hours
+  description: Count readings at or above the threshold valid at each reading event time, after source-as-known
+    reconstruction and within [as_of - 24 hours, as_of).
+  owner: example.feature-engineering
+  entity: device
+  output:
+    type: integer
+    nullable: true
+    unit: count
+    description: Count readings at or above the threshold valid at each reading event time, after source-as-known
+      reconstruction and within [as_of - 24 hours, as_of).
+    constraints:
+      minimum: 0
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  inputs:
+  - alias: readings
+    source: temperature_readings
+    columns:
+    - reading_id
+    - revision_no
+    - tenant_id
+    - device_id
+    - observed_at
+    - available_at
+    - is_deleted
+    - temperature_c
+  - alias: thresholds
+    source: device_threshold_history
+    columns:
+    - tenant_id
+    - device_id
+    - interval_id
+    - valid_from
+    - valid_to
+    - revision_no
+    - available_at
+    - is_deleted
+    - critical_threshold_c
+  dependencies: []
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 86400
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: aggregate
+    input: readings
+    joins:
+    - relationship: reading_to_device_threshold
+      version: 1.0.0
+      left_alias: readings
+      right_alias: thresholds
+    group_by:
+    - entity_key: tenant_id
+      input: readings
+      column: tenant_id
+    - entity_key: device_id
+      input: readings
+      column: device_id
+    filter:
+      kind: call
+      operator: greater_or_equal
+      args:
+      - kind: column
+        input: readings
+        column: temperature_c
+      - kind: column
+        input: thresholds
+        column: critical_threshold_c
+    operation: count
+    value: null
+    distinct_by: []
+    nulls: ignore
+  lineage:
+    sources:
+    - source: temperature_readings
+      column: reading_id
+      roles:
+      - ordering
+      description: Stable logical sensor reading identity across corrections. Used for ordering.
+    - source: temperature_readings
+      column: revision_no
+      roles:
+      - ordering
+      - revision
+      description: Strictly increasing revision ordinal within a reading_id. Used for ordering, revision.
+    - source: temperature_readings
+      column: tenant_id
+      roles:
+      - entity_key
+      - join_key
+      description: Tenant owning the sensor. Used for entity_key, join_key.
+    - source: temperature_readings
+      column: device_id
+      roles:
+      - entity_key
+      - join_key
+      description: Tenant-local sensor identifier. Used for entity_key, join_key.
+    - source: temperature_readings
+      column: observed_at
+      roles:
+      - event_time
+      description: Correctable business instant when the temperature was measured. Used for event_time.
+    - source: temperature_readings
+      column: available_at
+      roles:
+      - availability_time
+      description: Instant this exact correction became visible to the feature system. Used for availability_time.
+    - source: temperature_readings
+      column: is_deleted
+      roles:
+      - deletion
+      description: A true selected revision retracts the entire logical reading. Used for deletion.
+    - source: temperature_readings
+      column: temperature_c
+      roles:
+      - filter
+      description: Measured temperature in degrees Celsius; null means an unusable measurement. Used for
+        filter.
+    - source: device_threshold_history
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - join_key
+      description: Tenant boundary, paired with device_id in every dimension join. Used for entity_key,
+        ordering, join_key.
+    - source: device_threshold_history
+      column: device_id
+      roles:
+      - entity_key
+      - ordering
+      - join_key
+      description: Tenant-local device identity. Used for entity_key, ordering, join_key.
+    - source: device_threshold_history
+      column: interval_id
+      roles:
+      - ordering
+      description: Stable device-scoped identity of one valid-time interval, unchanged when either boundary
+        is corrected. Used for ordering.
+    - source: device_threshold_history
+      column: valid_from
+      roles:
+      - event_time
+      - valid_time
+      description: Inclusive business-time interval start, which can be corrected in a later revision.
+        Used for event_time, valid_time.
+    - source: device_threshold_history
+      column: valid_to
+      roles:
+      - valid_time
+      description: Exclusive business-time interval end; null denotes an open-ended interval. Used for
+        valid_time.
+    - source: device_threshold_history
+      column: revision_no
+      roles:
+      - ordering
+      - revision
+      description: Strictly increasing correction ordinal for this stable interval_id. Used for ordering,
+        revision.
+    - source: device_threshold_history
+      column: available_at
+      roles:
+      - availability_time
+      description: Earliest instant this interval revision was readable by the feature system. Used for
+        availability_time.
+    - source: device_threshold_history
+      column: is_deleted
+      roles:
+      - deletion
+      description: A selected true revision removes this logical interval. Used for deletion.
+    - source: device_threshold_history
+      column: critical_threshold_c
+      roles:
+      - filter
+      description: Temperature at or above this threshold is classified as hot for the interval. Used
+        for filter.
+    - source: device_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: device_registry
+      column: device_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Device identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: device_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: device_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 86400
+    coverage: contiguous
+    earliest_as_of: '2026-02-01T00:00:00Z'
+  acceptance:
+    suites:
+    - temperature_history_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+feature_sets:
+- id: device_temperature
+  version: 1.0.0
+  name: Device Temperature
+  description: Atomic, exactly pinned synthetic example feature set.
+  owner: example.feature-engineering
+  entity: device
+  features:
+  - id: device.hot_reading_count_24h
+    version: 1.0.0
+  publication: atomic
+consumers:
+- id: temperature_batch
+  version: 1.0.0
+  name: Temperature Batch
+  description: Synthetic request contract. Request as_of anchors feature windows; requested_at determines
+    what published values were visible.
+  owner: example.modeling
+  feature_set:
+    feature_set: device_temperature
+    version: 1.0.0
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: device_id
+    input_field: device_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+  selection:
+    mode: source_as_known
+    tie_breaker: sequence
+  max_staleness_seconds: 3600
+  missing_value_policy: preserve_null
+  label: null
+deployments:
+- id: temperature_dev
+  version: 1.0.0
+  name: Temperature Dev
+  description: Declarative synthetic binding example only. These identities and tables are not provisioned,
+    and no execution or cloud deployment is authorized by this document.
+  owner: example.platform
+  environment: development
+  source_bindings:
+  - source: device_registry
+    read_only: true
+    location:
+      kind: fixture
+      suite: temperature_history_conformance
+    version: 1.0.0
+    adapter: local_reference
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: temperature_readings
+    read_only: true
+    location:
+      kind: fixture
+      suite: temperature_history_conformance
+    version: 1.0.0
+    adapter: local_reference
+    column_mapping:
+      reading_id: reading_id
+      revision_no: revision_no
+      tenant_id: tenant_id
+      device_id: device_id
+      observed_at: observed_at
+      available_at: available_at
+      is_deleted: is_deleted
+      temperature_c: temperature_c
+  - source: device_threshold_history
+    read_only: true
+    location:
+      kind: fixture
+      suite: temperature_history_conformance
+    version: 1.0.0
+    adapter: local_reference
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      interval_id: interval_id
+      valid_from: valid_from
+      valid_to: valid_to
+      revision_no: revision_no
+      available_at: available_at
+      is_deleted: is_deleted
+      critical_threshold_c: critical_threshold_c
+  output_targets:
+  - feature_set: device_temperature
+    version: 1.0.0
+    location:
+      kind: file
+      path: ./example-output/temperature_dev/device_temperature.jsonl
+      format: jsonl
+    write_mode: merge
+    adapter: local_reference
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+    feature_mapping:
+    - feature: device.hot_reading_count_24h
+      version: 1.0.0
+      column: device_hot_reading_count_24h
+      state_column: device_hot_reading_count_24h_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: manual
+  refresh:
+    mode: full
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: false
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: local_reference
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: local_reference
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 0
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: device_registry
+      privilege: read
+    - resource: temperature_readings
+      privilege: read
+    - resource: device_threshold_history
+      privilege: read
+    - resource: device_temperature
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: local_reference
+    implementation: dev.featlas:local_reference
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    configuration: {}
+  execution:
+    compute: local_reference
+    catalog: local_reference
+    orchestrator: null
+  consumer_bindings:
+  - consumer: temperature_batch
+    version: 1.0.0
+    adapter: local_reference
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+- id: temperature_prod
+  version: 1.0.0
+  name: Temperature Prod
+  description: Declarative synthetic binding example only. These identities and tables are not provisioned,
+    and no execution or cloud deployment is authorized by this document.
+  owner: example.platform
+  environment: production
+  source_bindings:
+  - source: device_registry
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_raw
+      name: device_registry
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: temperature_readings
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_raw
+      name: temperature_readings
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      reading_id: reading_id
+      revision_no: revision_no
+      tenant_id: tenant_id
+      device_id: device_id
+      observed_at: observed_at
+      available_at: available_at
+      is_deleted: is_deleted
+      temperature_c: temperature_c
+  - source: device_threshold_history
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_raw
+      name: device_threshold_history
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+      interval_id: interval_id
+      valid_from: valid_from
+      valid_to: valid_to
+      revision_no: revision_no
+      available_at: available_at
+      is_deleted: is_deleted
+      critical_threshold_c: critical_threshold_c
+  output_targets:
+  - feature_set: device_temperature
+    version: 1.0.0
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_features
+      name: device_temperature
+      format: delta
+    write_mode: merge
+    adapter: databricks_platform
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_id
+      device_id: device_id
+    feature_mapping:
+    - feature: device.hot_reading_count_24h
+      version: 1.0.0
+      column: device_hot_reading_count_24h
+      state_column: device_hot_reading_count_24h_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: interval
+    every_seconds: 3600
+    offset_seconds: 0
+  refresh:
+    mode: incremental
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: true
+    start: '2026-02-01T00:00:00Z'
+    end: '2026-06-08T00:00:00Z'
+    mode: source_as_known
+    publish: separate_namespace
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: databricks_platform
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 25
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: device_registry
+      privilege: read
+    - resource: temperature_readings
+      privilege: read
+    - resource: device_threshold_history
+      privilege: read
+    - resource: device_temperature
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: databricks_platform
+    implementation: dev.featlas:databricks
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    - orchestrator
+    configuration:
+      connection_profile: example_databricks
+      feature_api: uc_feature_tables
+  execution:
+    compute: databricks_platform
+    catalog: databricks_platform
+    orchestrator: databricks_platform
+  consumer_bindings:
+  - consumer: temperature_batch
+    version: 1.0.0
+    adapter: databricks_platform
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+acceptance_suites:
+- id: temperature_history_conformance
+  version: 1.0.0
+  name: Temperature History Conformance
+  description: All values are synthetic. Expected values are derived from small enumerated cases and intentional
+    boundary conditions; structural validity alone does not verify a production implementation.
+  runner: reference
+  cases:
+  - id: historical_join_and_late_revision
+    name: Historical Join And Late Revision
+    description: A 75 C reading matches the old 70 C threshold before noon and the new 80 C threshold
+      after noon. A later-arriving correction of the old threshold cannot leak into this as-of.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: morning
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 75.0
+      - reading_id: afternoon
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T13:00:00Z'
+        available_at: '2026-06-07T13:00:00Z'
+        is_deleted: false
+        temperature_c: 75.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 2
+        available_at: '2026-06-08T00:00:01Z'
+        is_deleted: false
+        critical_threshold_c: 100.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 1
+        state: ok
+  - id: valid_interval_boundary
+    name: Valid Interval Boundary
+    description: Exactly at noon the earlier interval is ineligible and the later threshold is 80 C; the
+      75 C reading is not hot.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: at_transition
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        temperature_c: 75.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: correction_moves_event_outside_window
+    name: Correction Moves Event Outside Window
+    description: 'Select revision 2 first: its corrected timestamp is outside the 24-hour window. Filtering
+      revision 1 first would incorrectly count this reading.'
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: moved
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      - reading_id: moved
+        revision_no: 2
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-06T23:59:59Z'
+        available_at: '2026-06-07T04:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: selected_retraction
+    name: Selected Retraction
+    description: An available selected tombstone removes an earlier hot observation, without resurrecting
+      the previous revision.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: retracted
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      - reading_id: retracted
+        revision_no: 2
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T04:00:00Z'
+        is_deleted: true
+        temperature_c: 90.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: value_correction_before_filter
+    name: Value Correction Before Filter
+    description: The latest available value is 60 C and fails the predicate. A future available revision
+      with 100 C is not yet known.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: corrected
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      - reading_id: corrected
+        revision_no: 2
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T03:00:00Z'
+        is_deleted: false
+        temperature_c: 60.0
+      - reading_id: corrected
+        revision_no: 3
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-08T00:00:01Z'
+        is_deleted: false
+        temperature_c: 100.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: dimension_boundary_correction
+    name: Dimension Boundary Correction
+    description: The latest available revision moves a stable interval start after the fact event. The
+      earlier interval revision must not be resurrected; the left join has no match.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: before_corrected_start
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_120000
+        valid_from: '2026-06-07T12:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T12:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-07T03:00:00Z'
+        valid_to: '2026-06-07T12:00:00Z'
+        revision_no: 2
+        available_at: '2026-06-07T04:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: overlapping_dimension_intervals
+    name: Overlapping Dimension Intervals
+    description: Two independently identified intervals match one fact event. This violates many-to-one
+      cardinality and must fail.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: ambiguous
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: '2026-06-08T00:00:00Z'
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260607_000000
+        valid_from: '2026-06-07T00:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-07T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 80.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      diagnostic:
+        code: MULTIPLE_MATCHES
+  - id: unmatched_dimension
+    name: Unmatched Dimension
+    description: A left join preserves a reading with a null threshold. The comparison is unknown and
+      does not classify it as hot.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: no_threshold
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      device_threshold_history: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 0
+        state: empty
+  - id: join_tenant_isolation
+    name: Join Tenant Isolation
+    description: The same local device ID has 70 C and 95 C thresholds in different tenants. A 90 C reading
+      counts only for tenant_a.
+    feature:
+      id: device.hot_reading_count_24h
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      device_id: device_1
+    - tenant_id: tenant_b
+      device_id: device_1
+    source_rows:
+      device_registry:
+      - tenant_id: tenant_a
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      - tenant_id: tenant_b
+        device_id: device_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      temperature_readings:
+      - reading_id: a_reading
+        revision_no: 1
+        tenant_id: tenant_a
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      - reading_id: b_reading
+        revision_no: 1
+        tenant_id: tenant_b
+        device_id: device_1
+        observed_at: '2026-06-07T02:00:00Z'
+        available_at: '2026-06-07T02:00:00Z'
+        is_deleted: false
+        temperature_c: 90.0
+      device_threshold_history:
+      - tenant_id: tenant_a
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 70.0
+      - tenant_id: tenant_b
+        device_id: device_1
+        interval_id: interval_20260601_000000
+        valid_from: '2026-06-01T00:00:00Z'
+        valid_to: null
+        revision_no: 1
+        available_at: '2026-06-01T00:00:00Z'
+        is_deleted: false
+        critical_threshold_c: 95.0
+    context:
+      mode: source_as_known
+      source_status:
+      - source: device_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: temperature_readings
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: device_threshold_history
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          device_id: device_1
+        value: 1
+        state: ok
+      - entity_keys:
+          tenant_id: tenant_b
+          device_id: device_1
+        value: 0
+        state: empty

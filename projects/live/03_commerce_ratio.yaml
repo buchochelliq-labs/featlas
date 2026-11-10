@@ -1,0 +1,1515 @@
+# Derived from spec/feature-engineering-spec-v0.2.0/examples/03_commerce_ratio.yaml by projects/derive.py.
+# Only deployment adapter pins/local output formats differ (05 also gains lookup_prod); logical contracts are unchanged.
+# Live variant: Unity Catalog namespace example_catalog -> featlas (deployment bindings only).
+# Complete FeatureEngineeringProject, specification 0.2.0.
+# Synthetic contracts only; no adapters are installed or resources provisioned.
+spec_version: 0.2.0
+kind: FeatureEngineeringProject
+metadata:
+  id: commerce_ratio_example
+  name: Customer spend and derived ratio
+  version: 1.0.0
+  description: Synthetic exact minor-unit monetary aggregates, explicit version-pinned feature dependencies
+    and a separately declared future label contract.
+  owners:
+  - example.feature-engineering
+  status: draft
+  tags:
+  - synthetic
+  - specification-example
+entities:
+- id: customer
+  version: 1.0.0
+  name: Customer
+  description: A registered customer identified by the full tenant-scoped composite key.
+  owner: example.analytics
+  keys:
+  - name: tenant_id
+    type: string
+    description: Tenant isolation boundary.
+    source_column: tenant_id
+    is_tenant: true
+  - name: customer_id
+    type: string
+    description: Tenant-local customer identifier.
+    source_column: customer_id
+    is_tenant: false
+  population:
+    source: customer_registry
+    mode: as_of_keys
+    event_time_upper: inclusive
+    availability_upper: inclusive
+    deletion_policy: exclude_deleted
+sources:
+- id: customer_registry
+  version: 1.0.0
+  name: Customer registry
+  description: One immutable registration row per tenant and customer; registration defines population
+    membership after it is observed. Decommissioning would require a versioned population source in a
+    new source version.
+  owner: example.data-platform
+  columns:
+  - name: tenant_id
+    type: string
+    description: Tenant boundary; the same local entity ID may exist in different tenants.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: customer_id
+    type: string
+    description: Customer identifier unique only within one tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: registered_at
+    type: timestamp
+    description: Business instant when this entity joined the population.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Instant this registration became visible to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - tenant_id
+  - customer_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - tenant_id
+    - customer_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: registered_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: tenant_id
+      origin: synthetic.customer_registry.tenant_id
+      description: 'Created as a synthetic fixture field: Tenant boundary; the same local entity ID may
+        exist in different tenants.'
+    - column: customer_id
+      origin: synthetic.customer_registry.customer_id
+      description: 'Created as a synthetic fixture field: Customer identifier unique only within one tenant.'
+    - column: registered_at
+      origin: synthetic.customer_registry.registered_at
+      description: 'Created as a synthetic fixture field: Business instant when this entity joined the
+        population.'
+    - column: available_at
+      origin: synthetic.customer_registry.available_at
+      description: 'Created as a synthetic fixture field: Instant this registration became visible to
+        the feature system.'
+    code: null
+- id: purchase_events
+  version: 1.0.0
+  name: Customer purchase events
+  description: One immutable purchase observation per transaction_id. Monetary amounts are integer USD
+    cents, so exact sums do not depend on binary floating-point rounding.
+  owner: example.data-platform
+  columns:
+  - name: transaction_id
+    type: string
+    description: Immutable purchase identity used for exact retransmission deduplication.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: tenant_id
+    type: string
+    description: Merchant/account tenant boundary.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: customer_id
+    type: string
+    description: Customer identifier unique within one tenant.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: purchased_at
+    type: timestamp
+    description: Business timestamp when the purchase occurred.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: available_at
+    type: timestamp
+    description: Earliest instant this purchase observation was available to the feature system.
+    nullable: false
+    unit: null
+    classification: internal
+  - name: amount_usd_cents
+    type: integer
+    description: Nonnegative gross purchase amount in USD cents; the feature explicitly excludes negative
+      adjustments.
+    nullable: false
+    unit: USD_cent
+    classification: internal
+  - name: status
+    type: string
+    description: Business state. Only the literal settled is included; pending and cancelled observations
+      are excluded.
+    nullable: false
+    unit: null
+    classification: internal
+  primary_key:
+  - transaction_id
+  record_semantics:
+    kind: append_only
+    logical_key:
+    - transaction_id
+    duplicate_policy: collapse_identical
+  time:
+    event_time: purchased_at
+    available_time: available_at
+    timezone: UTC
+  quality:
+    null_key_policy: reject
+    invalid_row_policy: reject
+    max_lateness_seconds: 86400
+    completeness:
+      mode: external_status
+      description: A persisted synthetic source-status observation supplies an explicit complete event-time
+        interval. Empty tables alone prove no coverage; outages are reported separately.
+  retention:
+    raw_seconds: 31536000
+    revision_history_seconds: 31536000
+    earliest_reproducible_at: '2026-01-01T00:00:00Z'
+  lineage:
+    description: Synthetic example table constructed solely for this specification; no customer, production
+      or measured data is represented.
+    upstream_columns:
+    - column: transaction_id
+      origin: synthetic.purchase_events.transaction_id
+      description: 'Created as a synthetic fixture field: Immutable purchase identity used for exact retransmission
+        deduplication.'
+    - column: tenant_id
+      origin: synthetic.purchase_events.tenant_id
+      description: 'Created as a synthetic fixture field: Merchant/account tenant boundary.'
+    - column: customer_id
+      origin: synthetic.purchase_events.customer_id
+      description: 'Created as a synthetic fixture field: Customer identifier unique within one tenant.'
+    - column: purchased_at
+      origin: synthetic.purchase_events.purchased_at
+      description: 'Created as a synthetic fixture field: Business timestamp when the purchase occurred.'
+    - column: available_at
+      origin: synthetic.purchase_events.available_at
+      description: 'Created as a synthetic fixture field: Earliest instant this purchase observation was
+        available to the feature system.'
+    - column: amount_usd_cents
+      origin: synthetic.purchase_events.amount_usd_cents
+      description: 'Created as a synthetic fixture field: Nonnegative gross purchase amount in USD cents;
+        the feature explicitly excludes negative adjustments.'
+    - column: status
+      origin: synthetic.purchase_events.status
+      description: 'Created as a synthetic fixture field: Business state. Only the literal settled is
+        included; pending and cancelled observations are excluded.'
+    code: null
+relationships: []
+features:
+- id: customer.spend_7d
+  version: 1.0.0
+  name: Settled spend in seven days
+  description: Exact sum of nonnegative settled gross purchase amounts in integer USD cents over the prior
+    seven days.
+  owner: example.feature-engineering
+  entity: customer
+  output:
+    type: integer
+    nullable: true
+    unit: USD_cent
+    description: Exact sum of nonnegative settled gross purchase amounts in integer USD cents over the
+      prior seven days.
+    constraints:
+      minimum: 0
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  inputs:
+  - alias: purchases
+    source: purchase_events
+    columns:
+    - transaction_id
+    - tenant_id
+    - customer_id
+    - purchased_at
+    - available_at
+    - amount_usd_cents
+    - status
+  dependencies: []
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 604800
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: aggregate
+    input: purchases
+    joins: []
+    group_by:
+    - entity_key: tenant_id
+      input: purchases
+      column: tenant_id
+    - entity_key: customer_id
+      input: purchases
+      column: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: purchases
+          column: status
+        - kind: literal
+          type: string
+          value: settled
+      - kind: call
+        operator: greater_or_equal
+        args:
+        - kind: column
+          input: purchases
+          column: amount_usd_cents
+        - kind: literal
+          type: integer
+          value: 0
+    operation: sum
+    value:
+      kind: column
+      input: purchases
+      column: amount_usd_cents
+    distinct_by: []
+    nulls: ignore
+  lineage:
+    sources:
+    - source: purchase_events
+      column: transaction_id
+      roles:
+      - ordering
+      description: Immutable purchase identity used for exact retransmission deduplication. Used for ordering.
+    - source: purchase_events
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Merchant/account tenant boundary. Used for entity_key.
+    - source: purchase_events
+      column: customer_id
+      roles:
+      - entity_key
+      description: Customer identifier unique within one tenant. Used for entity_key.
+    - source: purchase_events
+      column: purchased_at
+      roles:
+      - event_time
+      description: Business timestamp when the purchase occurred. Used for event_time.
+    - source: purchase_events
+      column: available_at
+      roles:
+      - availability_time
+      description: Earliest instant this purchase observation was available to the feature system. Used
+        for availability_time.
+    - source: purchase_events
+      column: amount_usd_cents
+      roles:
+      - value
+      - filter
+      description: Nonnegative gross purchase amount in USD cents; the feature explicitly excludes negative
+        adjustments. Used for value, filter.
+    - source: purchase_events
+      column: status
+      roles:
+      - filter
+      description: Business state. Only the literal settled is included; pending and cancelled observations
+        are excluded. Used for filter.
+    - source: customer_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: customer_registry
+      column: customer_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Customer identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: customer_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: customer_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 604800
+    coverage: contiguous
+    earliest_as_of: '2026-02-01T00:00:00Z'
+  acceptance:
+    suites:
+    - commerce_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+- id: customer.spend_30d
+  version: 1.0.0
+  name: Settled spend in 30 days
+  description: Exact sum of nonnegative settled gross purchase amounts in integer USD cents over the prior
+    30 days.
+  owner: example.feature-engineering
+  entity: customer
+  output:
+    type: integer
+    nullable: true
+    unit: USD_cent
+    description: Exact sum of nonnegative settled gross purchase amounts in integer USD cents over the
+      prior 30 days.
+    constraints:
+      minimum: 0
+    numeric_tolerance:
+      absolute: 0
+      relative: 0
+  inputs:
+  - alias: purchases
+    source: purchase_events
+    columns:
+    - transaction_id
+    - tenant_id
+    - customer_id
+    - purchased_at
+    - available_at
+    - amount_usd_cents
+    - status
+  dependencies: []
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: aggregate
+    input: purchases
+    joins: []
+    group_by:
+    - entity_key: tenant_id
+      input: purchases
+      column: tenant_id
+    - entity_key: customer_id
+      input: purchases
+      column: customer_id
+    filter:
+      kind: call
+      operator: and
+      args:
+      - kind: call
+        operator: equal
+        args:
+        - kind: column
+          input: purchases
+          column: status
+        - kind: literal
+          type: string
+          value: settled
+      - kind: call
+        operator: greater_or_equal
+        args:
+        - kind: column
+          input: purchases
+          column: amount_usd_cents
+        - kind: literal
+          type: integer
+          value: 0
+    operation: sum
+    value:
+      kind: column
+      input: purchases
+      column: amount_usd_cents
+    distinct_by: []
+    nulls: ignore
+  lineage:
+    sources:
+    - source: purchase_events
+      column: transaction_id
+      roles:
+      - ordering
+      description: Immutable purchase identity used for exact retransmission deduplication. Used for ordering.
+    - source: purchase_events
+      column: tenant_id
+      roles:
+      - entity_key
+      description: Merchant/account tenant boundary. Used for entity_key.
+    - source: purchase_events
+      column: customer_id
+      roles:
+      - entity_key
+      description: Customer identifier unique within one tenant. Used for entity_key.
+    - source: purchase_events
+      column: purchased_at
+      roles:
+      - event_time
+      description: Business timestamp when the purchase occurred. Used for event_time.
+    - source: purchase_events
+      column: available_at
+      roles:
+      - availability_time
+      description: Earliest instant this purchase observation was available to the feature system. Used
+        for availability_time.
+    - source: purchase_events
+      column: amount_usd_cents
+      roles:
+      - value
+      - filter
+      description: Nonnegative gross purchase amount in USD cents; the feature explicitly excludes negative
+        adjustments. Used for value, filter.
+    - source: purchase_events
+      column: status
+      roles:
+      - filter
+      description: Business state. Only the literal settled is included; pending and cancelled observations
+        are excluded. Used for filter.
+    - source: customer_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: customer_registry
+      column: customer_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Customer identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: customer_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: customer_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies: []
+    code: null
+  missingness:
+    empty:
+      action: value
+      value: 0
+    null_input: ignore
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-02-01T00:00:00Z'
+  acceptance:
+    suites:
+    - commerce_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+- id: customer.recent_spend_ratio
+  version: 1.0.0
+  name: Seven-day share of 30-day spend
+  description: The exact pinned seven-day spend divided by 30-day spend for the same customer and as_of.
+    A zero denominator produces a successful nullable output via safe_divide.
+  owner: example.feature-engineering
+  entity: customer
+  output:
+    type: number
+    nullable: true
+    unit: ratio
+    description: The exact pinned seven-day spend divided by 30-day spend for the same customer and as_of.
+      A zero denominator produces a successful nullable output via safe_divide.
+    constraints:
+      minimum: 0
+      maximum: 1
+    numeric_tolerance:
+      absolute: 1.0e-09
+      relative: 1.0e-09
+  inputs: []
+  dependencies:
+  - feature: customer.spend_7d
+    version: 1.0.0
+    alignment: same_entity_as_of
+  - feature: customer.spend_30d
+    version: 1.0.0
+    alignment: same_entity_as_of
+  time:
+    timezone: UTC
+    window:
+      lookback_seconds: 2592000
+      lower: inclusive
+      upper: exclusive
+    availability:
+      cutoff: as_of
+      upper: inclusive
+    knowledge_mode: source_as_known
+    publication:
+      delay_seconds: 60
+  transform:
+    kind: expression
+    expression:
+      kind: call
+      operator: safe_divide
+      args:
+      - kind: feature
+        feature: customer.spend_7d
+        version: 1.0.0
+      - kind: feature
+        feature: customer.spend_30d
+        version: 1.0.0
+  lineage:
+    sources:
+    - source: customer_registry
+      column: tenant_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Tenant boundary; the same local entity ID may exist in different tenants. Used for
+        entity_key, ordering, population.
+    - source: customer_registry
+      column: customer_id
+      roles:
+      - entity_key
+      - ordering
+      - population
+      description: Customer identifier unique only within one tenant. Used for entity_key, ordering, population.
+    - source: customer_registry
+      column: registered_at
+      roles:
+      - event_time
+      - population
+      description: Business instant when this entity joined the population. Used for event_time, population.
+    - source: customer_registry
+      column: available_at
+      roles:
+      - availability_time
+      - population
+      description: Instant this registration became visible to the feature system. Used for availability_time,
+        population.
+    dependencies:
+    - feature: customer.spend_7d
+      version: 1.0.0
+      description: Pinned same-entity, same-as-of input to the derived output.
+    - feature: customer.spend_30d
+      version: 1.0.0
+      description: Pinned same-entity, same-as-of input to the derived output.
+    code: null
+  missingness:
+    empty:
+      action: 'null'
+    null_input: propagate
+    insufficient_history: 'null'
+    source_unavailable: 'null'
+    execution_failure: error
+  quality:
+    checks:
+    - kind: finite
+      severity: error
+    on_violation: error
+  history:
+    required_seconds: 2592000
+    coverage: contiguous
+    earliest_as_of: '2026-02-01T00:00:00Z'
+  acceptance:
+    suites:
+    - commerce_conformance
+    description: Human-reviewed synthetic golden cases cover the declared behavior. External adapter conformance
+      is required for transforms outside the bundled verifier.
+feature_sets:
+- id: customer_spending
+  version: 1.0.0
+  name: Customer Spending
+  description: Atomic, exactly pinned synthetic example feature set.
+  owner: example.feature-engineering
+  entity: customer
+  features:
+  - id: customer.spend_7d
+    version: 1.0.0
+  - id: customer.spend_30d
+    version: 1.0.0
+  - id: customer.recent_spend_ratio
+    version: 1.0.0
+  publication: atomic
+consumers:
+- id: spend_training_dataset
+  version: 1.0.0
+  name: Spend Training Dataset
+  description: Synthetic request contract. Request as_of anchors feature windows; requested_at determines
+    what published values were visible.
+  owner: example.modeling
+  feature_set:
+    feature_set: customer_spending
+    version: 1.0.0
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: customer_id
+    input_field: customer_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+    dataset_cutoff: dataset_cutoff
+  selection:
+    mode: source_as_known
+    tie_breaker: sequence
+  max_staleness_seconds: 3600
+  missing_value_policy: preserve_null
+  label:
+    source: purchase_events
+    value_column: amount_usd_cents
+    entity_keys:
+    - entity_key: tenant_id
+      column: tenant_id
+    - entity_key: customer_id
+      column: customer_id
+    event_time_column: purchased_at
+    available_time_column: available_at
+    horizon_seconds: 604800
+    lower: inclusive
+    upper: exclusive
+    availability_policy: at_or_before_dataset_cutoff
+    description: Sum all observed purchase amounts during [feature as_of, feature as_of + 7 days), independently
+      of feature inputs. This simple synthetic label uses every purchase state and signed amount; a business-specific
+      settled-only target must define its own filtered label source. Keep only examples whose whole horizon
+      is proven complete by the dataset cutoff.
+    aggregation: sum
+    empty:
+      action: value
+      value: 0
+    incomplete_horizon: exclude
+    full_horizon_required: true
+- id: spend_serving_replay
+  version: 1.0.0
+  name: Spend Serving Replay
+  description: Synthetic request contract. Request as_of anchors feature windows; requested_at determines
+    what published values were visible.
+  owner: example.modeling
+  feature_set:
+    feature_set: customer_spending
+    version: 1.0.0
+  entity_inputs:
+  - entity_key: tenant_id
+    input_field: tenant_id
+  - entity_key: customer_id
+    input_field: customer_id
+  time_inputs:
+    as_of: as_of
+    requested_at: requested_at
+  selection:
+    mode: historical_serving_replay
+    tie_breaker: sequence
+  max_staleness_seconds: 3600
+  missing_value_policy: preserve_null
+  label: null
+deployments:
+- id: commerce_dev
+  version: 1.0.0
+  name: Commerce Dev
+  description: Declarative synthetic binding example only. These identities and tables are not provisioned,
+    and no execution or cloud deployment is authorized by this document.
+  owner: example.platform
+  environment: development
+  source_bindings:
+  - source: customer_registry
+    read_only: true
+    location:
+      kind: fixture
+      suite: commerce_conformance
+    version: 1.0.0
+    adapter: local_reference
+    column_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: purchase_events
+    read_only: true
+    location:
+      kind: fixture
+      suite: commerce_conformance
+    version: 1.0.0
+    adapter: local_reference
+    column_mapping:
+      transaction_id: transaction_id
+      tenant_id: tenant_id
+      customer_id: customer_id
+      purchased_at: purchased_at
+      available_at: available_at
+      amount_usd_cents: amount_usd_cents
+      status: status
+  output_targets:
+  - feature_set: customer_spending
+    version: 1.0.0
+    location:
+      kind: file
+      path: ./example-output/commerce_dev/customer_spending.jsonl
+      format: jsonl
+    write_mode: merge
+    adapter: local_reference
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+    feature_mapping:
+    - feature: customer.spend_7d
+      version: 1.0.0
+      column: customer_spend_7d
+      state_column: customer_spend_7d_state
+    - feature: customer.spend_30d
+      version: 1.0.0
+      column: customer_spend_30d
+      state_column: customer_spend_30d_state
+    - feature: customer.recent_spend_ratio
+      version: 1.0.0
+      column: customer_recent_spend_ratio
+      state_column: customer_recent_spend_ratio_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: manual
+  refresh:
+    mode: full
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: false
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: local_reference
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: local_reference
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: local_reference
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 0
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: customer_registry
+      privilege: read
+    - resource: purchase_events
+      privilege: read
+    - resource: customer_spending
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: local_reference
+    implementation: dev.featlas:local_reference
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    configuration: {}
+  execution:
+    compute: local_reference
+    catalog: local_reference
+    orchestrator: null
+  consumer_bindings:
+  - consumer: spend_training_dataset
+    version: 1.0.0
+    adapter: local_reference
+    role: offline_store
+  - consumer: spend_serving_replay
+    version: 1.0.0
+    adapter: local_reference
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+- id: commerce_prod
+  version: 1.0.0
+  name: Commerce Prod
+  description: Declarative synthetic binding example only. These identities and tables are not provisioned,
+    and no execution or cloud deployment is authorized by this document.
+  owner: example.platform
+  environment: production
+  source_bindings:
+  - source: customer_registry
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_raw
+      name: customer_registry
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+      registered_at: registered_at
+      available_at: available_at
+  - source: purchase_events
+    read_only: true
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_raw
+      name: purchase_events
+      format: delta
+    version: 1.0.0
+    adapter: databricks_platform
+    column_mapping:
+      transaction_id: transaction_id
+      tenant_id: tenant_id
+      customer_id: customer_id
+      purchased_at: purchased_at
+      available_at: available_at
+      amount_usd_cents: amount_usd_cents
+      status: status
+  output_targets:
+  - feature_set: customer_spending
+    version: 1.0.0
+    location:
+      kind: table
+      namespace:
+      - featlas
+      - synthetic_features
+      name: customer_spending
+      format: delta
+    write_mode: merge
+    adapter: databricks_platform
+    role: offline_store
+    entity_key_mapping:
+      tenant_id: tenant_id
+      customer_id: customer_id
+    feature_mapping:
+    - feature: customer.spend_7d
+      version: 1.0.0
+      column: customer_spend_7d
+      state_column: customer_spend_7d_state
+    - feature: customer.spend_30d
+      version: 1.0.0
+      column: customer_spend_30d
+      state_column: customer_spend_30d_state
+    - feature: customer.recent_spend_ratio
+      version: 1.0.0
+      column: customer_recent_spend_ratio
+      state_column: customer_recent_spend_ratio_state
+    metadata_columns:
+      as_of: feature_as_of
+      published_at: published_at
+      publication_sequence: publication_sequence
+      publication_id: publication_id
+      materialization_id: materialization_id
+  schedule:
+    mode: interval
+    every_seconds: 3600
+    offset_seconds: 0
+  refresh:
+    mode: incremental
+    lookback_seconds: 2592000
+    late_arrival_policy: recompute_affected
+  publication:
+    atomicity: feature_set
+    visibility: after_success
+    observed_timestamp_required: true
+    surface: offline_snapshot
+  backfill:
+    allowed: true
+    start: '2026-02-01T00:00:00Z'
+    end: '2026-06-08T00:00:00Z'
+    mode: source_as_known
+    publish: separate_namespace
+  runtime:
+    sdk_policy: pin_and_probe_at_implementation
+    required_capabilities:
+    - adapter: databricks_platform
+      role: compute
+      capability: core.aggregate
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.expression
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.revision_reconstruction
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.as_of_join
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: compute
+      capability: core.source_as_known
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.serving_replay
+      reason: Required by the pinned feature computation or historical retrieval contract.
+    - adapter: databricks_platform
+      role: catalog
+      capability: core.source_read
+      reason: Read source snapshots through complete logical-to-physical mappings.
+    - adapter: databricks_platform
+      role: offline_store
+      capability: core.atomic_publication
+      reason: Publish complete entity/as-of feature-set snapshots with observed visibility evidence.
+  slo:
+    max_compute_seconds: 300
+    max_staleness_seconds: 3600
+    max_error_rate: 0.01
+  budget:
+    currency: USD
+    max_daily_cost: 25
+    max_scan_bytes: 1073741824
+    max_output_rows: 1000000
+    max_memory_mib: 2048
+    max_concurrent_runs: 1
+  monitoring:
+    metrics:
+    - freshness
+    - coverage
+    - row_count
+    - null_rate
+    - quality_failures
+    - compute_seconds
+    - cost
+    - publication_lag
+    alert_owner: example.platform-oncall
+  access:
+    read_principal: example.feature-reader
+    write_principal: example.feature-publisher
+    required_permissions:
+    - resource: customer_registry
+      privilege: read
+    - resource: purchase_events
+      privilege: read
+    - resource: customer_spending
+      privilege: write
+    purpose: Evaluate documented synthetic examples and illustrate least-privilege deployment intent.
+  output_retention_seconds: 31536000
+  adapters:
+  - id: databricks_platform
+    implementation: dev.featlas:databricks
+    version: 0.1.0
+    roles:
+    - compute
+    - catalog
+    - offline_store
+    - orchestrator
+    configuration:
+      connection_profile: example_databricks
+      feature_api: uc_feature_tables
+  execution:
+    compute: databricks_platform
+    catalog: databricks_platform
+    orchestrator: databricks_platform
+  consumer_bindings:
+  - consumer: spend_training_dataset
+    version: 1.0.0
+    adapter: databricks_platform
+    role: offline_store
+  - consumer: spend_serving_replay
+    version: 1.0.0
+    adapter: databricks_platform
+    role: offline_store
+  portability:
+    mode: portable
+    native_bindings: []
+acceptance_suites:
+- id: commerce_conformance
+  version: 1.0.0
+  name: Commerce Conformance
+  description: All values are synthetic. Expected values are derived from small enumerated cases and intentional
+    boundary conditions; structural validity alone does not verify a production implementation.
+  runner: reference
+  cases:
+  - id: seven_day_sum
+    name: Seven Day Sum
+    description: 'Only the recent settled nonnegative purchase contributes: older, pending and negative
+      adjustment rows are excluded.'
+    feature:
+      id: customer.spend_7d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events:
+      - transaction_id: recent
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        amount_usd_cents: 2500
+        status: settled
+      - transaction_id: older
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-05-20T12:00:00Z'
+        available_at: '2026-05-20T12:00:00Z'
+        amount_usd_cents: 7500
+        status: settled
+      - transaction_id: pending
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T13:00:00Z'
+        available_at: '2026-06-07T13:00:00Z'
+        amount_usd_cents: 30000
+        status: pending
+      - transaction_id: adjustment
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T14:00:00Z'
+        available_at: '2026-06-07T14:00:00Z'
+        amount_usd_cents: -100
+        status: settled
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: 2500
+        state: ok
+  - id: thirty_day_lower_boundary
+    name: Thirty Day Lower Boundary
+    description: The purchase exactly 30 elapsed days before as_of is included and the purchase one second
+      earlier is excluded.
+    feature:
+      id: customer.spend_30d
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events:
+      - transaction_id: exact_lower
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-05-09T00:00:00Z'
+        available_at: '2026-05-09T00:00:00Z'
+        amount_usd_cents: 1000
+        status: settled
+      - transaction_id: before_lower
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-05-08T23:59:59Z'
+        available_at: '2026-05-08T23:59:59Z'
+        amount_usd_cents: 2000
+        status: settled
+      - transaction_id: recent
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        amount_usd_cents: 2500
+        status: settled
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: 3500
+        state: ok
+  - id: derived_ratio
+    name: Derived Ratio
+    description: The numerator is 2500 USD cents and denominator is 10000 USD cents; cancellation of matching
+      units yields 0.25.
+    feature:
+      id: customer.recent_spend_ratio
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events:
+      - transaction_id: recent
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        amount_usd_cents: 2500
+        status: settled
+      - transaction_id: older
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-05-20T12:00:00Z'
+        available_at: '2026-05-20T12:00:00Z'
+        amount_usd_cents: 7500
+        status: settled
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: 0.25
+        state: ok
+  - id: zero_denominator
+    name: Zero Denominator
+    description: Both dependencies are known zero with complete coverage. safe_divide returns null as
+      an intentional successful computation, not an outage or missing-history signal.
+    feature:
+      id: customer.recent_spend_ratio
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events: []
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: null
+        state: ok
+  - id: late_purchase_excluded
+    name: Late Purchase Excluded
+    description: A large recent purchase arrived after as_of and is excluded from both pinned dependencies.
+    feature:
+      id: customer.recent_spend_ratio
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events:
+      - transaction_id: recent
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        amount_usd_cents: 2500
+        status: settled
+      - transaction_id: older
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-05-20T12:00:00Z'
+        available_at: '2026-05-20T12:00:00Z'
+        amount_usd_cents: 7500
+        status: settled
+      - transaction_id: late
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T13:00:00Z'
+        available_at: '2026-06-08T00:00:01Z'
+        amount_usd_cents: 100000
+        status: settled
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: 0.25
+        state: ok
+  - id: derived_tenant_isolation
+    name: Derived Tenant Isolation
+    description: Tenant_a has entirely recent spend and tenant_b has entirely older spend despite sharing
+      the same local customer ID.
+    feature:
+      id: customer.recent_spend_ratio
+      version: 1.0.0
+    as_of: '2026-06-08T00:00:00Z'
+    population_rows:
+    - tenant_id: tenant_a
+      customer_id: customer_1
+    - tenant_id: tenant_b
+      customer_id: customer_1
+    source_rows:
+      customer_registry:
+      - tenant_id: tenant_a
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      - tenant_id: tenant_b
+        customer_id: customer_1
+        registered_at: '2026-01-01T00:00:00Z'
+        available_at: '2026-01-01T00:00:00Z'
+      purchase_events:
+      - transaction_id: a
+        tenant_id: tenant_a
+        customer_id: customer_1
+        purchased_at: '2026-06-07T12:00:00Z'
+        available_at: '2026-06-07T12:00:00Z'
+        amount_usd_cents: 100
+        status: settled
+      - transaction_id: b
+        tenant_id: tenant_b
+        customer_id: customer_1
+        purchased_at: '2026-05-20T12:00:00Z'
+        available_at: '2026-05-20T12:00:00Z'
+        amount_usd_cents: 400
+        status: settled
+    context:
+      mode: source_as_known
+      source_status:
+      - source: customer_registry
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      - source: purchase_events
+        state: available
+        coverage_start: '2026-01-01T00:00:00Z'
+        coverage_end: '2026-06-09T00:00:00Z'
+      capabilities:
+      - core.aggregate
+      - core.expression
+      - core.revision_reconstruction
+      - core.as_of_join
+      - core.source_as_known
+      - core.serving_replay
+    expected:
+      rows:
+      - entity_keys:
+          tenant_id: tenant_a
+          customer_id: customer_1
+        value: 1.0
+        state: ok
+      - entity_keys:
+          tenant_id: tenant_b
+          customer_id: customer_1
+        value: 0.0
+        state: ok

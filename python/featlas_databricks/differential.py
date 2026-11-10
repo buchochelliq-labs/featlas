@@ -18,7 +18,6 @@ from .core import Core
 from .errors import FeatlasError
 from .runner import SnapshotRun, format_instant, parse_instant
 
-_SPARK_TYPES = {"BIGINT": "long", "DOUBLE": "double", "BOOLEAN": "boolean", "STRING": "string", "TIMESTAMP": "timestamp", "DATE": "date"}
 
 
 def utc_process() -> None:
@@ -42,9 +41,12 @@ def _convert(value: Any, spark_type: str) -> Any:
 
 
 def register_source(spark, name: str, spec: dict, rows: list[dict]) -> None:
-    from pyspark.sql.types import StructField, StructType, _parse_datatype_string
+    from pyspark.sql import types as T
 
-    fields = [StructField(c["physical"], _parse_datatype_string(_SPARK_TYPES[c["type"]]), True) for c in spec["columns"]]
+    # Explicit type objects (no JVM-side type parsing, so this also works over Spark Connect).
+    spark_types = {"BIGINT": T.LongType(), "DOUBLE": T.DoubleType(), "BOOLEAN": T.BooleanType(), "STRING": T.StringType(), "TIMESTAMP": T.TimestampType(), "DATE": T.DateType()}
+    fields = [T.StructField(c["physical"], spark_types[c["type"]], True) for c in spec["columns"]]
+    StructType = T.StructType
     data = [tuple(_convert(r.get(c["logical"]), c["type"]) for c in spec["columns"]) for r in rows]
     spark.createDataFrame(data, StructType(fields)).createOrReplaceTempView(name)
 
@@ -106,8 +108,21 @@ def run_case(spark, core: Core, project: str, generated: dict, case: dict, consu
     problems = compare(spark_rows, expected["rows"], fplan["output"]["type"], tol)
     core_rows = core_result.get("actual_rows") or []
     problems += [f"vs core: {p}" for p in compare(spark_rows, core_rows, fplan["output"]["type"], tol)]
+    problems += compare_warnings(run.quality_warnings, core_result.get("quality_warnings") or [])
+    outcome["quality_warnings"] = run.quality_warnings
     outcome.update(status="failed" if problems else "passed", reason="; ".join(problems))
     return outcome
+
+
+def compare_warnings(spark: list[dict], core: list[dict]) -> list[str]:
+    """Warning-severity findings must match the core exactly (feature, check, keys, value)."""
+    import json
+
+    def key(w: dict) -> str:
+        return json.dumps([w["feature"], w["check"], w["check_index"], w["outcome"], w["entity_keys"], w["value"]], sort_keys=True)
+
+    a, b = sorted(map(key, spark)), sorted(map(key, core))
+    return [] if a == b else [f"quality warnings differ: spark {a} vs core {b}"]
 
 
 def _diag_outcome(outcome: dict, expected: dict, code: str, why: str, all_codes: list[str] | None = None) -> dict:

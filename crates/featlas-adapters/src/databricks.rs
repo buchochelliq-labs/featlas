@@ -1,9 +1,10 @@
-//! Azure Databricks adapter `dev.featlas:databricks@0.1.0`.
+//! Databricks adapter `dev.featlas:databricks@0.1.0` (Azure Databricks is the first target).
 //!
 //! Roles: compute (Spark SQL lowering of the canonical plan), catalog (Unity
 //! Catalog source reads), offline_store (Unity Catalog Delta feature tables),
 //! orchestrator (declared; job integration unverified). There is no
-//! online_store role in this version.
+//! online_store role in this version. Capability assessment lives in
+//! `databricks_caps.rs` and is driven by `databricks_lock.json`.
 //!
 //! This module only *generates* SQL text and statements. It performs no I/O,
 //! holds no credentials and imports no SDK. Execution happens in the thin
@@ -25,9 +26,7 @@
 //!   explicitly; number results are checked finite;
 //! * population left-joins aggregates so zero-event entities survive.
 
-use featlas_core::capability::{
-    AdapterDescriptor, Assessment, AssessmentContext, EvidenceScope, Status,
-};
+use featlas_core::capability::{AdapterDescriptor, Assessment, AssessmentContext};
 use featlas_core::diag::{Diagnostic, Stage};
 use featlas_core::model::*;
 use featlas_core::plan::{FeaturePlan, FeatureSetPlan, Plan, SourceNode, Step};
@@ -45,18 +44,6 @@ const ROLES: &[Role] = &[
 ];
 
 pub struct Databricks;
-
-/// Capabilities for which this version contains a lowering/statement generator.
-const COMPUTE_LOWERED: &[&str] = &[
-    "core.aggregate",
-    "core.recency",
-    "core.lookup",
-    "core.expression",
-    "core.revision_reconstruction",
-    "core.as_of_join",
-    "core.relationship_join",
-    "core.source_as_known",
-];
 
 impl AdapterDescriptor for Databricks {
     fn implementation(&self) -> &str {
@@ -90,33 +77,13 @@ impl AdapterDescriptor for Databricks {
         })
     }
     fn assess(&self, role: Role, capability: &str, ctx: &AssessmentContext) -> Assessment {
-        if let Some((_, _, _, ev)) = ctx
-            .live_evidence
-            .iter()
-            .find(|(a, r, c, _)| a == IMPLEMENTATION && *r == role && c == capability)
-        {
-            // Operator-supplied live evidence is recorded but its authenticity is not established here.
-            return Assessment { status: Status::Unverified, scope: EvidenceScope::LiveTarget, evidence: vec![ev.clone()], limitations: vec!["Live evidence reference supplied; status remains unverified until a reviewed differential acceptance run is pinned in the adapter lock".into()] };
-        }
-        let none_live = "No live Azure Databricks execution has been observed for this exact candidate; the mandatory target gate is open";
-        match (role, capability) {
-            (Role::Compute, c) if COMPUTE_LOWERED.contains(&c) => Assessment::unverified(EvidenceScope::Static, format!("Spark SQL lowering is generated and differential-tested on local Apache Spark only. {none_live}.")),
-            (Role::Catalog, "core.source_read") => Assessment::unverified(EvidenceScope::Static, format!("Unity Catalog reads are generated as SELECT statements; physical schema, history retention and permissions are not probed. {none_live}.")),
-            (Role::OfflineStore, "core.atomic_publication") => Assessment::unverified(EvidenceScope::Static, format!("Single-statement Delta MERGE per feature-set snapshot plus commit-history evidence is generated; atomic visibility is not observed. {none_live}.")),
-            (Role::OfflineStore, "core.serving_replay") => Assessment::unverified(EvidenceScope::Static, format!("Replay reads require persisted published_at evidence from Delta commit history; no historical ledger has been observed. {none_live}.")),
-            (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Declaration, "Databricks job scheduling is not implemented in this version; manual runs only"),
-            (Role::OnlineStore, _) => Assessment::unsupported("This adapter version provides no online_store role"),
-            (_, c) if c.starts_with("learned.") || c.starts_with("custom.") => Assessment::unsupported(format!("{c} has no attested implementation in this adapter; custom/learned execution is not supported")),
-            (_, "core.label_construction") => Assessment::unsupported("Label dataset construction is not lowered to Spark in this version"),
-            (_, "core.online_publication") => Assessment::unsupported("Online publication is not implemented"),
-            (r, c) => Assessment::unsupported(format!("{c} is not provided for role {}", r.as_str())),
-        }
+        crate::databricks_caps::assess(role, capability, ctx)
     }
     fn implementation_sha256(&self) -> Option<String> {
-        None
+        Some(crate::databricks_caps::implementation_sha256())
     }
     fn runtime_versions(&self) -> Map<String, Value> {
-        Map::new()
+        crate::databricks_caps::runtime_versions()
     }
     fn check_bindings(&self, p: &Project, d: &Deployment, adapter_id: &str) -> Vec<Diagnostic> {
         let mut out = Vec::new();
@@ -352,6 +319,83 @@ pub struct FeatureStatements {
     pub computed: Statement,
     pub degraded: Statement,
     pub missingness: Missingness,
+    /// Output and quality rules in the core's rank order (SEM-OUT-001, SEM-QUAL-001).
+    pub quality: Vec<QualityStatement>,
+}
+
+/// One output/quality rule over a feature view; `sql` returns the violating rows.
+#[derive(Debug, Clone, Serialize)]
+pub struct QualityStatement {
+    pub name: String,
+    /// 0 type/nullability, 1 minimum, 2 maximum, 3 enumeration, 4+i declared check i.
+    pub rank: usize,
+    pub rule: String,
+    pub code: String,
+    /// `error` fails the run; `warning` is recorded, values unchanged; `quarantine` blocks publication.
+    pub outcome: String,
+    pub check: String,
+    pub sql: String,
+}
+
+/// A numeric bound as a Spark literal that compares exactly with BIGINT/DOUBLE values.
+fn bound_literal(x: f64) -> String {
+    if x.fract() == 0.0 && x.abs() < 1e15 {
+        format!("{}", x as i64)
+    } else {
+        format!("CAST('{x:?}' AS DOUBLE)")
+    }
+}
+
+/// Output constraints and declared quality checks of one feature, lowered over its view.
+fn quality_statements(f: &Feature, view: &str, keys: &str) -> Vec<QualityStatement> {
+    let o = &f.output;
+    let v = "fl_value";
+    let numeric = matches!(o.ty, LogicalType::Integer | LogicalType::Number);
+    let mut rules: Vec<(usize, &str, String, &str, &str, String)> = Vec::new();
+    if !o.nullable {
+        rules.push((0, "SEM-OUT-001", "OUTPUT_TYPE_MISMATCH".into(), "error", "nullability", format!("{v} IS NULL")));
+    }
+    if let Some(m) = o.constraints.minimum.filter(|_| numeric) {
+        rules.push((1, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "minimum", format!("{v} < {}", bound_literal(m))));
+    }
+    if let Some(m) = o.constraints.maximum.filter(|_| numeric) {
+        rules.push((2, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "maximum", format!("{v} > {}", bound_literal(m))));
+    }
+    if let Some(allowed) = &o.constraints.enumeration {
+        let lits: Vec<String> = allowed.iter().map(|a| literal_json(a, o.ty)).collect();
+        rules.push((3, "SEM-OUT-001", "QUALITY_VIOLATION".into(), "error", "enumeration", if lits.is_empty() { format!("{v} IS NOT NULL") } else { format!("{v} IS NOT NULL AND NOT ({v} IN ({}))", lits.join(", ")) }));
+    }
+    for (i, q) in f.quality.checks.iter().enumerate() {
+        let predicate = match q {
+            QualityCheck::NotNull { .. } => format!("fl_state IN ('ok', 'empty') AND {v} IS NULL"),
+            QualityCheck::Range { minimum, maximum, .. } => {
+                let mut parts = Vec::new();
+                if let Some(m) = minimum { parts.push(format!("{v} < {}", bound_literal(*m))); }
+                if let Some(m) = maximum { parts.push(format!("{v} > {}", bound_literal(*m))); }
+                if parts.is_empty() || !numeric { "false".into() } else { format!("({})", parts.join(" OR ")) }
+            }
+            QualityCheck::Finite { .. } => match o.ty {
+                LogicalType::Number => format!("(isnan({v}) OR abs({v}) = double('Infinity'))"),
+                LogicalType::Integer => "false".into(),
+                _ => format!("{v} IS NOT NULL"),
+            },
+        };
+        let outcome = if q.severity() == "warn" { "warning" } else if f.quality.on_violation == "quarantine" { "quarantine" } else { "error" };
+        let code = match outcome { "warning" => "QUALITY_WARNING", "quarantine" => "QUALITY_QUARANTINED", _ => "QUALITY_VIOLATION" };
+        rules.push((4 + i, "SEM-QUAL-001", code.into(), outcome, q.kind(), predicate));
+    }
+    rules
+        .into_iter()
+        .map(|(rank, rule, code, outcome, check, predicate)| QualityStatement {
+            name: format!("{view}_quality_{rank}_{check}"),
+            rank,
+            rule: rule.into(),
+            code,
+            outcome: outcome.into(),
+            check: check.into(),
+            sql: format!("SELECT {keys}, {v} AS value, fl_state AS state FROM {view} WHERE {predicate}"),
+        })
+        .collect()
 }
 
 struct Lowering<'a> {
@@ -809,6 +853,8 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             purpose: format!("{}: coverage not established; typed null with the core-computed state and no source reads", f.id),
             sql: format!("CREATE OR REPLACE TEMP VIEW {view} AS\nSELECT {keys}, {value} AS fl_value, CAST({degraded_state} AS STRING) AS fl_state FROM {population}"),
             reads: vec![fs.population.source.clone()], view: None };
+        let model = p.feature(&f.id).ok_or_else(|| format!("{} is not in the project", f.id))?;
+        let quality = quality_statements(model, &view, &keys);
         features.push(FeatureStatements {
             feature: f.id.clone(),
             version: f.version.clone(),
@@ -816,6 +862,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             computed,
             degraded,
             missingness: f.missingness.clone(),
+            quality,
         });
     }
     // Snapshot assembly with physical names.
@@ -962,11 +1009,28 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         ),
     ]);
     let evidence = vec![
-        Statement { name: "commit_history".into(), purpose: "Read the Delta commit whose userMetadata is this materialization_id; its timestamp is the observed visibility instant".into(), sql: format!("DESCRIBE HISTORY {output_table}"), reads: vec![], view: None },
+        Statement {
+            name: "commit_history".into(),
+            purpose: "Read, through the table's change data feed over the bounded version range [:from_version, :to_version], the commit that inserted this publication's rows; its timestamp is the observed visibility instant. The range is a retained commit (see commit_candidates), so the read never needs expired history. Independent of session confs such as commit userMetadata.".into(),
+            sql: format!(
+                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, :from_version, :to_version) WHERE _change_type = 'insert' AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
+                sql_string(&output_table),
+                quote(&mc.publication_id)
+            ),
+            reads: vec![],
+            view: None,
+        },
         Statement {
             name: "record_published_at".into(),
             purpose: "Record observed visibility evidence on the rows of this publication only (never fabricated from schedules or job time)".into(),
             sql: format!("UPDATE {output_table} SET {} = CAST(:observed_commit_timestamp AS TIMESTAMP) WHERE {} = :publication_id AND {} IS NULL", quote(&mc.published_at), quote(&mc.publication_id), quote(&mc.published_at)), reads: vec![], view: None },
+        Statement {
+            name: "commit_candidates".into(),
+            purpose: "The table's retained commit history; the host reads commit_history one retained MERGE commit at a time (newest first, after the pre-publication version on a fresh write), so evidence lookup never depends on history that log or change-data retention has removed".into(),
+            sql: format!("DESCRIBE HISTORY {output_table}"),
+            reads: vec![],
+            view: None,
+        },
     ];
     let consumer_read = Statement {
         name: "consumer_read".into(),
@@ -994,7 +1058,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         ("publication_sequence".to_string(), "BIGINT: deterministic original publication order".to_string()),
         ("publication_id".to_string(), "STRING: stable original publication identity".to_string()),
         ("materialization_id".to_string(), "STRING: identity of this write; also the Delta commit userMetadata".to_string()),
-        ("observed_commit_timestamp".to_string(), "TIMESTAMP: timestamp of the Delta commit read from DESCRIBE HISTORY".to_string()),
+        ("observed_commit_timestamp".to_string(), "TIMESTAMP: _commit_timestamp of the commit that inserted the publication (change data feed)".to_string()),
         ("max_as_of".to_string(), "TIMESTAMP: largest as_of among consumer request rows".to_string()),
     ]);
     let notes = vec![

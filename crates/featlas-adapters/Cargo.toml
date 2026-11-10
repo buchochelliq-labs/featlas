@@ -4,6 +4,7 @@ description = "Adapter implementations (local reference, in-memory test store, A
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 
 [dependencies]
 featlas-core = { path = "../featlas-core" }

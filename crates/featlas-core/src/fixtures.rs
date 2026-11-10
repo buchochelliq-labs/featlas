@@ -46,6 +46,9 @@ pub struct CaseResult {
     pub actual_diagnostic: Option<Json>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub trace: Vec<TraceStep>,
+    /// Warning-severity quality findings of the evaluation (values unchanged).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quality_warnings: Vec<crate::eval::QualityFinding>,
 }
 
 pub fn run_case(
@@ -66,6 +69,7 @@ pub fn run_case(
         actual_rows: None,
         actual_diagnostic: None,
         trace: Vec::new(),
+        quality_warnings: Vec::new(),
     };
     if suite.runner == Runner::AdapterRequired {
         result.reason =
@@ -119,6 +123,7 @@ pub fn run_case(
             let cmp = feature
                 .map(|f| compare_rows(f, &ev.rows, rows))
                 .unwrap_or(Err("Unknown feature".into()));
+            result.quality_warnings = ev.quality_warnings.clone();
             result.actual_rows = Some(ev.rows);
             match cmp {
                 Ok(()) => result.status = CaseStatus::Passed,
@@ -134,6 +139,7 @@ pub fn run_case(
                 "Expected diagnostic {} but evaluation produced rows",
                 diagnostic.code
             );
+            result.quality_warnings = ev.quality_warnings.clone();
             result.actual_rows = Some(ev.rows);
         }
         (Err(e), Expectation::Diagnostic { diagnostic }) => {
