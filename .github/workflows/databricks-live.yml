@@ -13,6 +13,11 @@ name: databricks-live
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "Also run the platform job (scheduled job, Online Feature Store + Feature Serving, Feature Views)"
+        type: boolean
+        default: true
   pull_request:
     paths:
       - "crates/featlas-adapters/src/databricks.rs"
@@ -67,7 +72,7 @@ jobs:
           git rev-parse HEAD > live-evidence/commit.txt
           sha256sum target/release/fe-spec >> live-evidence/commit.txt
           # The files a passing run vouches for (pinned in crates/featlas-adapters/src/databricks_lock.json).
-          sha256sum crates/featlas-adapters/src/databricks.rs python/featlas_databricks/runner.py > live-evidence/sources.sha256
+          sha256sum crates/featlas-adapters/src/databricks.rs python/featlas_databricks/runner.py python/featlas_databricks/cli.py python/featlas_databricks/online.py python/featlas_databricks/feature_views.py > live-evidence/sources.sha256
       - name: Differential suite on Databricks serverless (generated SQL vs goldens and core)
         run: cd python && FEATLAS_DIFFERENTIAL_REPORT=../live-evidence/databricks-differential.json pytest -q -rA tests/test_local_spark_differential.py
       - name: Unity Catalog publication suite
@@ -78,3 +83,61 @@ jobs:
         with:
           name: databricks-live-evidence
           path: live-evidence/
+
+  # Platform surfaces (manual dispatch only: it creates a job, an Online Feature Store and a
+  # serving endpoint, all removed at the end). OAuth scopes: environment variable
+  # DATABRICKS_PLATFORM_SCOPES, default below. Extra grants for the SP: CREATE VOLUME, READ VOLUME,
+  # WRITE VOLUME and CREATE FUNCTION on featlas.synthetic_raw / featlas.synthetic_features.
+  platform:
+    if: github.event_name == 'workflow_dispatch' && inputs.platform
+    runs-on: ubuntu-latest
+    environment: databricks-free
+    timeout-minutes: 90
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST || vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      DATABRICKS_SCOPES: ${{ vars.DATABRICKS_PLATFORM_SCOPES || 'databricks-connect jobs files unity-catalog pipelines model-serving model-serving-inference' }}
+      FEATLAS_SPARK: databricks
+      FEATLAS_PLATFORM: "1"
+      TZ: UTC
+    steps:
+      - name: Check required configuration (names only)
+        run: |
+          [ -n "$DATABRICKS_HOST" ] && [ -n "$DATABRICKS_CLIENT_ID" ] && [ -n "$DATABRICKS_CLIENT_SECRET" ] || { echo "::error::Missing Databricks configuration in environment databricks-free"; exit 1; }
+          echo "Requested OAuth scopes: $DATABRICKS_SCOPES"
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Wheels for the job's serverless environment (the test probes its architecture).
+      - name: Build aarch64 wheel (manylinux 2_28)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: aarch64-unknown-linux-gnu
+          manylinux: "2_28"
+          working-directory: python
+          args: --release --out ../wheels
+      - name: Build x86_64 wheel (manylinux 2_28)
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64-unknown-linux-gnu
+          manylinux: "2_28"
+          working-directory: python
+          args: --release --out ../wheels
+      - run: python -m pip install pytest PyYAML==6.0.3 sqlglot==30.30.0 "databricks-connect>=16.4,<18" "databricks-feature-engineering>=0.16.0" wheels/featlas-*x86_64*.whl
+      - name: Record client versions
+        run: |
+          mkdir -p platform-evidence
+          python -m pip freeze | grep -iE "databricks|pyspark|featlas|mlflow" > platform-evidence/pip-freeze.txt
+          git rev-parse HEAD > platform-evidence/commit.txt
+          sha256sum wheels/*.whl >> platform-evidence/commit.txt
+          sha256sum crates/featlas-adapters/src/databricks.rs python/featlas_databricks/runner.py python/featlas_databricks/cli.py python/featlas_databricks/online.py python/featlas_databricks/feature_views.py > platform-evidence/sources.sha256
+      - name: Platform suite (job, online store and serving, Feature Views)
+        run: cd python && FEATLAS_WHEEL_DIR=../wheels FEATLAS_PLATFORM_REPORT=../platform-evidence/databricks-platform.json pytest -q -rA tests/test_databricks_platform.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: databricks-platform-evidence
+          path: platform-evidence/

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 
@@ -47,6 +48,11 @@ def statuses_from_table(spark, table: str, as_of: str) -> list[dict]:
 
 
 def _spark(profile: str):
+    """The job's own Spark session on Databricks compute; Databricks Connect elsewhere."""
+    if os.environ.get("DATABRICKS_RUNTIME_VERSION"):  # pragma: no cover - runs inside a job task
+        from pyspark.sql import SparkSession
+
+        return SparkSession.builder.getOrCreate()
     try:
         from databricks.connect import DatabricksSession  # type: ignore
     except ImportError as exc:  # pragma: no cover - live-only path
@@ -75,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--materialization-id")
     ap.add_argument("--allow-create-table", action="store_true")
     ap.add_argument("--evidence-out")
+    ap.add_argument("--online-sample", type=int, default=20, help="online_store targets: number of published keys whose online visibility is observed")
     args = ap.parse_args(argv)
 
     core = Core()
@@ -114,6 +121,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         auth = PublicationAuthorization(args.environment or "", args.approved_by or "", args.allow_create_table, args.publication_id or "", args.publication_sequence or 0, args.materialization_id or "")
         evidence = run.publish(auth)
+        if art.get("surface") == "online_store":
+            from .online import OnlineAuthorization, OnlinePublisher
+
+            keys = [{k: r[k] for k in art["online"]["lookup_keys"]} for r in run.spark.table(art["snapshot"]["view"]).select(*art["online"]["lookup_keys"]).limit(args.online_sample).collect()]
+            evidence["online"] = OnlinePublisher(run.spark, art).publish(evidence, OnlineAuthorization(args.environment or "", args.approved_by or "", args.allow_create_table), keys)
         evidence.update(plan_digest=gen["manifest"]["plan_digest"], project_file_sha256=gen["manifest"]["project_file_sha256"], generator=art["generator"])
         out = json.dumps(evidence, indent=2, default=str)
         if args.evidence_out:

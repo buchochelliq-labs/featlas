@@ -391,6 +391,7 @@ pub fn generate(
     let compute = d.adapter(&d.execution.compute).unwrap();
     let mut artifacts = Map::new();
     let mut label_artifacts = Map::new();
+    let mut feature_views = Map::new();
     if compute.implementation == databricks::IMPLEMENTATION {
         for fs in &plan.logical.feature_sets {
             let art = databricks::lower(plan, &fs.id, &l.project)
@@ -402,6 +403,14 @@ pub fn generate(
             );
             files.insert(format!("{dir}/script.sql"), databricks::render_script(&art));
             artifacts.insert(fs.id.clone(), serde_json::to_value(&art).unwrap());
+            // feature_api: feature_views -> per-feature exact Feature View mapping.
+            let api = plan.bindings.adapters.iter().find(|a| a.id == compute.id).and_then(|a| a.configuration.get("feature_api")).and_then(Value::as_str);
+            if api == Some("feature_views") {
+                let fv = databricks::feature_views(plan, &fs.id)
+                    .map_err(|m| ApiError::new("LOWERING_FAILED", m, Value::Null))?;
+                files.insert(format!("{dir}/feature_views.json"), serde_json::to_string_pretty(&fv).unwrap());
+                feature_views.insert(fs.id.clone(), fv);
+            }
         }
         // Scheduled deployments: a paused Databricks job running every feature set (SEM-DEPLOY-003).
         if d.execution.orchestrator.is_some() && matches!(d.schedule, featlas_core::model::Schedule::Interval { .. }) {
@@ -443,7 +452,7 @@ pub fn generate(
     });
     Ok(envelope(
         "generate",
-        json!({"plan": plan, "capability_report": report, "diagnostics": outcome.diagnostics, "artifacts": artifacts, "label_artifacts": label_artifacts, "files": files, "manifest": manifest}),
+        json!({"plan": plan, "capability_report": report, "diagnostics": outcome.diagnostics, "artifacts": artifacts, "label_artifacts": label_artifacts, "feature_views": feature_views, "files": files, "manifest": manifest}),
     ))
 }
 

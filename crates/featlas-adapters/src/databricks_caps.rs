@@ -28,6 +28,19 @@ const SOURCES: &[(&str, &[u8])] = &[
         "python/featlas_databricks/runner.py",
         include_bytes!("../../../python/featlas_databricks/runner.py"),
     ),
+    // Scheduled job entry point, online publication and Feature View materialization.
+    (
+        "python/featlas_databricks/cli.py",
+        include_bytes!("../../../python/featlas_databricks/cli.py"),
+    ),
+    (
+        "python/featlas_databricks/online.py",
+        include_bytes!("../../../python/featlas_databricks/online.py"),
+    ),
+    (
+        "python/featlas_databricks/feature_views.py",
+        include_bytes!("../../../python/featlas_databricks/feature_views.py"),
+    ),
 ];
 
 /// Capabilities for which this version contains a lowering/statement generator.
@@ -219,9 +232,12 @@ pub fn assess(role: Role, capability: &str, ctx: &AssessmentContext) -> Assessme
         (Role::OfflineStore, "core.atomic_publication") => Assessment::unverified(EvidenceScope::Static, format!("Single-statement Delta MERGE per feature-set snapshot plus change-data-feed commit evidence is generated. {none_live}.")),
         (Role::OfflineStore, "core.serving_replay") => Assessment::unverified(EvidenceScope::Static, format!("Replay reads require persisted published_at evidence. {none_live}.")),
         (Role::Orchestrator, "core.scheduling") => Assessment::unverified(EvidenceScope::Static, format!("A paused Databricks Asset Bundle job (databricks/job.yml: UTC Quartz schedule on the deployment grid, slot-derived idempotent publication identity, retries, max_concurrent_runs and timeout from budget/SLO) is generated; deploying and running it has not been observed. {none_live}.")),
-        (Role::OnlineStore, _) => Assessment::unsupported("This adapter version provides no online_store role"),
+        (Role::OnlineStore, "core.atomic_publication") => Assessment::unverified(EvidenceScope::Static, format!("One Delta MERGE replaces the latest-snapshot staging feature table (PK entity keys + as_of TIMESERIES, change data feed on); the host publishes it to a Databricks Online Feature Store with publish_table. {none_live}.")),
+        (Role::OnlineStore, "core.online_publication") => Assessment::unverified(EvidenceScope::Static, format!("published_at is recorded only when a Feature Serving endpoint (or the online table) returns the new publication for the published keys; commit time is never used as online visibility (SEM-PORT-009). {none_live}.")),
+        (Role::OnlineStore, "core.serving_replay") => Assessment::unsupported("The online store holds only the latest snapshot per entity; historical replay is served from the offline_snapshot deployment's table"),
+        (Role::OnlineStore, c) => Assessment::unsupported(format!("{c} is not provided for role online_store")),
         (_, c) if c.starts_with("learned.") || c.starts_with("custom.") => Assessment::unsupported(format!("{c} has no attested implementation in this adapter; custom/learned execution is not supported")),
-        (_, "core.online_publication") => Assessment::unsupported("Online publication is not implemented"),
+        (_, "core.online_publication") => Assessment::unsupported("Online publication is provided only by the online_store role"),
         (r, c) => Assessment::unsupported(format!("{c} is not provided for role {}", r.as_str())),
     }
 }
@@ -235,10 +251,11 @@ mod tests {
         let l = lock();
         assert_eq!(l.adapter, IMPLEMENTATION);
         for r in &l.verified_runs {
-            assert_eq!(
-                r.sources_sha256.keys().collect::<Vec<_>>(),
-                SOURCES.iter().map(|(p, _)| p).collect::<Vec<_>>(),
-                "run {} pins exactly the vouched-for sources",
+            // Earlier runs vouched for fewer files; a run matches only if it pinned all of them.
+            let known: Vec<&str> = SOURCES.iter().map(|(p, _)| *p).collect();
+            assert!(
+                r.sources_sha256.keys().all(|p| known.contains(&p.as_str())),
+                "run {} pins only vouched-for sources",
                 r.run_id
             );
             for v in &r.verified {
@@ -282,12 +299,11 @@ mod tests {
                 );
             }
         }
-        // Never vouched for by any run.
-        let s = assess(
-            Role::Orchestrator,
-            "core.scheduling",
-            &AssessmentContext::default(),
-        );
-        assert_ne!(s.status, Status::SupportedNative);
+        // Native only while a pinned run that tested the compiled sources lists it.
+        for (role, cap) in [(Role::Orchestrator, "core.scheduling"), (Role::OnlineStore, "core.online_publication")] {
+            let s = assess(role, cap, &AssessmentContext::default());
+            let vouched = current_run().is_some_and(|r| r.verified.iter().any(|v| v.role == role && v.capability == cap));
+            assert_eq!(s.status == Status::SupportedNative, vouched, "{cap}: {:?}", s.limitations);
+        }
     }
 }
