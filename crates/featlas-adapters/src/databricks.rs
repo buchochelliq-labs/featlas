@@ -1072,7 +1072,8 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         sql: format!(
             "CREATE TABLE IF NOT EXISTS {output_table} (\n  {},\n  CONSTRAINT {} PRIMARY KEY ({pk_cols})\n) USING DELTA\nTBLPROPERTIES ('delta.enableChangeDataFeed' = 'true', 'featlas.feature_set' = {}, 'featlas.feature_set_fingerprint' = {})",
             ddl_cols.join(",\n  "),
-            quote(&format!("{}_pk", safe(&fs.id))),
+            // Unity Catalog constraint names are unique per schema: name it after the table.
+            quote(&format!("{}_pk", match &target.location { Location::Table { name, .. } => safe(name), _ => safe(&fs.id) })),
             sql_string(&format!("{}@{}", fs.id, fs.version)),
             sql_string(&fs.fingerprint)
         ), reads: vec![], view: None };

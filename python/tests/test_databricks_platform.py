@@ -72,7 +72,11 @@ class Steps:
 
     def fail(self, exc: BaseException):
         self.out["result"] = "failed"
-        self.out["error"] = {"type": type(exc).__name__, "message": str(exc)[:2000], "trace": traceback.format_exc(limit=4)[-2000:]}
+        causes, c = [], exc.__cause__ or exc.__context__
+        while c is not None and len(causes) < 3:
+            causes.append(f"{type(c).__name__}: {str(c)[:3000]}")
+            c = c.__cause__ or c.__context__
+        self.out["error"] = {"type": type(exc).__name__, "message": str(exc)[:2000], "detail": str(getattr(exc, "detail", "") or "")[:4000], "causes": causes, "trace": traceback.format_exc(limit=4)[-2000:]}
 
     def ok(self, **kw):
         self.out["result"] = "passed"
@@ -164,13 +168,15 @@ def test_scheduled_job(env):
         spark.sql(f"CREATE OR REPLACE TABLE {q(status)} (source STRING, state STRING, coverage_start TIMESTAMP, coverage_end TIMESTAMP, observed_at TIMESTAMP)")
         spark.sql(f"INSERT INTO {q(status)} VALUES ('device_registry', 'available', TIMESTAMP'2026-01-01 00:00:00', TIMESTAMP'2030-01-01 00:00:00', TIMESTAMP'2026-01-01 00:00:00'), ('fault_events', 'available', TIMESTAMP'2026-01-01 00:00:00', TIMESTAMP'2030-01-01 00:00:00', TIMESTAMP'2026-01-01 00:00:00')")
         # Wheel for the serverless architecture, probed on the target itself.
-        from pyspark.sql.functions import udf
-
-        probe = spark.range(1).select(udf(lambda _: __import__("platform").machine() + " " + __import__("platform").python_version(), "string")("id").alias("p")).collect()[0]["p"]
-        arch = "aarch64" if probe.split()[0] in ("aarch64", "arm64") else "x86_64"
+        # The runtime version names the architecture (e.g. 19.13.x-aarch64-photon-scala2.13); a
+        # Python UDF probe would depend on the UDF sandbox, which is not what the job uses.
+        version = spark.sql("SELECT current_version() AS v").collect()[0]["v"]
+        dbr = (version.asDict() if hasattr(version, "asDict") else dict(version)).get("dbr_version") or ""
+        arch = "aarch64" if "aarch64" in dbr or "arm64" in dbr else "x86_64"
+        probe = dbr
         wheels = sorted(Path(os.environ["FEATLAS_WHEEL_DIR"]).glob(f"featlas-*{arch}*.whl"))
         assert wheels, f"no {arch} wheel in {os.environ['FEATLAS_WHEEL_DIR']}"
-        step("probe", serverless_python=probe, wheel=wheels[0].name)
+        step("probe", dbr_version=probe, arch=arch, wheel=wheels[0].name)
         spark.sql(f"CREATE VOLUME IF NOT EXISTS {q(VOLUME)}")
         base = f"/Volumes/{VOLUME.replace('.', '/')}/{RUN}"
         w.files.upload(f"{base}/{wheels[0].name}", io.BytesIO(wheels[0].read_bytes()), overwrite=True)

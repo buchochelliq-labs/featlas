@@ -100,6 +100,9 @@ jobs:
       DATABRICKS_SCOPES: ${{ vars.DATABRICKS_PLATFORM_SCOPES || 'databricks-connect jobs files unity-catalog pipelines model-serving model-serving-inference' }}
       FEATLAS_SPARK: databricks
       FEATLAS_PLATFORM: "1"
+      # The Feature Engineering client builds an MLflow client: use the workspace, not a local db.
+      MLFLOW_TRACKING_URI: databricks
+      MLFLOW_REGISTRY_URI: databricks-uc
       TZ: UTC
     steps:
       - name: Check required configuration (names only)
