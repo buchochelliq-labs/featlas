@@ -1,0 +1,120 @@
+# Documentation site, built with zensical (MkDocs-compatible): `zensical build --strict`.
+# Pages live in docs/. The evidence records under docs/evidence/ are linked as plain files.
+site_name: featlas
+site_description: >-
+  featlas implements the Feature Engineering Specification 0.2.0: a Rust semantic core,
+  the fe-spec CLI and MCP server, Python bindings and a Databricks adapter.
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+
+# Generated evidence (JSON, SQL, text) stays in the repository and is linked as files; it is
+# not rendered as pages. RUN.md is an evidence record kept out of the navigation.
+exclude_docs: |
+  evidence/generated-fault_prod/
+  evidence/local-acceptance/
+not_in_nav: |
+  evidence/databricks-live/RUN.md
+
+theme:
+  name: material
+  language: en
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - navigation.path
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: lucide/moon
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: lucide/sun
+        name: Switch to light mode
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts:
+      - concepts/index.md
+      - The specification model: concepts/spec-model.md
+      - Time semantics: concepts/time.md
+      - Missingness and coverage: concepts/missingness.md
+      - Publication and replay: concepts/publication.md
+      - Quality policies: concepts/quality.md
+      - Labels: concepts/labels.md
+      - Identity and hashing: concepts/identity.md
+      - Capabilities and readiness: concepts/capabilities.md
+  - Architecture: architecture.md
+  - Guides:
+      - Writing feature specs: guides/authoring.md
+      - Databricks: guides/databricks.md
+      - Reviewing evidence: guides/reviewing.md
+  - Reverse engineering:
+      - reverse/index.md
+      - Drafting a spec: reverse/drafting.md
+      - Characterization tests: reverse/characterization.md
+      - Splitting wide tables: reverse/splitting.md
+      - Regeneration and parity: reverse/regenerate.md
+      - Worked example: reverse/example.md
+      - Reference: reverse/reference.md
+  - Reference:
+      - CLI (fe-spec): reference/cli.md
+      - MCP server: reference/mcp.md
+      - Python API: reference/python.md
+      - Diagnostics: reference/diagnostics.md
+      - Glossary: reference/glossary.md
+  - Testing and evidence: testing.md
+  - Releases: releases.md
+  - Contributing: contributing.md
+  - Status and roadmap: status.md
+  - Records:
+      - Decisions (D1-D8): DECISIONS.md
+      - Evidence and reviews: EVIDENCE.md
+      - Traceability (SEM-*): TRACEABILITY.md
+      - Specification findings: SPEC_FINDINGS.md
+      - Databricks runbook: DATABRICKS_RUNBOOK.md
+      - ODCS (prospective): ODCS.md
