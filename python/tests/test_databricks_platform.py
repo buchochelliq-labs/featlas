@@ -150,6 +150,17 @@ def summarize(w, r: dict) -> dict:
     return {"run_id": r.get("run_id"), "trigger": r.get("trigger"), "state": r.get("state"), "start_time": r.get("start_time"), "end_time": r.get("end_time"), "tasks": tasks}
 
 
+def probe_feature_store_api(w, step) -> None:
+    """Record whether the scoped OAuth token is accepted by the Feature Store REST API, which the
+    Feature Engineering client uses for Feature Views and FeatureSpecs."""
+    for path in ("/api/2.0/feature-store/feature-tables/search", "/api/2.0/feature-engineering/features"):
+        try:
+            w.api_client.do("GET", path, query={"max_results": 1})
+            step("feature_store_api", path=path, accepted=True)
+        except Exception as exc:  # noqa: BLE001 - recorded verbatim
+            step("feature_store_api", path=path, accepted=False, error=f"{type(exc).__name__}: {str(exc)[:400]}")
+
+
 def test_scheduled_job(env):
     step = Steps("scheduled_job")
     spark, w, core = env["spark"], env["w"], env["core"]
@@ -285,6 +296,7 @@ def test_online_publication(env):
 def test_feature_views_parity(env):
     step = Steps("feature_views")
     spark, core = env["spark"], env["core"]
+    probe_feature_store_api(env["w"], step)
     sys.path.insert(0, str(Path(__file__).parent))
     import fv_project
 

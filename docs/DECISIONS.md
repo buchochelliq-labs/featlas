@@ -205,7 +205,10 @@ recorded as online visibility. Resource creation (store, online table, FeatureSp
 needs explicit authorization. `core.serving_replay` on the online role is `unsupported`.
 Databricks documents that online stores need Lakebase without scale-to-zero while Free Edition's
 single Lakebase project is scale-to-zero; whether Free Edition accepts an online store is
-therefore an observation of the live platform run, not an assumption.
+therefore an observation of the live platform run, not an assumption. Observed in platform run
+42921271192: `create_online_store` and `delete_online_store` succeeded on Free Edition; the run
+stopped before syncing (a quoting bug, fixed), and calls of the Feature Engineering client that go
+to the feature-store REST API were refused with HTTP 401 for the scoped OAuth token.
 
 ## D16. Feature Views or Unity Catalog feature tables (adapter configuration `feature_api`)
 

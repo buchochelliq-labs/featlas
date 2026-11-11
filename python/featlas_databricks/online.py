@@ -38,6 +38,11 @@ class OnlineAuthorization:
     allow_create: bool = False
 
 
+def _uc(name: str) -> str:
+    """`a`.`b`.`c` -> a.b.c: the Feature Engineering client takes plain three-part names."""
+    return name.replace("`", "")
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -102,8 +107,8 @@ class OnlinePublisher:
         if not auth.allow_create and not self._online_table_exists():
             raise FeatlasError("ONLINE_TABLE_MISSING", f"{self.o['online_table']} does not exist; creating it needs explicit authorization")
         store = self.fe.get_online_store(name=self.o["store"])
-        self._step("publish_table", source=self.a["output_table"], online_table=self.o["online_table"])
-        res = self.fe.publish_table(online_store=store, source_table_name=self.a["output_table"], online_table_name=self.o["online_table"], publish_mode="TRIGGERED")
+        self._step("publish_table", source=_uc(self.a["output_table"]), online_table=self.o["online_table"])
+        res = self.fe.publish_table(online_store=store, source_table_name=_uc(self.a["output_table"]), online_table_name=_uc(self.o["online_table"]), publish_mode="TRIGGERED")
         return {"online_table": self.o["online_table"], "result": str(res)[:500]}
 
     def _online_table_exists(self) -> bool:
@@ -116,7 +121,7 @@ class OnlinePublisher:
     # --- serving and observation ----------------------------------------------------------------
 
     def feature_spec_name(self) -> str:
-        ns = self.a["output_table"].rsplit(".", 1)[0]
+        ns = _uc(self.a["output_table"]).rsplit(".", 1)[0]
         return f"{ns}.{self.a['feature_set'].replace('.', '_')}_online_spec"
 
     def ensure_endpoint(self, auth: OnlineAuthorization, timeout_s: float = 1800) -> str:
@@ -136,7 +141,7 @@ class OnlinePublisher:
         spec = self.feature_spec_name()
         cols = self.o["feature_columns"] + [self.o["as_of_column"], self.o["publication_id_column"]]
         try:
-            self.fe.create_feature_spec(name=spec, features=[FeatureLookup(table_name=self.a["output_table"], lookup_key=self.o["lookup_keys"], feature_names=cols)])
+            self.fe.create_feature_spec(name=spec, features=[FeatureLookup(table_name=_uc(self.a["output_table"]), lookup_key=self.o["lookup_keys"], feature_names=cols)])
             self._step("create_feature_spec", name=spec)
         except Exception as exc:  # noqa: BLE001 - an existing spec is reused
             if "already exists" not in str(exc).lower():
