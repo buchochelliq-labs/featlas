@@ -1,0 +1,329 @@
+{
+  "run": "42993010899",
+  "project": "projects/live/platform.yaml",
+  "scopes": [
+    "databricks-connect",
+    "jobs",
+    "files",
+    "unity-catalog",
+    "pipelines",
+    "model-serving",
+    "model-serving-inference",
+    "mlflow"
+  ],
+  "tests": {
+    "scheduled_job": {
+      "steps": [
+        {
+          "step": "probe",
+          "at": "2026-11-11T09:30:44.909268Z",
+          "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+          "arch": "aarch64",
+          "wheel": "featlas-0.1.0-cp312-abi3-manylinux_2_28_aarch64.whl"
+        }
+      ],
+      "result": "failed",
+      "error": {
+        "type": "UnknownException",
+        "message": "(com.databricks.sql.managedcatalog.acl.UnauthorizedAccessException) PERMISSION_DENIED: Principal 'featlas' does not have CREATE VOLUME on Schema 'featlas.synthetic_raw'.\n\nJVM stacktrace:\ncom.databricks.sql.managedcatalog.acl.UnauthorizedAccessException\n\tat com.databricks.sql.managedcatalog.client.ErrorDetailsHandlerImpl.wrapServiceException(ErrorDetailsHandler.scala:119)\n\tat com.databricks.sql.managedcatalog.client.ErrorDetailsHandlerImpl.wrapServiceException$(ErrorDetailsHandler.scala:88)\n\tat com.databricks.managedcatalog.ManagedCatalogClientImpl.wrapServiceException(ManagedCatalogClientImpl.scala:44)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.recordAndWrapExceptionBase(ManagedCatalogClientImpl.scala:8915)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.recordAndWrapException(ManagedCatalogClientImpl.scala:8865)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.createVolumeProto(ManagedCatalogClientImpl.scala:9880)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.$anonfun$createVolume$1(ManagedCatalogClientImpl.scala:9862)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.$anonfun$recordAndWrapExceptionBase$2(ManagedCatalogClientImpl.scala:8937)\n\tat com.databricks.spark.util.FrameProfiler$.record(FrameProfiler.scala:115)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.$anonfun$recordAndWrapExceptionBase$1(ManagedCatalogClientImpl.scala:8936)\n\tat com.databricks.sql.managedcatalog.client.ErrorDetailsHandlerImpl.wrapServiceException(ErrorDetailsHandler.scala:96)\n\tat com.databricks.sql.managedcatalog.client.ErrorDetailsHandlerImpl.wrapServiceException$(ErrorDetailsHandler.scala:88)\n\tat com.databricks.managedcatalog.ManagedCatalogClientImpl.wrapServiceException(ManagedCatalogClientImpl.scala:44)\n\tat com.databricks.sql.managedcatalog.client.ManagedCatalogClientImpl.recordAndWrapExceptionBase(ManagedCatalogClientImpl.scala:8915)\n\tat com.datab",
+        "detail": "",
+        "causes": [
+          "_MultiThreadedRendezvous: <_MultiThreadedRendezvous of RPC that terminated with:\n\tstatus = StatusCode.INTERNAL\n\tdetails = \"PERMISSION_DENIED: Principal 'featlas' does not have CREATE VOLUME on Schema 'featlas.synthetic_raw'.\"\n\tdebug_error_string = \"INTERNAL:PERMISSION_DENIED: Principal 'featlas' does not have CREATE VOLUME on Schema 'featlas.synthetic_raw'.\"\n>"
+        ],
+        "trace": "t.ArtifactManager.withClassLoaderIfNeeded(ArtifactManager.scala:139)\n\tat org.apache.spark.sql.artifact.ArtifactManager.withResources(ArtifactManager.scala:144)\n\tat org.apache.spark.sql.connect.service.SessionHolder.withSession(SessionHolder.scala:961)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner.executeInternal(ExecuteThreadRunner.scala:348)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner.$anonfun$execute$1(ExecuteThreadRunner.scala:204)\n\tat scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)\n\tat com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries(UtilizationMetrics.scala:102)\n\tat com.databricks.spark.connect.service.UtilizationMetrics.recordActiveQueries$(UtilizationMetrics.scala:99)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner.recordActiveQueries(ExecuteThreadRunner.scala:63)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner.org$apache$spark$sql$connect$execution$ExecuteThreadRunner$$execute(ExecuteThreadRunner.scala:196)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.$anonfun$run$3(ExecuteThreadRunner.scala:647)\n\tat scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)\n\tat com.databricks.spark.util.DBRTracing$.withSpanFromParent(DBRTracing.scala:70)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.$anonfun$run$2(ExecuteThreadRunner.scala:647)\n\tat scala.runtime.java8.JFunction0$mcV$sp.apply(JFunction0$mcV$sp.scala:18)\n\tat com.databricks.unity.UCSEphemeralState$Handle.runWith(UCSEphemeralState.scala:51)\n\tat com.databricks.unity.HandleImpl.runWith(UCSHandle.scala:138)\n\tat com.databricks.unity.HandleImpl.$anonfun$runWithAndClose$1(UCSHandle.scala:147)\n\tat scala.util.Using$.resource(Using.scala:296)\n\tat com.databricks.unity.HandleImpl.runWithAndClose(UCSHandle.scala:146)\n\tat org.apache.spark.sql.connect.execution.ExecuteThreadRunner$ExecutionThread.run(ExecuteThreadRunner.scala:646)\n"
+      }
+    },
+    "online_publication": {
+      "steps": [
+        {
+          "step": "staged",
+          "at": "2026-11-11T09:31:20.562121Z",
+          "table": "`featlas`.`synthetic_features`.`device_reliability_online_src_42993010899`",
+          "rows": 2,
+          "visibility": "staged_for_online_store"
+        },
+        {
+          "step": "teardown",
+          "at": "2026-11-11T09:31:52.356327Z",
+          "done": [
+            "serving_endpoint: ResourceDoesNotExist: Endpoint with name 'featlas-dr-42993010899' does not exist.",
+            "feature_spec: Exception: {'error_code': 'RESOURCE_DOES_NOT_EXIST', 'message': \"Function 'featlas.synthetic_features.device_reliability_online_spec' does not exist.\", 'details': [{'@type': 'type.googleapis.com/google.rpc.Error",
+            "online_table",
+            "online_store"
+          ]
+        }
+      ],
+      "result": "failed",
+      "error": {
+        "type": "Exception",
+        "message": "{'error_code': 'PERMISSION_DENIED', 'message': \"Principal 'featlas' does not have CREATE FUNCTION on Schema 'featlas.synthetic_features'.\", 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'PERMISSION_DENIED', 'domain': 'unity-catalog.databricks.com', 'metadata': {'resourceType': 'Schema', 'databricks.com/message_template': \"<principalName> does not have <msg> on <resourceType> '<resourceName>'.\", 'principalName': \"Principal 'featlas'\", 'resourceName': 'featlas.synthetic_features', 'databricks.com/sql_state': '42501', 'msg': 'CREATE FUNCTION'}}, {'@type': 'type.googleapis.com/google.rpc.RequestInfo', 'request_id': '6839fb11-290a-46d9-b871-10957e576b16', 'serving_data': ''}]}",
+        "detail": "",
+        "causes": [],
+        "trace": "Traceback (most recent call last):\n  File \"/home/runner/work/featlas/featlas/python/tests/test_databricks_platform.py\", line 280, in test_online_publication\n    ev = pub.publish(staged, OnlineAuthorization(\"databricks-free\", \"github-actions:databricks-platform\", allow_create=True), keys)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/featlas_databricks/online.py\", line 191, in publish\n    endpoint = self.ensure_endpoint(auth)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/featlas_databricks/online.py\", line 144, in ensure_endpoint\n    self.fe.create_feature_spec(name=spec, features=[FeatureLookup(table_name=_uc(self.a[\"output_table\"]), lookup_key=self.o[\"lookup_keys\"], feature_names=cols)])\n  File \"/opt/hostedtoolcache/Python/3.12.16/x64/lib/python3.12/site-packages/databricks/feature_engineering/client.py\", line 1499, in create_feature_spec\n    return self._training_scoring_client.create_feature_spec(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nException: {'error_code': 'PERMISSION_DENIED', 'message': \"Principal 'featlas' does not have CREATE FUNCTION on Schema 'featlas.synthetic_features'.\", 'details': [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'reason': 'PERMISSION_DENIED', 'domain': 'unity-catalog.databricks.com', 'metadata': {'resourceType': 'Schema', 'databricks.com/message_template': \"<principalName> does not have <msg> on <resourceType> '<resourceName>'.\", 'principalName': \"Principal 'featlas'\", 'resourceName': 'featlas.synthetic_features', 'databricks.com/sql_state': '42501', 'msg': 'CREATE FUNCTION'}}, {'@type': 'type.googleapis.com/google.rpc.RequestInfo', 'request_id': '6839fb11-290a-46d9-b871-10957e576b16', 'serving_data': ''}]}\n"
+      }
+    },
+    "feature_views": {
+      "steps": [
+        {
+          "step": "feature_store_api",
+          "at": "2026-11-11T09:31:52.508554Z",
+          "path": "/api/2.0/feature-store/feature-tables/search",
+          "accepted": false,
+          "error": "NotFound: Workspace Feature Store has been deprecated in the current workspace. Databricks recommends using Feature Engineering in Unity Catalog. Please reach out to system admin if you have any more questions."
+        },
+        {
+          "step": "feature_store_api",
+          "at": "2026-11-11T09:31:52.556965Z",
+          "path": "/api/2.0/feature-engineering/features",
+          "accepted": false,
+          "error": "InvalidParameterValue: Field 'catalog_name' is required, expected non-default value (not \"\")!"
+        },
+        {
+          "step": "mapping",
+          "at": "2026-11-11T09:31:52.683206Z",
+          "features": [
+            {
+              "column": "events_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "fault_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "max_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "mean_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "last_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "distinct_codes_1h",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "count_distinct: Feature Views offer only ApproxCountDistinct"
+              ]
+            },
+            {
+              "column": "seconds_since_event",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "recency has no Feature View function"
+              ]
+            },
+            {
+              "column": "fault_severity_per_event_1h",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "derived expression features are computed from other features, not from a source"
+              ]
+            }
+          ]
+        },
+        {
+          "step": "compare",
+          "at": "2026-11-11T09:32:37.343857Z",
+          "result": {
+            "device.events_1h": {
+              "column": "events_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "value",
+                "value": 0
+              }
+            },
+            "device.fault_severity_1h": {
+              "column": "fault_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.max_severity_1h": {
+              "column": "max_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.mean_severity_1h": {
+              "column": "mean_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.last_severity_1h": {
+              "column": "last_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            }
+          },
+          "featlas": [
+            {
+              "tenant_id": "t1",
+              "device_id": "d1",
+              "events_1h": 3,
+              "events_1h_state": "ok",
+              "fault_severity_1h": 2.0,
+              "fault_severity_1h_state": "ok",
+              "max_severity_1h": 2.0,
+              "max_severity_1h_state": "ok",
+              "mean_severity_1h": 1.5,
+              "mean_severity_1h_state": "ok",
+              "last_severity_1h": null,
+              "last_severity_1h_state": "ok",
+              "distinct_codes_1h": 2,
+              "distinct_codes_1h_state": "ok",
+              "seconds_since_event": 600,
+              "seconds_since_event_state": "ok",
+              "fault_severity_per_event_1h": 0.6666666666666666,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            },
+            {
+              "tenant_id": "t2",
+              "device_id": "d1",
+              "events_1h": 2,
+              "events_1h_state": "ok",
+              "fault_severity_1h": 5.0,
+              "fault_severity_1h_state": "ok",
+              "max_severity_1h": 4.5,
+              "max_severity_1h_state": "ok",
+              "mean_severity_1h": 2.5,
+              "mean_severity_1h_state": "ok",
+              "last_severity_1h": 0.5,
+              "last_severity_1h_state": "ok",
+              "distinct_codes_1h": 2,
+              "distinct_codes_1h_state": "ok",
+              "seconds_since_event": 60,
+              "seconds_since_event_state": "ok",
+              "fault_severity_per_event_1h": 2.5,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            },
+            {
+              "tenant_id": "t1",
+              "device_id": "d2",
+              "events_1h": 0,
+              "events_1h_state": "empty",
+              "fault_severity_1h": null,
+              "fault_severity_1h_state": "empty",
+              "max_severity_1h": null,
+              "max_severity_1h_state": "empty",
+              "mean_severity_1h": null,
+              "mean_severity_1h_state": "empty",
+              "last_severity_1h": null,
+              "last_severity_1h_state": "empty",
+              "distinct_codes_1h": 0,
+              "distinct_codes_1h_state": "empty",
+              "seconds_since_event": null,
+              "seconds_since_event_state": "empty",
+              "fault_severity_per_event_1h": null,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            }
+          ],
+          "feature_views": [
+            {
+              "device_id": "d1",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t1",
+              "events_1h": 3,
+              "fault_severity_1h": 2.0,
+              "max_severity_1h": 2.0,
+              "mean_severity_1h": 1.5,
+              "last_severity_1h": null
+            },
+            {
+              "device_id": "d1",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t2",
+              "events_1h": 2,
+              "fault_severity_1h": 5.0,
+              "max_severity_1h": 4.5,
+              "mean_severity_1h": 2.5,
+              "last_severity_1h": 0.5
+            },
+            {
+              "device_id": "d2",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t1",
+              "events_1h": 0,
+              "fault_severity_1h": null,
+              "max_severity_1h": null,
+              "mean_severity_1h": null,
+              "last_severity_1h": null
+            }
+          ]
+        }
+      ],
+      "result": "passed",
+      "compared": {
+        "device.events_1h": 3,
+        "device.fault_severity_1h": 3,
+        "device.max_severity_1h": 3,
+        "device.mean_severity_1h": 3,
+        "device.last_severity_1h": 3
+      },
+      "empty_window_served_as_null": {
+        "device.events_1h": 0,
+        "device.fault_severity_1h": 0,
+        "device.max_severity_1h": 0,
+        "device.mean_severity_1h": 0,
+        "device.last_severity_1h": 0
+      }
+    }
+  },
+  "mlflow_creds_patched": [
+    "mlflow.data.delta_dataset_source",
+    "mlflow.genai.judges.typesafe",
+    "mlflow.genai.scorers.registry",
+    "mlflow.store._unity_catalog.registry.rest_store",
+    "mlflow.store.artifact.databricks_artifact_repo",
+    "mlflow.store.artifact.databricks_models_artifact_repo",
+    "mlflow.store.artifact.dbfs_artifact_repo",
+    "mlflow.store.artifact.unity_catalog_models_artifact_repo",
+    "mlflow.store.model_registry.databricks_workspace_model_registry_rest_store",
+    "mlflow.tracking._tracking_service.utils",
+    "mlflow.utils.databricks_utils",
+    "mlflow.utils.oss_registry_utils"
+  ],
+  "runtime": {
+    "spark_version": "4.2.0"
+  }
+}

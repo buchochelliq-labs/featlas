@@ -257,6 +257,16 @@ class SnapshotRun:
             dict(self._params(), publication_id=auth.publication_id),
         ).collect()
         retry = bool(existing)
+        if not retry and a.get("surface") == "online_store":
+            # The online staging table holds only the latest snapshot: an older one would change
+            # nothing, so it is refused before computing (out-of-order or late publication).
+            newer = self._sql(
+                "superseding_snapshot",
+                f"SELECT count(*) AS n FROM {a['output_table']} WHERE {self._meta('as_of')} > :as_of OR ({self._meta('as_of')} = :as_of AND {self._meta('publication_sequence')} >= :publication_sequence)",
+                dict(self._params(), publication_sequence=auth.publication_sequence),
+            ).collect()[0]["n"]
+            if newer:
+                raise FeatlasError("SNAPSHOT_SUPERSEDED", f"{a['output_table']} already serves a newer snapshot than {self.as_of} (sequence {auth.publication_sequence}); an online target publishes only the latest")
         if retry:
             if len(existing) != 1:
                 raise FeatlasError("PUBLICATION_IDENTITY_CONFLICT", f"publication_id {auth.publication_id} already has {len(existing)} distinct (materialization, sequence, as_of) groups; refusing to guess")
@@ -292,9 +302,15 @@ class SnapshotRun:
         if commit["rows"] != stored_rows:
             raise FeatlasError("PUBLICATION_EVIDENCE_MISSING", f"The inserting commit holds {commit['rows']} rows but the publication has {stored_rows}; the snapshot was not committed atomically")
         observed = commit["timestamp"]
-        self._sql("record_published_at", a["evidence"][1]["sql"], {"observed_commit_timestamp": observed, "publication_id": auth.publication_id})
+        online = a.get("surface") == "online_store"
+        # The staging commit of an online target is not online visibility (SEM-PORT-009):
+        # published_at is recorded by featlas_databricks.online once the store serves the rows.
+        if not online:
+            self._sql("record_published_at", a["evidence"][1]["sql"], {"observed_commit_timestamp": observed, "publication_id": auth.publication_id})
         micros = self.spark.sql("SELECT unix_micros(:t) AS u", args={"t": observed}).collect()[0]["u"]
         return {
+            "surface": a.get("surface", "offline_snapshot"),
+            "visibility": "staged_for_online_store" if online else "committed",
             "table": a["output_table"],
             "table_version": commit.get("version"),
             "commit_timestamp": format_instant(datetime.fromtimestamp(micros / 1_000_000, tz=timezone.utc).replace(microsecond=micros % 1_000_000)),

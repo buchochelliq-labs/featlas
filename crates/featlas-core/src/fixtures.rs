@@ -19,6 +19,7 @@ pub const LOCAL_CAPABILITIES: &[&str] = &[
     "core.expression",
     "core.revision_reconstruction",
     "core.as_of_join",
+    "core.relationship_join",
     "core.source_as_known",
     "core.serving_replay",
 ];

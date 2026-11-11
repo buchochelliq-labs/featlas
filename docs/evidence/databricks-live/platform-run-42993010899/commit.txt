@@ -1,0 +1,3 @@
+af13da7d32f33ba60ce708ba24633bc44a09d071
+912d7d1c28cdae6e9049249181c22a882f2f722cd336585f008f62ba5dfaa772  wheels/featlas-0.1.0-cp312-abi3-manylinux_2_28_aarch64.whl
+374bfb94f9edb35c57027433cc6be11e20751463f08348ace30fd610e823dba7  wheels/featlas-0.1.0-cp312-abi3-manylinux_2_34_x86_64.whl

@@ -287,6 +287,309 @@
           "evidence": "labels"
         }
       ]
+    },
+    {
+      "run_id": "42890653921",
+      "run_url": "https://github.com/buchochelliq-labs/featlas/actions/runs/42890653921",
+      "artifact_sha256": "1b593fda60fa98c810ecfc03b6993f724d77144ac8d4492d5e1e06e2ddaf47dd",
+      "tested_commit": "ac72f96a7645a040e922dca95839d1aef116bfa8",
+      "observed_at": "2026-11-10T20:16:09Z",
+      "target": {
+        "product": "Databricks Free Edition",
+        "cloud": "aws",
+        "compute": "serverless",
+        "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+        "spark_version": "4.2.0",
+        "unity_catalog": true
+      },
+      "client": {
+        "databricks-connect": "17.3.15",
+        "databricks-sdk": "0.164.0",
+        "python": "3.12.16"
+      },
+      "sources_sha256": {
+        "crates/featlas-adapters/src/databricks.rs": "c47b23bf8eae0b79ea9fe0dcb8f832dd5e307460ff8ab7be56c7552246dbc9aa",
+        "python/featlas_databricks/runner.py": "a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f",
+        "python/featlas_databricks/cli.py": "0993793fcb05dc87be02d518fde360fccdbb9587c04a5d1e48d8789db383aa7d",
+        "python/featlas_databricks/online.py": "6be70a8d258519a1f790cc387a6b9f1f4814ab888b700ebec7c946080aa26ca1",
+        "python/featlas_databricks/feature_views.py": "c83cc6fa5445b81cf04f981f111c9ebd4384217d345a049292b23eab6b77c566"
+      },
+      "evidence": {
+        "differential": {
+          "path": "docs/evidence/databricks-live/run-42890653921/databricks-differential.json",
+          "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
+          "summary": "49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+        },
+        "labels": {
+          "path": "docs/evidence/databricks-live/run-42890653921/pytest-summary.txt",
+          "sha256": "f31cdad66b4009037b76769ad10cb4efce291ef3d4b32d00d61e2671f50b4950",
+          "summary": "60 differential tests passed, including 7 label-dataset cases (projects/labels/spend_training_dataset.json) vs goldens and core"
+        },
+        "publication": {
+          "path": "docs/evidence/databricks-live/run-42890653921/databricks-live.json",
+          "sha256": "654a92658b89a72e1c20d289821e4723fd8dd25e792d777a125e07d9ca522bda",
+          "summary": "8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+        }
+      },
+      "verified": [
+        {
+          "role": "compute",
+          "capability": "core.aggregate",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.recency",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.lookup",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.expression",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.revision_reconstruction",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.as_of_join",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.source_as_known",
+          "evidence": "differential"
+        },
+        {
+          "role": "catalog",
+          "capability": "core.source_read",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.atomic_publication",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.serving_replay",
+          "evidence": "publication"
+        },
+        {
+          "role": "compute",
+          "capability": "core.label_construction",
+          "evidence": "labels"
+        }
+      ]
+    },
+    {
+      "run_id": "42907049080",
+      "run_url": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080",
+      "artifact_sha256": "188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69",
+      "tested_commit": "03f6960acaefa224619abc0a1af038e6919a70b4",
+      "observed_at": "2026-11-10T22:02:11Z",
+      "target": {
+        "product": "Databricks Free Edition",
+        "cloud": "aws",
+        "compute": "serverless",
+        "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+        "spark_version": "4.2.0",
+        "unity_catalog": true
+      },
+      "client": {
+        "databricks-connect": "17.3.15",
+        "databricks-sdk": "0.164.0",
+        "python": "3.12.16"
+      },
+      "sources_sha256": {
+        "crates/featlas-adapters/src/databricks.rs": "4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629",
+        "python/featlas_databricks/runner.py": "a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f",
+        "python/featlas_databricks/cli.py": "0993793fcb05dc87be02d518fde360fccdbb9587c04a5d1e48d8789db383aa7d",
+        "python/featlas_databricks/online.py": "6be70a8d258519a1f790cc387a6b9f1f4814ab888b700ebec7c946080aa26ca1",
+        "python/featlas_databricks/feature_views.py": "c83cc6fa5445b81cf04f981f111c9ebd4384217d345a049292b23eab6b77c566"
+      },
+      "evidence": {
+        "differential": {
+          "path": "docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
+          "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
+          "summary": "49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+        },
+        "labels": {
+          "path": "docs/evidence/databricks-live/run-42907049080/pytest-summary.txt",
+          "sha256": "63cb475897484ec5d09d33c276d4c7202295b23fc8001e89a411fbda7dd9f482",
+          "summary": "60 differential tests passed, including 7 label-dataset cases (projects/labels/spend_training_dataset.json) vs goldens and core"
+        },
+        "publication": {
+          "path": "docs/evidence/databricks-live/run-42907049080/databricks-live.json",
+          "sha256": "84f1131d0842f1808088ca9dcbb94a96a2a234b4ea957f38d399c6e43ab079d7",
+          "summary": "8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+        }
+      },
+      "verified": [
+        {
+          "role": "compute",
+          "capability": "core.aggregate",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.recency",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.lookup",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.expression",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.revision_reconstruction",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.as_of_join",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.source_as_known",
+          "evidence": "differential"
+        },
+        {
+          "role": "catalog",
+          "capability": "core.source_read",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.atomic_publication",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.serving_replay",
+          "evidence": "publication"
+        },
+        {
+          "role": "compute",
+          "capability": "core.label_construction",
+          "evidence": "labels"
+        }
+      ]
+    },
+    {
+      "run_id": "42984352013",
+      "run_url": "https://github.com/buchochelliq-labs/featlas/actions/runs/42984352013",
+      "artifact_sha256": "070957e38875c1c996aa8ede5e174f8df98e591464977d04e7ba63661c0a669e",
+      "tested_commit": "1c42b92731810e8674c6e499293549a929c4c67c",
+      "observed_at": "2026-11-11T08:30:42Z",
+      "target": {
+        "product": "Databricks Free Edition",
+        "cloud": "aws",
+        "compute": "serverless",
+        "dbr_version": "19.13.x-aarch64-photon-scala2.13",
+        "spark_version": "4.2.0",
+        "unity_catalog": true
+      },
+      "client": {
+        "databricks-connect": "17.3.15",
+        "databricks-sdk": "0.164.0",
+        "python": "3.12.16"
+      },
+      "sources_sha256": {
+        "crates/featlas-adapters/src/databricks.rs": "4a9f8da7b58163bfb434d4e58c23e54831b2aeac25caa88c8c6d28c855a4e629",
+        "python/featlas_databricks/runner.py": "a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f",
+        "python/featlas_databricks/cli.py": "0993793fcb05dc87be02d518fde360fccdbb9587c04a5d1e48d8789db383aa7d",
+        "python/featlas_databricks/online.py": "eb7f2913b7ed7f0e2eef923837d00b485efb7ffbbc5314e2c707d7b113984819",
+        "python/featlas_databricks/feature_views.py": "c83cc6fa5445b81cf04f981f111c9ebd4384217d345a049292b23eab6b77c566"
+      },
+      "evidence": {
+        "differential": {
+          "path": "docs/evidence/databricks-live/run-42984352013/databricks-differential.json",
+          "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
+          "summary": "49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+        },
+        "labels": {
+          "path": "docs/evidence/databricks-live/run-42984352013/pytest-summary.txt",
+          "sha256": "52716786280b2a7c397a6450b35e8780cb854f169c4c685842167082d891f776",
+          "summary": "60 differential tests passed, including 7 label-dataset cases (projects/labels/spend_training_dataset.json) vs goldens and core"
+        },
+        "publication": {
+          "path": "docs/evidence/databricks-live/run-42984352013/databricks-live.json",
+          "sha256": "ded50e68eef017f55d5f78266d4875e122d1a1a6afcb98947cb615593bf449dc",
+          "summary": "8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+        }
+      },
+      "verified": [
+        {
+          "role": "compute",
+          "capability": "core.aggregate",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.recency",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.lookup",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.expression",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.revision_reconstruction",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.as_of_join",
+          "evidence": "differential"
+        },
+        {
+          "role": "compute",
+          "capability": "core.source_as_known",
+          "evidence": "differential"
+        },
+        {
+          "role": "catalog",
+          "capability": "core.source_read",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.atomic_publication",
+          "evidence": "publication"
+        },
+        {
+          "role": "offline_store",
+          "capability": "core.serving_replay",
+          "evidence": "publication"
+        },
+        {
+          "role": "compute",
+          "capability": "core.label_construction",
+          "evidence": "labels"
+        }
+      ]
     }
   ]
 }
