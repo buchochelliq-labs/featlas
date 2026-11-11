@@ -1,0 +1,6 @@
+databricks-connect==17.3.15
+databricks-sdk==0.165.0
+featlas @ file:///home/runner/work/featlas/featlas/python/dist/featlas-0.1.0-cp312-abi3-manylinux_2_34_x86_64.whl#sha256=8456f293bcc83b920d3367d00b0eccfa73b6ff3bc9e8e73e077eeeb85c0e75f0
+grpcio==1.85.1
+grpcio-status==1.85.1
+protobuf==7.36.2

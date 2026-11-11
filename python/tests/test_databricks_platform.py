@@ -37,7 +37,7 @@ import pytest
 pytest.importorskip("pyspark")
 yaml = pytest.importorskip("yaml")
 
-from spark_session import LIVE, apply_default_scopes, get_spark, scopes  # noqa: E402
+from spark_session import LIVE, apply_default_scopes, apply_mlflow_scoped_creds, get_spark, scopes  # noqa: E402
 
 from featlas_databricks import jobs  # noqa: E402
 from featlas_databricks.core import Core  # noqa: E402
@@ -87,6 +87,7 @@ class Steps:
 def env(tmp_path_factory):
     apply_default_scopes()
     spark = get_spark()
+    REPORT["mlflow_creds_patched"] = apply_mlflow_scoped_creds()
     from databricks.sdk import WorkspaceClient  # type: ignore
 
     w = WorkspaceClient()

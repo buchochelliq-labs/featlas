@@ -1,5 +1,5 @@
 12312647076ead3e6fb309c7feb018cb73e07d64cd98b057f85e579b499e9c2a  ./candidate.txt
-ea0ef2360d4b700db7f0de366d58bb5eae58dcaedbd1fce92e29affe165dfca8  ./capability-report-databricks.json
+174243eac8ac53a73db628c1d5ae35fa2f0c65bd6c46b4202b26718c996c5827  ./capability-report-databricks.json
 97245151f665a6aefb799a38658d2c97cfe141e25dba250803ca73b5229bf134  ./capability-report-positive-local.json
 ed34e0526432a2fae1b9e6e9a9d64ab8ed1f2176da853629f3668e8044621efe  ./capability-report-rejecting-custom.json
 4763ea4685581e8463260af34eb9a282aeee7b6c5f710508a77545c548f30761  ./cargo-test.txt
@@ -60,3 +60,10 @@ e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437  ./databricks-l
 425385fb8e3a6010b21d60320c38e112439bc682c290fb8f3754c8ffd1181a23  ./databricks-live/run-42907049080/pip-freeze.txt
 63cb475897484ec5d09d33c276d4c7202295b23fc8001e89a411fbda7dd9f482  ./databricks-live/run-42907049080/pytest-summary.txt
 ace243f2724e84b0c224f63c73d2944a4473cbc8e43634125ccc04fd9f11b9c1  ./databricks-live/run-42907049080/sources.sha256
+95453f354d81f62b95455c0626c85f424a7db7d80d43efe0f46be4f30264d815  ./databricks-live/run-42984352013/RUN.md
+2abee90f1b7bd0787f736e9482f10c6555ce4227f34a1a8466d822b488129554  ./databricks-live/run-42984352013/commit.txt
+e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437  ./databricks-live/run-42984352013/databricks-differential.json
+ded50e68eef017f55d5f78266d4875e122d1a1a6afcb98947cb615593bf449dc  ./databricks-live/run-42984352013/databricks-live.json
+1650b7f8db2ffa1b70509111db51a22a58d4b37142f321eb3879ce86cf1cc79b  ./databricks-live/run-42984352013/pip-freeze.txt
+52716786280b2a7c397a6450b35e8780cb854f169c4c685842167082d891f776  ./databricks-live/run-42984352013/pytest-summary.txt
+a018f236bc206247410bb9ecb52f5313486dad9fdc52b92c20b7eae5a002ae7e  ./databricks-live/run-42984352013/sources.sha256

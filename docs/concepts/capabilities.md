@@ -101,13 +101,13 @@ logic does not invalidate the lowering pin.
 
 ### What this commit reports
 
-The lock pins five runs. Run 42771706619 tested `databricks.rs` `1847f7c2…` and `runner.py`
+The lock pins six runs. Run 42771706619 tested `databricks.rs` `1847f7c2…` and `runner.py`
 `44be9ac4…`; run 42816483568 tested `95a63302…` and `3f0cb046…`; run 42847828392 tested
-`95a63302…` and `b0deb914…`; runs 42890653921 and 42907049080 tested the five files vouched for
-since the online, Feature Views and job changes. Run 42907049080 (`databricks.rs` `4a9f8da7…`,
-`runner.py` `a024c552…`, `cli.py` `0993793f…`, `online.py` `6be70a8d…`, `feature_views.py`
-`c83cc6fa…`) tested the compiled sources of this commit. So step 2 applies with run
-42907049080: the eight core checks of `projects/01_fault_count.yaml` (`fault_prod`) and
+`95a63302…` and `b0deb914…`; runs 42890653921, 42907049080 and 42984352013 tested the five files
+vouched for since the online, Feature Views and job changes. Run 42984352013 (`databricks.rs`
+`4a9f8da7…`, `runner.py` `a024c552…`, `cli.py` `0993793f…`, `online.py` `eb7f2913…`,
+`feature_views.py` `c83cc6fa…`) tested the compiled sources of this commit. So step 2 applies
+with run 42984352013: the eight core checks of `projects/01_fault_count.yaml` (`fault_prod`) and
 `core.label_construction` (project 03) are `supported_native` with `live_target` evidence, while
 `core.scheduling` and the `online_store` checks stay `unverified`/`static` until a run of the
 platform job is pinned. Real output of
@@ -122,9 +122,9 @@ platform job is pinned. Real output of
   "evidence_scope": "live_target",
   "evidence": [
     {
-      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42907049080#docs/evidence/databricks-live/run-42907049080/databricks-differential.json",
+      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/42984352013#docs/evidence/databricks-live/run-42984352013/databricks-differential.json",
       "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-      "description": "Live run 42907049080 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 03f6960acaef, artifact sha256 188d5f11d151b6df9b83673ca9028db835d16b422a56055a380b4746c5078e69): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+      "description": "Live run 42984352013 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.13.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 1c42b9273181, artifact sha256 070957e38875c1c996aa8ede5e174f8df98e591464977d04e7ba63661c0a669e): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
     }
   ],
   "limitations": [
