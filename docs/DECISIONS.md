@@ -208,7 +208,10 @@ single Lakebase project is scale-to-zero; whether Free Edition accepts an online
 therefore an observation of the live platform run, not an assumption. Observed in platform run
 42921271192: `create_online_store` and `delete_online_store` succeeded on Free Edition; the run
 stopped before syncing (a quoting bug, fixed), and calls of the Feature Engineering client that go
-to the feature-store REST API were refused with HTTP 401 for the scoped OAuth token.
+to the feature-store REST API were refused with HTTP 401 for the scoped OAuth token. That 401 was
+the client sending no credential (the scoped token is accepted by the API directly); with the
+scoped credentials handed to it, run 42993010899 reached `create_feature_spec`, which needs
+`CREATE FUNCTION` on the staging table's schema.
 
 ## D16. Feature Views or Unity Catalog feature tables (adapter configuration `feature_api`)
 
@@ -226,7 +229,10 @@ them), a spec filter lowered to `filter_condition`, and non-temporal entity keys
 features never map. Feature states, quality policies and publication evidence are not represented
 by Feature Views and stay with featlas. Values are compared live (`create_training_set` against
 featlas' own snapshot) before relying on them; an empty window served as null where the spec
-declares a value is reported separately, never counted as equal.
+declares a value is reported separately, never counted as equal. Observed in platform run
+42993010899 on Databricks Free Edition: the five mapped features of the test feature set equal
+featlas' snapshot for every entity (0 mismatches), including an empty window (`Count` served 0,
+the declared empty value) and a null latest value (`Last` served null).
 
 ## D17. Feast as a store (dev.featlas:feast@0.1.0)
 

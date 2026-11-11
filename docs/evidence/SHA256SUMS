@@ -67,3 +67,8 @@ ded50e68eef017f55d5f78266d4875e122d1a1a6afcb98947cb615593bf449dc  ./databricks-l
 1650b7f8db2ffa1b70509111db51a22a58d4b37142f321eb3879ce86cf1cc79b  ./databricks-live/run-42984352013/pip-freeze.txt
 52716786280b2a7c397a6450b35e8780cb854f169c4c685842167082d891f776  ./databricks-live/run-42984352013/pytest-summary.txt
 a018f236bc206247410bb9ecb52f5313486dad9fdc52b92c20b7eae5a002ae7e  ./databricks-live/run-42984352013/sources.sha256
+49af853caecddb9d8debfc38be556b1c6d3b05d789a4e4775e1a6dfcd542bb5e  ./databricks-live/platform-run-42993010899/RUN.md
+f5e848798ae78d11c14661f8808a752f4e6a3be50dabb4ff22bf88c72b27186a  ./databricks-live/platform-run-42993010899/commit.txt
+e94d9bc01406ca214d48b83880ba5e2adc33d74c6a42a5318ceb9faafc7ac948  ./databricks-live/platform-run-42993010899/databricks-platform.json
+56b8e0fe4acf0d8911c4eef68a8f6b75a4ae688882961fdec9f30541674500ce  ./databricks-live/platform-run-42993010899/pip-freeze.txt
+a018f236bc206247410bb9ecb52f5313486dad9fdc52b92c20b7eae5a002ae7e  ./databricks-live/platform-run-42993010899/sources.sha256
