@@ -199,3 +199,203 @@ def test_parity_sql_flags_one_sided_nulls_and_rows_missing_from_one_split_table(
     assert r["mismatched_x"] == 1, "legacy 1.0 vs regenerated NULL is a mismatch"
     assert r["missing_in_p_new_y"] == 1 and r["missing_in_p_new_x"] == 0
     assert r["missing_in_new"] == 0, "the union alone would have hidden the missing row"
+
+
+RICH_SQL = """
+WITH real_orders AS (
+  SELECT order_id, tenant_id, customer_id, ordered_at, ingested_at, status, channel, amount_cents AS amount
+  FROM main.sales.orders WHERE is_test = false
+),
+kept AS (SELECT * FROM real_orders r WHERE r.status <> 'cancelled')
+SELECT
+  k.tenant_id,
+  k.customer_id,
+  :as_of AS feature_ts,
+  COUNT(*) AS orders_30d,
+  COUNT(*) FILTER (WHERE k.ordered_at >= :as_of - INTERVAL 7 DAYS) AS orders_7d,
+  SUM(CASE WHEN k.ordered_at >= :as_of - INTERVAL 14 DAYS THEN k.amount END) AS spend_14d,
+  TIMESTAMPDIFF(SECOND, MAX(k.ordered_at), :as_of) AS seconds_since_last_order,
+  TIMESTAMPDIFF(SECOND, MAX(k.ordered_at) FILTER (WHERE k.channel = 'web'), :as_of) AS seconds_since_last_web_order,
+  MAX_BY(k.status, k.ordered_at) AS last_status,
+  MIN_BY(k.amount, k.ordered_at) AS first_amount_30d,
+  orders_7d / NULLIF(orders_30d, 0) AS share_7d
+FROM kept k
+WHERE k.ordered_at >= :as_of - INTERVAL 30 DAYS AND k.ordered_at < :as_of
+GROUP BY k.tenant_id, k.customer_id
+"""
+
+
+def test_analyzer_inlines_ctes_and_reads_windows_recency_and_lookups():
+    a = analyze_sql(RICH_SQL)
+    assert a.tables == {"k": "main.sales.orders"} and not a.unsupported, a.unsupported
+    by = {o.name: o for o in a.outputs}
+    assert by["orders_7d"].window.lookback_seconds == 7 * 86400 and by["orders_7d"].filter is None
+    assert by["spend_14d"].window.lookback_seconds == 14 * 86400 and by["spend_14d"].value == {"kind": "column", "input": "k", "column": "amount_cents"}
+    assert by["orders_30d"].window is None and a.window.lookback_seconds == 30 * 86400
+    assert by["seconds_since_last_order"].kind == "recency" and by["seconds_since_last_order"].event_column == "ordered_at"
+    assert by["seconds_since_last_web_order"].filter["operator"] == "equal"
+    assert by["last_status"].kind == "lookup" and by["last_status"].order_by == [{"input": "k", "column": "ordered_at", "direction": "desc"}]
+    assert by["first_amount_30d"].order_by[0]["direction"] == "asc"
+    # CTE filters become shared filters on the base table.
+    assert {f["args"][0]["column"] for f in a.filters} == {"is_test", "status"}
+
+
+@pytest.mark.parametrize("expr, reason", [
+    ("DATEDIFF(:as_of, MAX(o.ordered_at))", "calendar-day"),
+    ("TIMESTAMPDIFF(MINUTE, MAX(o.ordered_at), :as_of)", "whole seconds"),
+    ("COUNT(*) FILTER (WHERE o.ordered_at < :as_of - INTERVAL 7 DAYS)", "windows end at as_of"),
+    ("MAX_BY(o.status, o.ordered_at + INTERVAL 1 SECOND)", "order by a column"),
+])
+def test_analyzer_reports_constructs_without_an_exact_spec_form(expr, reason):
+    a = analyze_sql(f"SELECT o.customer_id, {expr} AS x FROM main.sales.orders o "
+                    "WHERE o.ordered_at >= :as_of - INTERVAL 30 DAYS AND o.ordered_at < :as_of GROUP BY o.customer_id")
+    [u] = [u for u in a.unsupported if u.get("name") == "x"]
+    assert reason in u["reason"], u
+
+
+def test_analyzer_keeps_non_simple_ctes_as_unsupported():
+    a = analyze_sql("WITH d AS (SELECT customer_id, COUNT(*) AS n FROM main.sales.orders GROUP BY customer_id) "
+                    "SELECT o.customer_id, COUNT(*) AS c FROM main.sales.orders o WHERE o.ordered_at >= :as_of - INTERVAL 1 DAY AND o.ordered_at < :as_of GROUP BY o.customer_id")
+    assert [u["name"] for u in a.unsupported if u["construct"] == "CTE"] == ["d"]
+
+
+def test_draft_with_windows_recency_and_lookups_reproduces_legacy_outputs(spark, inputs):
+    _, _, descs = inputs
+    analysis = analyze_sql(RICH_SQL)
+    views = _register(spark, descs, ORDERS, CUSTOMERS)
+    legacy = legacy_sample(spark, analysis, views, AS_OF)
+    by_key = {(r["tenant_id"], r["customer_id"]): r for r in legacy}
+    a_c1 = by_key[("tenant_a", "c1")]
+    assert a_c1["seconds_since_last_order"] == 1 and a_c1["last_status"] == "pending" and a_c1["first_amount_30d"] == 1200
+    assert a_c1["orders_7d"] == 1 and a_c1["spend_14d"] == 500
+    assert by_key[("tenant_a", "c2")]["fl_state_seconds_since_last_web_order"] == "empty"
+    target = {"table": "main.features.customer_rich", "columns": [{"name": n, "type": t} for n, t in (
+        ("tenant_id", "string"), ("customer_id", "string"), ("feature_ts", "timestamp"), ("orders_30d", "bigint"), ("orders_7d", "bigint"),
+        ("spend_14d", "bigint"), ("seconds_since_last_order", "bigint"), ("seconds_since_last_web_order", "bigint"),
+        ("last_status", "string"), ("first_amount_30d", "bigint"), ("share_7d", "double"))]}
+    sample = {"as_of": AS_OF, "coverage_end": "2026-06-02T00:00:00Z", "legacy_rows": legacy, "source_rows": {"customers": CUSTOMERS, "orders": ORDERS}}
+    out = draft_spec(target, analysis, {d["table"]: d for d in (descs["orders"], descs["customers"])}, {"samples": [sample]})
+    assert out["project"] is not None, out["report"]
+    feats = {f["id"].split(".", 1)[1]: f for f in out["project"]["features"]}
+    assert feats["orders_7d"]["time"]["window"]["lookback_seconds"] == 7 * 86400
+    assert feats["share_7d"]["time"]["window"]["lookback_seconds"] == 30 * 86400
+    assert feats["seconds_since_last_order"]["transform"]["kind"] == "recency"
+    assert feats["last_status"]["transform"] == {**feats["last_status"]["transform"], "kind": "lookup", "on_tie": "error"}
+    assert any("MAX_BY" in a["why"] for a in out["report"]["assumptions"])
+    v = featlas.validate(to_yaml(out["project"]))
+    assert v["passed"], [(d["path"], d["message"]) for d in v["report"]["diagnostics"] if d["severity"] == "error"]
+    p = featlas.Project(to_yaml(out["project"]))
+    res = p.run_fixtures()["summary"]
+    assert res["failed"] == 0, [c for c in res["cases"] if c["status"] == "failed"]
+    characterized = {c["case"].split("_characterization")[0] for c in res["cases"] if "characterization" in c["case"] and c["status"] == "passed"}
+    assert characterized >= {"orders_7d", "spend_14d", "seconds_since_last_order", "seconds_since_last_web_order", "last_status", "first_amount_30d"}
+    # Regenerate on Spark from the drafted spec (Databricks lowering) and compare with the legacy table.
+    dep = out["project"]["deployments"][0]["id"]
+    gen = p.generate(dep)
+    [art] = gen["artifacts"].values()
+    rel = {}
+    for source, spec in art["expected_source_schemas"].items():
+        register_source(spark, f"rx_{source}", spec, {"customers": CUSTOMERS, "orders": ORDERS}[source])
+        rel[source] = f"rx_{source}"
+    statuses = [{"source": s, "state": "available", "coverage_start": "2026-01-01T00:00:00Z", "coverage_end": "2026-06-02T00:00:00Z"} for s in ("customers", "orders")]
+    run = SnapshotRun(spark, art, AS_OF, p.coverage(dep, "customer_rich", AS_OF, statuses), set(), rel, population_source="customers")
+    snap = {(r["tenant_id"], r["customer_id"]): r for r in run.run_to_snapshot({"publication_id": "p", "publication_sequence": 1, "materialization_id": "m"})}
+    for key, lrow in by_key.items():
+        for col in feats:
+            got, want = snap[key][col], lrow[col]
+            if isinstance(want, float) or isinstance(got, float):
+                assert want is not None and got is not None and abs(got - want) <= 1e-9 * max(1, abs(want)), (key, col, got, want)
+            else:
+                assert got == want, (key, col, got, want)
+
+
+JOIN_SQL = """
+SELECT o.tenant_id, o.customer_id, :as_of AS feature_ts,
+  COUNT(*) AS orders_30d,
+  COUNT(*) FILTER (WHERE ch.channel_group = 'online') AS online_orders_30d,
+  SUM(o.amount_cents * p.multiplier) AS weighted_spend_30d,
+  MAX_BY(ch.channel_group, o.ordered_at) AS last_channel_group
+FROM main.sales.orders o
+LEFT JOIN main.sales.channels ch ON ch.channel = o.channel
+JOIN main.sales.tenant_policy p ON p.tenant_id = o.tenant_id
+  AND o.ordered_at >= p.valid_from AND (p.valid_to IS NULL OR o.ordered_at < p.valid_to)
+WHERE o.ordered_at >= :as_of - INTERVAL 30 DAYS AND o.ordered_at < :as_of AND o.is_test = false
+GROUP BY o.tenant_id, o.customer_id
+"""
+CHANNELS_DESC = {"table": "main.sales.channels", "primary_key": ["channel"], "columns": [
+    {"name": "channel", "type": "string", "nullable": False}, {"name": "channel_group", "type": "string"},
+    {"name": "updated_at", "type": "timestamp", "nullable": False}, {"name": "ingested_at", "type": "timestamp", "nullable": False}]}
+POLICY_DESC = {"table": "main.sales.tenant_policy", "primary_key": ["tenant_id", "valid_from"], "columns": [
+    {"name": "tenant_id", "type": "string", "nullable": False}, {"name": "valid_from", "type": "timestamp", "nullable": False},
+    {"name": "valid_to", "type": "timestamp"}, {"name": "multiplier", "type": "double"}, {"name": "ingested_at", "type": "timestamp", "nullable": False}]}
+CHANNELS = [  # 'invoice' is not a channel: the LEFT JOIN keeps those orders with a null group
+    {"channel": "web", "channel_group": "online", "updated_at": "2026-01-01T00:00:00Z", "ingested_at": "2026-01-01T00:00:00Z"},
+    {"channel": "store", "channel_group": "offline", "updated_at": "2026-01-01T00:00:00Z", "ingested_at": "2026-01-01T00:00:00Z"},
+]
+POLICY = [  # tenant_a's multiplier changes on 2026-05-15; tenant_b has one open interval
+    {"tenant_id": "tenant_a", "valid_from": "2026-01-01T00:00:00Z", "valid_to": "2026-05-15T00:00:00Z", "multiplier": 1.0, "ingested_at": "2026-01-01T00:00:00Z"},
+    {"tenant_id": "tenant_a", "valid_from": "2026-05-15T00:00:00Z", "valid_to": None, "multiplier": 2.0, "ingested_at": "2026-05-01T00:00:00Z"},
+    {"tenant_id": "tenant_b", "valid_from": "2026-01-01T00:00:00Z", "valid_to": None, "multiplier": 0.5, "ingested_at": "2026-01-01T00:00:00Z"},
+]
+
+
+def test_analyzer_reads_equi_and_valid_time_joins():
+    a = analyze_sql(JOIN_SQL)
+    ch, p = a.joins
+    assert ch["kind"] == "left" and ch["on"] == [[("o", "channel"), ("ch", "channel")]] and ch["valid_time"] is None
+    assert p["kind"] == "inner" and p["valid_time"] == {"probe": ("o", "ordered_at"), "valid_from": "valid_from", "valid_to": "valid_to"}
+    assert not a.unsupported
+
+
+def test_draft_with_joins_becomes_relationships_and_reproduces_legacy(spark, inputs):
+    _, _, descs = inputs
+    analysis = analyze_sql(JOIN_SQL)
+    views = _register(spark, descs, ORDERS, CUSTOMERS)
+    for name, desc, rows in (("legacy_channels", CHANNELS_DESC, CHANNELS), ("legacy_policy", POLICY_DESC, POLICY)):
+        register_source(spark, name, {"columns": [{"physical": c["name"], "logical": c["name"], "type": {"string": "STRING", "timestamp": "TIMESTAMP", "double": "DOUBLE"}[c["type"]]} for c in desc["columns"]]}, rows)
+    views.update({"main.sales.channels": "legacy_channels", "main.sales.tenant_policy": "legacy_policy"})
+    legacy = legacy_sample(spark, analysis, views, AS_OF)
+    by_key = {(r["tenant_id"], r["customer_id"]): r for r in legacy}
+    # o1 (05-02, x1.0) 1200 + o2 (05-10, x1.0) 800 + o3 (05-31, x2.0) 500 = 3000
+    assert by_key[("tenant_a", "c1")]["weighted_spend_30d"] == 3000.0 and by_key[("tenant_a", "c1")]["online_orders_30d"] == 2
+    target = {"table": "main.features.customer_joined", "columns": [{"name": n, "type": t} for n, t in (
+        ("tenant_id", "string"), ("customer_id", "string"), ("feature_ts", "timestamp"), ("orders_30d", "bigint"),
+        ("online_orders_30d", "bigint"), ("weighted_spend_30d", "double"), ("last_channel_group", "string"))]}
+    sample = {"as_of": AS_OF, "coverage_end": "2026-06-02T00:00:00Z", "legacy_rows": legacy,
+              "source_rows": {"customers": CUSTOMERS, "orders": ORDERS, "channels": CHANNELS, "tenant_policy": POLICY}}
+    sources = {d["table"]: d for d in (descs["orders"], descs["customers"], CHANNELS_DESC, POLICY_DESC)}
+    # Default: tenant-scoped entity; the global channels table cannot be joined (SEM-ENT-002).
+    scoped = draft_spec(target, analysis, sources, {"samples": [sample]})
+    assert any("SEM-ENT-002" in u.get("reason", "") for u in scoped["report"]["unsupported"])
+    assert {"online_orders_30d", "last_channel_group"} <= {k for k, m in scoped["report"]["mapping"].items() if "unsupported" in m}
+    out = draft_spec(target, analysis, sources, {"samples": [sample], "entity": {"tenant_key": None}})
+    assert out["project"] is not None, out["report"]
+    rels = {x["id"]: x for x in out["project"]["relationships"]}
+    assert rels["orders_to_channels"]["join_type"] == "left" and rels["orders_to_channels"]["temporal"] == {"mode": "none"}
+    assert rels["orders_to_tenant_policy"]["join_type"] == "inner" and rels["orders_to_tenant_policy"]["temporal"]["mode"] == "as_of"
+    feats = {f["id"].split(".", 1)[1]: f for f in out["project"]["features"]}
+    # The inner join filters every feature's rows; the left join only touches the features that read it.
+    assert [j["relationship"] for j in feats["orders_30d"]["transform"]["joins"]] == ["orders_to_tenant_policy"]
+    assert {j["relationship"] for j in feats["online_orders_30d"]["transform"]["joins"]} == {"orders_to_channels", "orders_to_tenant_policy"}
+    doc = to_yaml(out["project"])
+    v = featlas.validate(doc)
+    assert v["passed"], [(d["path"], d["message"]) for d in v["report"]["diagnostics"] if d["severity"] == "error"]
+    p = featlas.Project(doc)
+    res = p.run_fixtures()["summary"]
+    assert res["failed"] == 0, [c for c in res["cases"] if c["status"] == "failed"]
+    characterized = {c["case"].split("_characterization")[0] for c in res["cases"] if "characterization" in c["case"] and c["status"] == "passed"}
+    assert characterized >= {"orders_30d", "online_orders_30d", "weighted_spend_30d", "last_channel_group"}, [(c["case"], c["status"], c.get("reason")) for c in res["cases"]]
+    # Regenerate through the Databricks lowering on local Spark: column-by-column equal to legacy.
+    dep = out["project"]["deployments"][0]["id"]
+    [art] = p.generate(dep)["artifacts"].values()
+    rows = {"customers": CUSTOMERS, "orders": ORDERS, "channels": CHANNELS, "tenant_policy": POLICY}
+    rel = {}
+    for source, spec in art["expected_source_schemas"].items():
+        register_source(spark, f"jx_{source}", spec, rows[source])
+        rel[source] = f"jx_{source}"
+    statuses = [{"source": s, "state": "available", "coverage_start": "2026-01-01T00:00:00Z", "coverage_end": "2026-06-02T00:00:00Z"} for s in rows]
+    run = SnapshotRun(spark, art, AS_OF, p.coverage(dep, "customer_joined", AS_OF, statuses), set(), rel, population_source="customers")
+    snap = {(r["tenant_id"], r["customer_id"]): r for r in run.run_to_snapshot({"publication_id": "p", "publication_sequence": 1, "materialization_id": "m"})}
+    for key, lrow in by_key.items():
+        for col in feats:
+            assert snap[key][col] == lrow[col], (key, col, snap[key][col], lrow[col])

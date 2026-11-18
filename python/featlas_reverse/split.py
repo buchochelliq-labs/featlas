@@ -25,7 +25,7 @@ from __future__ import annotations
 import copy
 import itertools
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 from typing import Any
 
 from . import describe

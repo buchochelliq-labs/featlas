@@ -40,8 +40,15 @@ const ROLES: &[Role] = &[
     Role::Compute,
     Role::Catalog,
     Role::OfflineStore,
+    Role::OnlineStore,
     Role::Orchestrator,
 ];
+
+/// Feature Engineering client needed on the host for Feature Views and Online Feature Stores.
+pub const FEATURE_ENGINEERING_REQUIREMENT: &str = "databricks-feature-engineering>=0.16.0";
+
+/// Feature APIs an offline target can be exposed through (adapter configuration `feature_api`).
+pub const FEATURE_APIS: &[&str] = &["uc_feature_tables", "feature_views"];
 
 pub struct Databricks;
 
@@ -67,7 +74,16 @@ impl AdapterDescriptor for Databricks {
             "required": ["connection_profile", "feature_api"],
             "properties": {
                 "connection_profile": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$", "description": "Name of an externally managed Databricks unified-auth profile; never a credential."},
-                "feature_api": {"const": "uc_feature_tables", "description": "Unity Catalog feature tables via generated Spark SQL; Feature Views are not used by this version."},
+                "feature_api": {"enum": FEATURE_APIS, "description": "uc_feature_tables: every feature is computed by generated Spark SQL and published to a Unity Catalog feature table. feature_views: additionally emits, per feature, an exact Databricks Feature View definition where the feature's semantics map without loss (databricks/<feature_set>/feature_views.json) and keeps the rest on the feature table, with the reason."},
+                "online_store": {
+                    "type": "object", "additionalProperties": false, "required": ["name"],
+                    "description": "Databricks Online Feature Store (Lakebase) used by online_store output targets of this adapter.",
+                    "properties": {
+                        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$", "description": "Online store name (created by the host only with explicit authorization)."},
+                        "capacity": {"enum": ["CU_1", "CU_2", "CU_4", "CU_8"], "description": "Capacity requested when the store is created."},
+                        "serving_endpoint": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$", "description": "Feature Serving endpoint name used to observe online visibility."}
+                    }
+                },
                 "execution": {"enum": ["databricks_connect", "spark_session"], "description": "How the host obtains a Spark session."},
                 "source_status_table": {
                     "type": "object", "additionalProperties": false, "required": ["namespace", "name"],
@@ -130,9 +146,18 @@ impl AdapterDescriptor for Databricks {
                 );
             }
         }
+        let online_cfg = d
+            .adapters
+            .iter()
+            .find(|a| a.id == adapter_id)
+            .and_then(|a| a.configuration.get("online_store"))
+            .cloned();
         for (k, t) in d.output_targets.iter().enumerate() {
             if t.adapter != adapter_id {
                 continue;
+            }
+            if t.role == Role::OnlineStore && online_cfg.is_none() {
+                out.push(diag("DATABRICKS_ONLINE_STORE", format!("/deployments/{di}/output_targets/{k}"), "An online_store target needs the adapter configuration online_store {name, ...}".into()));
             }
             check_location(
                 &t.location,
@@ -282,6 +307,8 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize)]
 pub struct Artifacts {
     pub generator: String,
+    /// Implementation of the output target's store (`dev.featlas:databricks` or `dev.featlas:feast`).
+    pub store: String,
     pub plan_digest: String,
     pub logical_plan_digest: String,
     pub feature_set: String,
@@ -312,7 +339,27 @@ pub struct Artifacts {
     pub budget: Budget,
     /// Retention contracts the host verifies against the physical tables (SEM-DEPLOY-002).
     pub retention: RetentionContract,
+    /// `offline_snapshot` (every publication kept) or `online_store` (latest snapshot staged for
+    /// an Online Feature Store; visibility is observed at the store, never inferred from commits).
+    pub surface: String,
+    pub online: Option<OnlineTarget>,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OnlineTarget {
+    /// Online Feature Store (Lakebase) name, capacity and the Feature Serving endpoint used to
+    /// observe visibility, from the adapter configuration.
+    pub store: String,
+    pub capacity: String,
+    pub serving_endpoint: Option<String>,
+    /// UC name of the online table `publish_table` creates from the staging table.
+    pub online_table: String,
+    pub lookup_keys: Vec<String>,
+    pub as_of_column: String,
+    pub publication_id_column: String,
+    /// Feature value and state columns served online, in feature-set order.
+    pub feature_columns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -723,25 +770,33 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         .iter()
         .find(|f| f.id == feature_set)
         .ok_or_else(|| format!("Feature set {feature_set} is not in the plan"))?;
+    // Single-surface profile (SEM-PORT-005): a deployment publishes either the offline snapshot
+    // table or the online store; the offline target wins when a plan carries both.
     let target = plan
         .bindings
         .outputs
         .iter()
-        .find(|t| t.feature_set == fs.id && t.version == fs.version && t.role == Role::OfflineStore)
-        .ok_or("No offline_store target for this feature set")?;
+        .filter(|t| t.feature_set == fs.id && t.version == fs.version)
+        .min_by_key(|t| (t.role != Role::OfflineStore) as u8)
+        .ok_or("No output target for this feature set")?;
+    let online = target.role == Role::OnlineStore;
     let out_adapter = plan
         .bindings
         .adapters
         .iter()
         .find(|a| a.id == target.adapter)
         .ok_or("Unknown output adapter")?;
-    if out_adapter.implementation != IMPLEMENTATION {
+    // Feast stores but does not compute: the snapshot is lowered here and published by the
+    // featlas_feast host; the Unity Catalog publication statements do not apply.
+    let external_store = out_adapter.implementation == crate::feast::IMPLEMENTATION;
+    if out_adapter.implementation != IMPLEMENTATION && !external_store {
         return Err(format!(
-            "Offline target uses {}; this lowering publishes only to {IMPLEMENTATION}",
-            out_adapter.implementation
+            "Output target uses {}; this lowering publishes to {IMPLEMENTATION} and computes snapshots for {}",
+            out_adapter.implementation,
+            crate::feast::IMPLEMENTATION
         ));
     }
-    let output_table = table_name(&target.location)?;
+    let output_table = if external_store { target.location.address() } else { table_name(&target.location)? };
     let mut safe_names = BTreeMap::new();
     for id in plan
         .logical
@@ -999,19 +1054,26 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         .iter()
         .map(|k| quote(target.entity_key_mapping[&k.name].as_str().unwrap()))
         .collect();
-    let pk_cols = format!(
-        "{}, {} TIMESERIES, {}",
-        phys_keys.join(", "),
-        quote(&mc.as_of),
-        quote(&mc.publication_sequence)
-    );
+    // Offline: every publication is kept (replay). Online staging: one row per entity, the
+    // latest publication, keyed for Online Feature Store publishing (PK keys + as_of TIMESERIES).
+    let pk_cols = if online {
+        format!("{}, {} TIMESERIES", phys_keys.join(", "), quote(&mc.as_of))
+    } else {
+        format!(
+            "{}, {} TIMESERIES, {}",
+            phys_keys.join(", "),
+            quote(&mc.as_of),
+            quote(&mc.publication_sequence)
+        )
+    };
     let create_table = Statement {
         name: "create_feature_table".into(),
-        purpose: "Create the Unity Catalog feature table (resource creation; run only with explicit authorization)".into(),
+        purpose: if online { "Create the Unity Catalog feature table staging the latest snapshot for the online store (resource creation; run only with explicit authorization)" } else { "Create the Unity Catalog feature table (resource creation; run only with explicit authorization)" }.into(),
         sql: format!(
             "CREATE TABLE IF NOT EXISTS {output_table} (\n  {},\n  CONSTRAINT {} PRIMARY KEY ({pk_cols})\n) USING DELTA\nTBLPROPERTIES ('delta.enableChangeDataFeed' = 'true', 'featlas.feature_set' = {}, 'featlas.feature_set_fingerprint' = {})",
             ddl_cols.join(",\n  "),
-            quote(&format!("{}_pk", safe(&fs.id))),
+            // Unity Catalog constraint names are unique per schema: name it after the table.
+            quote(&format!("{}_pk", match &target.location { Location::Table { name, .. } => safe(name), _ => safe(&fs.id) })),
             sql_string(&format!("{}@{}", fs.id, fs.version)),
             sql_string(&fs.fingerprint)
         ), reads: vec![], view: None };
@@ -1021,10 +1083,20 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         .map(|c| format!("t.{c} = s.{c}"))
         .collect::<Vec<_>>()
         .join(" AND ");
-    let publish = Statement {
-        name: "publish_snapshot".into(),
-        purpose: "Single Delta MERGE commit making the complete snapshot visible atomically; idempotent on (keys, as_of, publication_id) for retries".into(),
-        sql: format!("MERGE INTO {output_table} t\nUSING {snapshot_view} s\nON {merge_on}\nWHEN NOT MATCHED THEN INSERT *"), reads: vec![], view: None };
+    let publish = if online {
+        let on_keys = phys_keys.iter().map(|c| format!("t.{c} = s.{c}")).collect::<Vec<_>>().join(" AND ");
+        let (a, q) = (quote(&mc.as_of), quote(&mc.publication_sequence));
+        Statement {
+            name: "publish_snapshot".into(),
+            purpose: "Single Delta MERGE commit replacing the staged online snapshot: newer rows update, new entities insert, entities absent from a newer complete snapshot are deleted; a retry or an older snapshot changes nothing".into(),
+            sql: format!("MERGE INTO {output_table} t\nUSING {snapshot_view} s\nON {on_keys}\nWHEN MATCHED AND (s.{a} > t.{a} OR (s.{a} = t.{a} AND s.{q} > t.{q})) THEN UPDATE SET *\nWHEN NOT MATCHED THEN INSERT *\nWHEN NOT MATCHED BY SOURCE AND t.{a} < CAST(:as_of AS TIMESTAMP) THEN DELETE"),
+            reads: vec![], view: None }
+    } else {
+        Statement {
+            name: "publish_snapshot".into(),
+            purpose: "Single Delta MERGE commit making the complete snapshot visible atomically; idempotent on (keys, as_of, publication_id) for retries".into(),
+            sql: format!("MERGE INTO {output_table} t\nUSING {snapshot_view} s\nON {merge_on}\nWHEN NOT MATCHED THEN INSERT *"), reads: vec![], view: None }
+    };
     let table_properties = Statement {
         name: "table_properties".into(),
         purpose: "Before publishing, the existing table must carry this feature set's identity and fingerprint".into(),
@@ -1047,7 +1119,7 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
             name: "commit_history".into(),
             purpose: "Read, through the table's change data feed over the bounded version range [:from_version, :to_version], the commit that inserted this publication's rows; its timestamp is the observed visibility instant. The range is a retained commit (see commit_candidates), so the read never needs expired history. Independent of session confs such as commit userMetadata.".into(),
             sql: format!(
-                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, :from_version, :to_version) WHERE _change_type = 'insert' AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
+                "SELECT _commit_version AS version, _commit_timestamp AS timestamp, count(*) AS rows FROM table_changes({}, :from_version, :to_version) WHERE _change_type IN ('insert', 'update_postimage') AND {} = :publication_id GROUP BY _commit_version, _commit_timestamp",
                 sql_string(&output_table),
                 quote(&mc.publication_id)
             ),
@@ -1118,7 +1190,14 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
     }
     let mut snapshot = snapshot;
     as_view(&mut snapshot);
+    let (create_table, publish, table_properties, evidence, consumer_read, expected_table_properties) = if external_store {
+        let na = |name: &str| Statement { name: name.into(), purpose: format!("Not used: {} publishes this target through its own host (featlas_feast)", crate::feast::IMPLEMENTATION), sql: String::new(), reads: vec![], view: None };
+        (na("create_feature_table"), na("publish_snapshot"), na("table_properties"), vec![na("commit_history"), na("record_published_at"), na("commit_candidates")], na("consumer_read"), BTreeMap::new())
+    } else {
+        (create_table, publish, table_properties, evidence, consumer_read, expected_table_properties)
+    };
     Ok(Artifacts {
+        store: out_adapter.implementation.clone(),
         generator: format!("{IMPLEMENTATION}@{VERSION}"),
         plan_digest: plan.plan_digest.clone(),
         logical_plan_digest: plan.logical_plan_digest.clone(),
@@ -1144,6 +1223,23 @@ pub fn lower(plan: &Plan, feature_set: &str, p: &Project) -> Result<Artifacts, S
         retention: RetentionContract {
             sources: retention_sources,
             output_retention_seconds: p.deployment(&plan.bindings.deployment).map(|d| d.output_retention_seconds).unwrap_or(0),
+        },
+        surface: if online { "online_store" } else { "offline_snapshot" }.into(),
+        online: if online && !external_store {
+            let cfg = out_adapter.configuration.get("online_store").ok_or("online_store target without adapter configuration online_store")?;
+            let Location::Table { namespace, name, .. } = &target.location else { return Err("online staging target must be a table".into()) };
+            Some(OnlineTarget {
+                store: cfg["name"].as_str().unwrap_or_default().to_string(),
+                capacity: cfg.get("capacity").and_then(Value::as_str).unwrap_or("CU_1").to_string(),
+                serving_endpoint: cfg.get("serving_endpoint").and_then(Value::as_str).map(str::to_string),
+                online_table: format!("{}.{}_online", namespace.join("."), name),
+                lookup_keys: fs.population.keys.iter().map(|k| target.entity_key_mapping[&k.name].as_str().unwrap_or_default().to_string()).collect(),
+                as_of_column: mc.as_of.clone(),
+                publication_id_column: mc.publication_id.clone(),
+                feature_columns: target.feature_mapping.iter().flat_map(|m| [m.column.clone(), m.state_column.clone()]).collect(),
+            })
+        } else {
+            None
         },
         notes,
     })
@@ -2012,6 +2108,11 @@ pub fn job_bundle(plan: &Plan, d: &Deployment, project_id: &str) -> Result<Value
         return Err(format!("every_seconds {e} is not expressible as a UTC Quartz schedule (whole minutes dividing an hour, whole hours dividing a day, or one day)"));
     };
     let job_key = format!("featlas_{}", safe(&d.id));
+    // Online targets publish through the Feature Engineering client (Online Feature Store).
+    let mut deps = vec![json!("${var.featlas_wheel}")];
+    if d.output_targets.iter().any(|t| t.role == Role::OnlineStore) {
+        deps.push(json!(FEATURE_ENGINEERING_REQUIREMENT));
+    }
     let tasks: Vec<Value> = plan
         .logical
         .feature_sets
@@ -2052,8 +2153,147 @@ pub fn job_bundle(plan: &Plan, d: &Deployment, project_id: &str) -> Result<Value
             "timeout_seconds": d.slo.max_compute_seconds,
             "schedule": {"quartz_cron_expression": cron, "timezone_id": "UTC", "pause_status": "PAUSED"},
             "tags": {"featlas_deployment": d.id, "featlas_deployment_identity": plan.bindings.deployment_identity, "featlas_plan_digest": plan.plan_digest},
-            "environments": [{"environment_key": "featlas", "spec": {"client": "2", "dependencies": ["${var.featlas_wheel}"]}}],
+            // Serverless environment 3: Python 3.12 (the featlas wheel is abi3 for CPython >= 3.12).
+            "environments": [{"environment_key": "featlas", "spec": {"client": "3", "dependencies": deps}}],
             "tasks": tasks,
         }}},
+    }))
+}
+
+/// Per-feature mapping of a feature set onto Databricks Feature Views (`feature_api:
+/// feature_views`). A feature maps only when the Feature View computes exactly the same value:
+/// one append-only source whose availability time is its event time (Feature Views select rows
+/// by event time only), a `[as_of - lookback, as_of)` window (RollingWindow), no joins, an
+/// aggregate over a plain column with nulls ignored (Count/Sum/Avg/Min/Max) or a latest/earliest
+/// lookup ordered by the event time (Last/First), and non-temporal entity keys. Everything else
+/// stays on the Unity Catalog feature table, with the reasons. States, quality checks and
+/// missingness other than the empty-window value are not represented by Feature Views.
+pub fn feature_views(plan: &Plan, feature_set: &str) -> Result<Value, String> {
+    let fs = plan.logical.feature_sets.iter().find(|f| f.id == feature_set).ok_or_else(|| format!("Feature set {feature_set} is not in the plan"))?;
+    let target = plan.bindings.outputs.iter().find(|t| t.feature_set == fs.id && t.version == fs.version).ok_or("No output target for this feature set")?;
+    let mut features = Vec::new();
+    for f in fs.features.iter().filter(|f| fs.members.contains(&format!("{}@{}", f.id, f.version))) {
+        let column = target.feature_mapping.iter().find(|m| m.feature == f.id).map(|m| m.column.clone()).unwrap_or_default();
+        let mut reasons: Vec<String> = Vec::new();
+        let mut assumptions: Vec<String> = Vec::new();
+        let (mut src, mut window, mut filter, mut group, mut function) = (None, None, None, None, None);
+        for st in &f.steps {
+            match st {
+                Step::Reconstruct { alias, source, .. } => {
+                    if src.is_some() { reasons.push("reads more than one input".into()); }
+                    src = Some((alias.clone(), source.clone()));
+                }
+                Step::EventWindow { lookback_seconds, lower, upper, .. } => {
+                    if *lower != Boundary::Inclusive || *upper != Boundary::Exclusive {
+                        reasons.push("window bounds are not [as_of - lookback, as_of) (RollingWindow is lower-inclusive, upper-exclusive)".into());
+                    }
+                    window = Some(*lookback_seconds);
+                }
+                Step::Join { relationship, .. } => reasons.push(format!("joins {relationship}; Feature Views do not join tables")),
+                Step::Filter { predicate } => filter = Some(predicate.clone()),
+                Step::Group { keys } => group = Some(keys.clone()),
+                Step::Aggregate { operation, value, nulls, .. } => {
+                    if *nulls != NullPolicy::Ignore { reasons.push(format!("null policy {nulls:?}: Feature View aggregates ignore nulls")); }
+                    function = Some(match (operation, value) {
+                        (AggregateOp::Count, _) => ("Count", None),
+                        (AggregateOp::Sum, Some(v)) => ("Sum", Some(v.clone())),
+                        (AggregateOp::Mean, Some(v)) => ("Avg", Some(v.clone())),
+                        (AggregateOp::Min, Some(v)) => ("Min", Some(v.clone())),
+                        (AggregateOp::Max, Some(v)) => ("Max", Some(v.clone())),
+                        (AggregateOp::CountDistinct, _) => { reasons.push("count_distinct: Feature Views offer only ApproxCountDistinct".into()); ("", None) }
+                        _ => { reasons.push(format!("{operation:?} without a value")); ("", None) }
+                    });
+                }
+                Step::Lookup { value, order_by } => {
+                    function = Some(match order_by.as_slice() {
+                        [o] if o.direction == "desc" => ("Last", Some(value.clone())),
+                        [o] if o.direction == "asc" => ("First", Some(value.clone())),
+                        _ => { reasons.push("lookup orders by more than one key".into()); ("", None) }
+                    });
+                    if let ([o], Some((_, sid))) = (order_by.as_slice(), &src) {
+                        if plan.logical.sources.get(sid).is_some_and(|s| s.event_time != o.column) {
+                            reasons.push(format!("lookup orders by {} but Feature Views order by the timeseries column", o.column));
+                        }
+                    }
+                    assumptions.push("Ties on the latest event time: the spec fails the run (LOOKUP_TIE); Last/First pick one row. Equal when event times are unique per entity in the window.".into());
+                }
+                Step::Recency { .. } => reasons.push("recency has no Feature View function".into()),
+                Step::Expression { .. } => reasons.push("derived expression features are computed from other features, not from a source".into()),
+                Step::RequiresCapability { kind, .. } => reasons.push(format!("{kind} has no Feature View form")),
+            }
+        }
+        let mut definition = Value::Null;
+        if let (Some((alias, sid)), Some(lookback), Some(keys), Some((func, value))) = (&src, window, &group, &function) {
+            let s = &plan.logical.sources[sid];
+            let b = plan.bindings.sources.iter().find(|b| &b.source == sid).ok_or_else(|| format!("{sid} unbound"))?;
+            let phys = |c: &str| b.column_mapping.get(c).and_then(Value::as_str).unwrap_or(c).to_string();
+            let ty = |c: &str| s.columns.iter().find(|x| x.name == c).map(|x| x.ty);
+            if s.record_kind != "append_only" || s.tombstone.is_some() {
+                reasons.push(format!("source {sid} is {} (revision reconstruction/tombstones); Feature Views read rows as stored", s.record_kind));
+            }
+            if s.available_time != s.event_time {
+                reasons.push(format!("source {sid} becomes available at {} but Feature Views select rows by event time {} only: rows arriving after as_of would be counted", s.available_time, s.event_time));
+            }
+            if ty(&s.event_time) != Some(LogicalType::Timestamp) {
+                reasons.push("the timeseries column must be a timestamp".into());
+            }
+            for k in keys {
+                if matches!(ty(&k.column), Some(LogicalType::Timestamp | LogicalType::Date)) {
+                    reasons.push(format!("entity key {} is temporal; Feature View entity columns cannot be DATE/TIMESTAMP", k.column));
+                }
+            }
+            let input = match (func, value) {
+                (_, Some(Expr::Column { column, .. })) => Some(phys(column)),
+                (&"Count", None) => match s.primary_key.iter().find(|c| s.columns.iter().any(|x| &x.name == *c && !x.nullable)) {
+                    Some(c) => Some(phys(c)),
+                    None => { reasons.push("count needs a non-nullable primary key column to count".into()); None }
+                },
+                (_, Some(_)) => { reasons.push("the aggregated value is an expression (only plain columns map)".into()); None }
+                _ => None,
+            };
+            let filter_condition = match &filter {
+                Some(e) => {
+                    let col = |a: &str, c: &str| if a == alias { quote(&phys(c)) } else { format!("__unmapped_{a}_{c}") };
+                    match lower_expr(e, &col, &|_| None, 0) {
+                        Ok(sql) if !sql.contains("__unmapped_") && !sql.contains("raise_error") => Some(sql),
+                        Ok(_) => { reasons.push("the filter reads another input or raises errors".into()); None }
+                        Err(m) => { reasons.push(format!("filter: {m}")); None }
+                    }
+                }
+                None => None,
+            };
+            let Location::Table { namespace, name, .. } = &b.location else { return Err(format!("{sid} is not bound to a table")) };
+            definition = json!({
+                "name": column,
+                "source": {"catalog_name": namespace.first(), "schema_name": namespace.get(1), "table_name": name, "filter_condition": filter_condition},
+                "entity": keys.iter().map(|k| phys(&k.column)).collect::<Vec<_>>(),
+                "timeseries_column": phys(&s.event_time),
+                "function": {"operator": func, "input": input},
+                "time_window": {"type": "rolling", "window_duration_seconds": lookback},
+                "empty_window": match &f.missingness.empty { EmptyPolicy::Value { value } => json!({"spec": "value", "value": value}), EmptyPolicy::Null => json!({"spec": "null"}), EmptyPolicy::Error => json!({"spec": "error"}) },
+            });
+            if matches!(f.missingness.empty, EmptyPolicy::Value { .. }) {
+                assumptions.push("The spec returns its declared empty value for an empty window; the Feature View value for an empty window is compared live before relying on it.".into());
+            }
+        } else if reasons.is_empty() {
+            reasons.push("no single-source windowed aggregate or lookup".into());
+        }
+        reasons.sort();
+        reasons.dedup();
+        let mapped = reasons.is_empty();
+        features.push(json!({
+            "feature": f.id, "version": f.version, "column": column,
+            "api": if mapped { "feature_views" } else { "uc_feature_tables" },
+            "reasons": reasons, "assumptions": assumptions,
+            "definition": if mapped { definition } else { Value::Null },
+        }));
+    }
+    Ok(json!({
+        "schema": "featlas.databricks.feature-views/v1",
+        "generator": format!("{IMPLEMENTATION}@{VERSION}"),
+        "plan_digest": plan.plan_digest,
+        "feature_set": fs.id, "feature_set_version": fs.version,
+        "not_represented": ["feature states (ok/empty/insufficient_history/source_unavailable)", "quality checks and policies", "availability-time (as-known) reconstruction", "publication identity and observed published_at"],
+        "features": features,
     }))
 }

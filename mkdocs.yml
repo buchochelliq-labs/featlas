@@ -92,6 +92,7 @@ nav:
   - Guides:
       - Writing feature specs: guides/authoring.md
       - Databricks: guides/databricks.md
+      - Stores and feature APIs: guides/stores.md
       - Reviewing evidence: guides/reviewing.md
   - Reverse engineering:
       - reverse/index.md
@@ -112,7 +113,7 @@ nav:
   - Contributing: contributing.md
   - Status and roadmap: status.md
   - Records:
-      - Decisions (D1-D8): DECISIONS.md
+      - Decisions (D1-D17): DECISIONS.md
       - Evidence and reviews: EVIDENCE.md
       - Traceability (SEM-*): TRACEABILITY.md
       - Specification findings: SPEC_FINDINGS.md

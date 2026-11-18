@@ -20,8 +20,9 @@ import re
 from typing import Any
 
 from . import describe
-from .analyze import Analysis, Output
+from .analyze import Analysis
 
+ROW_KINDS = ("aggregate", "recency", "lookup")
 CORE_CAPS = ["core.aggregate", "core.expression", "core.revision_reconstruction", "core.as_of_join", "core.source_as_known"]
 AVAILABILITY_HINTS = ("available_at", "ingested_at", "_ingested_at", "loaded_at", "_loaded_at", "_commit_timestamp", "arrival_ts", "received_at", "created_at_ingest")
 REGISTRY_HINTS = ("registry", "dim_", "_dim", "customers", "accounts", "devices", "users", "entities")
@@ -135,6 +136,53 @@ def _cols_of(e: Any, acc: set) -> set:
     return acc
 
 
+def _cols_at(e: Any, alias: str, acc: set | None = None) -> set:
+    """Columns of input ``alias`` referenced in an expression (or list of expressions/order keys)."""
+    acc = set() if acc is None else acc
+    if isinstance(e, dict):
+        if e.get("kind") == "column" and e.get("input") == alias:
+            acc.add(e["column"])
+        elif "column" in e and e.get("input") == alias and "kind" not in e:  # order_by entry
+            acc.add(e["column"])
+        for v in e.values():
+            _cols_at(v, alias, acc)
+    elif isinstance(e, list):
+        for v in e:
+            _cols_at(v, alias, acc)
+    return acc
+
+
+def _aliases(e: Any, acc: set | None = None) -> set:
+    acc = set() if acc is None else acc
+    if isinstance(e, dict):
+        if e.get("kind") == "column":
+            acc.add(e["input"])
+        for v in e.values():
+            _aliases(v, acc)
+    elif isinstance(e, list):
+        for v in e:
+            _aliases(v, acc)
+    return acc
+
+
+def _type_of(e: Any, descs: dict[str, dict]) -> str | None:
+    """Logical type of the first column an expression reads (for untyped legacy outputs)."""
+    if isinstance(e, dict):
+        if e.get("kind") == "column" and e["input"] in descs:
+            c = describe.column(descs[e["input"]], e["column"])
+            return describe.logical_type(c["type"]) if c else None
+        for v in e.values():
+            t = _type_of(v, descs)
+            if t:
+                return t
+    elif isinstance(e, list):
+        for v in e:
+            t = _type_of(v, descs)
+            if t:
+                return t
+    return None
+
+
 def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decisions: dict | None = None) -> dict:
     """Return ``{"project": <dict>, "report": <dict>}``. Validate the project with ``featlas``."""
     decisions = decisions or {}
@@ -143,8 +191,6 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
     target = describe.load(target)
     sources = {k: describe.load(v) for k, v in sources.items()}
     fact_table = analysis.tables[analysis.fact_alias]
-    if analysis.joins:
-        r.unsupported.append({"construct": "JOIN", "sql": str(analysis.joins), "advice": "Joins become spec relationships; declare the relationship (cardinality, valid time) and add it to the draft by hand. Joined columns are not drafted."})
     if fact_table not in sources:
         r.ask(f"sources.{fact_table}", f"Provide a table description for {fact_table} (column types are needed).")
         return {"project": None, "report": r.to_dict()}
@@ -157,13 +203,23 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         return {"project": None, "report": r.to_dict()}
     entity_id = _ident(_decide(decisions, "entity.id", re.sub(r"_id$", "", keys[-1]), "Entity named after its most specific key", r))
     tenant = _decide(decisions, "entity.tenant_key", next((k for k in keys if re.search(r"tenant|org|account", k)), None), "Tenant key detected by name (null = single-tenant)", r)
-    if analysis.window is None:
-        r.ask("window", "No event-time window was found in WHERE (col >= :as_of - INTERVAL ... AND col < :as_of). What window does each feature use?")
+    # Each row-level output uses its own window when it narrows the shared WHERE window.
+    row_outputs = [o for o in analysis.outputs if o.kind in ROW_KINDS]
+    windows = {o.name: o.window or analysis.window for o in row_outputs}
+    if not row_outputs or any(v is None for v in windows.values()):
+        r.ask("window", "No event-time window was found in WHERE (col >= :as_of - INTERVAL ... AND col < :as_of) or in the output's FILTER/CASE. What window does each feature use?", [o.name for o in row_outputs if windows[o.name] is None])
         return {"project": None, "report": r.to_dict()}
-    w = analysis.window
-    if w.lookback_seconds is None:
-        r.ask("window.lookback", "The window has no lower bound; unbounded history is not a portable feature window. Give a lookback.")
+    if any(v.lookback_seconds is None for v in windows.values()):
+        r.ask("window.lookback", "The window has no lower bound; unbounded history is not a portable feature window. Give a lookback.", [n for n, v in windows.items() if v.lookback_seconds is None])
         return {"project": None, "report": r.to_dict()}
+    event_columns = {(v.alias, v.event_column) for v in windows.values()}
+    if len(event_columns) != 1:
+        r.ask("window.event_time", f"Outputs bound different event-time columns {sorted(event_columns)}; a source has one event time. Which column is it?")
+        return {"project": None, "report": r.to_dict()}
+    w = analysis.window or next(iter(windows.values()))
+    for o in analysis.outputs:
+        for n in o.notes:
+            r.assume(f"outputs.{o.name}", "legacy semantics", n)
     # --- population source: one row per entity
     pop_table = decisions.get("population", {}).get("table")
     if pop_table is None:
@@ -199,11 +255,71 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
     fs_id = _ident(_decide(decisions, "feature_set.id", _table_parts(target["table"])[1], "Feature set named after the legacy table", r))
     alias = _ident(analysis.fact_alias if len(analysis.fact_alias) > 2 else fact_sid)
     amap = {analysis.fact_alias: alias}
+    sid_of = {fact_table: fact_sid, pop_table: pop_sid}
+    # --- dimension joins become relationships (many_to_one, left or inner, optionally valid-time)
+    dims: list[dict] = []
+    blocked_aliases: set[str] = set()
+    for j in analysis.joins:
+        if not j.get("translatable") or any(p[0][0] != analysis.fact_alias for p in j["on"]):
+            blocked_aliases.add(j["alias"])
+            if j.get("translatable"):
+                r.unsupported.append({"construct": "JOIN", "sql": str(j), "reason": "joins between joined tables (snowflake chains) are not drafted; join each dimension to the fact table"})
+            continue
+        t = j["table"]
+        if t not in sources:
+            r.ask(f"sources.{t}", f"Provide a table description for the joined table {t} (column types are needed).")
+            return {"project": None, "report": r.to_dict()}
+        d = sources[t]
+        dsid = sid_of.get(t) or _ident(_decide(decisions, f"source_ids.{t}", _table_parts(t)[1], "Logical source id from the table name", r))
+        sid_of[t] = dsid
+        dalias = _ident(j["alias"] if len(j["alias"]) > 2 else dsid)
+        if dalias == alias:
+            dalias = f"{dalias}_dim"
+        amap[j["alias"]] = dalias
+        from_cols = [p[0][1] for p in j["on"]]
+        to_cols = [p[1][1] for p in j["on"]]
+        if tenant and tenant not in from_cols:
+            blocked_aliases.add(j["alias"])
+            r.unsupported.append({"construct": "JOIN", "sql": f"{j['kind'].upper()} JOIN {t} ON {from_cols} = {to_cols}", "reason": f"{t} is not joined on the tenant key {tenant}: a tenant-scoped entity may not read a tenant-less dimension (SEM-ENT-002, equal local keys in different tenants would cross-match)", "advice": f"Scope {t} by tenant, or declare the entity single-tenant with decisions.entity.tenant_key = null."})
+            continue
+        vt = j.get("valid_time")
+        pk = decisions.get("sources", {}).get(t, {}).get("primary_key") or d.get("primary_key") or []
+        unique = set(pk) and set(pk) <= set(to_cols) | ({vt["valid_from"]} if vt else set())
+        if not unique:
+            r.assume(f"relationships.{t}.cardinality", "many_to_one", f"{t} is assumed to have at most one {'valid ' if vt else ''}row per {', '.join(to_cols)} (its declared key is {pk or 'unknown'}); the spec fails a run on multiple matches where the legacy join would duplicate fact rows")
+        if vt:
+            d_event = vt["valid_from"]
+            temporal = {"mode": "as_of", "reference": "left_event_time", "valid_from": vt["valid_from"], "valid_to": vt["valid_to"], "lower": "inclusive", "upper": "exclusive", "available_time_cutoff": "feature_as_of"}
+            if vt["probe"][1] != w.event_column:
+                r.unsupported.append({"construct": "valid-time join", "sql": str(j), "reason": f"the valid-time probe {vt['probe'][1]} is not the fact event time {w.event_column}"})
+                blocked_aliases.add(j["alias"])
+                continue
+        else:
+            d_event = decisions.get("sources", {}).get(t, {}).get("event_time") or next((c["name"] for c in d["columns"] if re.search(r"(registered|created|signup|joined|opened|updated|valid_from|effective)(_(at|ts|time|from))?$", c["name"])), None)
+            if d_event is None:
+                r.ask(f"sources.{t}.event_time", f"Which {t} column says when a row became true (its event time)? The spec reads a dimension row only once it is available at as_of.", [c["name"] for c in d["columns"]])
+                return {"project": None, "report": r.to_dict()}
+            temporal = {"mode": "none"}
+            r.assume(f"relationships.{t}.temporal", "none", f"The legacy join reads {t} as it is when the job runs; the spec reads only {t} rows available at as_of (no valid-time history). Differences on replayed history are legacy divergences.")
+        d_avail = avail_for(t, d, d_event) if t != pop_table else pop_avail
+        rel_id = _ident(f"{fact_sid}_to_{dsid}")
+        kind = j["kind"]
+        dims.append({
+            "table": t, "sid": dsid, "alias": dalias, "sql_alias": j["alias"], "kind": kind, "from": from_cols, "to": to_cols,
+            "event": d_event, "avail": d_avail, "pk": pk or to_cols, "valid_time": vt,
+            "relationship": {
+                "id": rel_id, "version": "1.0.0", "name": f"{fact_sid} to {dsid}",
+                "description": f"Reverse-engineered from the legacy {kind.upper()} JOIN {t} ON {' AND '.join(f'{a} = {b}' for a, b in zip(from_cols, to_cols))}{' with a valid-time probe' if vt else ''}.",
+                "owner": owner, "from": {"source": fact_sid, "columns": from_cols}, "to": {"source": dsid, "columns": to_cols},
+                "cardinality": "many_to_one", "join_type": kind, "null_keys": "unmatched",
+                "unmatched": "preserve_null" if kind == "left" else "drop", "multiple_matches": "error", "temporal": temporal,
+            },
+        })
     shared_filter = None
     for f in analysis.filters:
         f = _rename_inputs(f, amap)
         shared_filter = f if shared_filter is None else {"kind": "call", "operator": "and", "args": [shared_filter, f]}
-    used_cols = set(keys) | {w.event_column} | _cols_of(analysis.filters, set())
+    used_cols = set(keys) | {w.event_column} | _cols_at(_rename_inputs(analysis.filters, amap), alias)
     features: list[dict] = []
     fid = lambda name: f"{entity_id}.{_ident(name)}"  # noqa: E731
     key_lineage = [{"source": fact_sid, "column": k, "roles": ["entity_key"], "description": f"Entity key {k}."} for k in keys]
@@ -211,45 +327,93 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         {"source": pop_sid, "column": pop_event, "roles": ["event_time", "population"], "description": "Population membership time."},
         {"source": pop_sid, "column": pop_avail, "roles": ["availability_time", "population"], "description": "Population availability time."},
     ]
+    lookback_of: dict[str, int] = {}
+    window_of: dict[str, dict] = {}
     for o in analysis.outputs:
-        if o.kind not in ("aggregate", "expression"):
+        if o.kind not in ROW_KINDS + ("expression",):
             continue
         col = describe.column(target, o.name)
         try:
             out_ty = describe.logical_type(col["type"]) if col else None
         except ValueError:
             out_ty = None
-        if o.kind == "aggregate":
+        if o.kind in ROW_KINDS:
+            ow = windows[o.name]
+            window_of[o.name] = {"lookback_seconds": ow.lookback_seconds, "lower": ow.lower, "upper": ow.upper or "exclusive"}
             value = _rename_inputs(o.value, amap)
-            vcols = _cols_of(value, set())
-            fcols = _cols_of(o.filter, set())
-            used_cols |= vcols | fcols
             filt = _rename_inputs(o.filter, amap)
+            order_by = [{**x, "input": amap.get(x["input"], x["input"])} for x in o.order_by or []]
+            if {a for a, _ in o.columns} & blocked_aliases or _aliases(analysis.filters) & blocked_aliases:
+                r.unsupported.append({"construct": "output", "name": o.name, "sql": o.sql, "reason": "reads a joined table whose join could not be translated"})
+                continue
+            vcols = _cols_at(value, alias)
+            fcols = _cols_at(filt, alias)
+            ocols = {x["column"] for x in order_by if x["input"] == alias}
+            used_cols |= vcols | fcols | ocols
+            used_dims = [x for x in dims if x["kind"] == "inner" or _cols_at([value, filt, shared_filter, order_by], x["alias"])]
+            joins = [{"relationship": x["relationship"]["id"], "version": "1.0.0", "left_alias": alias, "right_alias": x["alias"]} for x in used_dims]
             if shared_filter is not None:
                 filt = shared_filter if filt is None else {"kind": "call", "operator": "and", "args": [shared_filter, filt]}
-            if out_ty is None:
-                vt = describe.logical_type(describe.column(fact, next(iter(vcols)))["type"]) if vcols else "integer"
-                out_ty = {"count": "integer", "count_distinct": "integer", "mean": "number"}.get(o.operation, vt)
-            if o.operation in ("count", "count_distinct") or o.coalesce_zero:
-                empty = {"action": "value", "value": 0 if out_ty == "integer" else 0.0}
-            else:
+            common = {"input": alias, "joins": joins, "group_by": [{"input": alias, "column": k, "entity_key": k} for k in keys], "filter": filt}
+            if o.kind == "recency":
+                out_ty = "integer"
                 empty = {"action": "null"}
-            transform = {
-                "kind": "aggregate", "input": alias, "joins": [],
-                "group_by": [{"input": alias, "column": k, "entity_key": k} for k in keys],
-                "filter": filt, "operation": o.operation,
-                "value": value if o.operation not in ("count", "count_distinct") else None,
-                "distinct_by": [value] if o.operation == "count_distinct" else [], "nulls": "ignore",
-            }
-            lineage_sources = key_lineage + [
-                {"source": fact_sid, "column": w.event_column, "roles": ["event_time"], "description": "Event time bounding the window."},
+                transform = {"kind": "recency", **common, "event_time": o.event_column, "unit": "second", "rounding": "floor"}
+                missing_null_input = "propagate"
+            elif o.kind == "lookup":
+                if out_ty is None:
+                    out_ty = _type_of(value, {alias: fact, **{x["alias"]: sources[x["table"]] for x in dims}}) or "string"
+                empty = {"action": "null"}
+                transform = {"kind": "lookup", **common, "value": value, "order_by": order_by, "on_tie": "error"}
+                missing_null_input = "propagate"
+            else:
+                if out_ty is None:
+                    vt = _type_of(value, {alias: fact, **{x["alias"]: sources[x["table"]] for x in dims}}) or "integer"
+                    out_ty = {"count": "integer", "count_distinct": "integer", "mean": "number"}.get(o.operation, vt)
+                if o.operation in ("count", "count_distinct") or o.coalesce_zero:
+                    empty = {"action": "value", "value": 0 if out_ty == "integer" else 0.0}
+                else:
+                    empty = {"action": "null"}
+                transform = {
+                    "kind": "aggregate", **common, "operation": o.operation,
+                    "value": value if o.operation not in ("count", "count_distinct") else None,
+                    "distinct_by": [value] if o.operation == "count_distinct" else [], "nulls": "ignore",
+                }
+                missing_null_input = "ignore"
+            ordering = ocols - {w.event_column}
+            jk = {c for x in used_dims for c in x["from"]}
+            lineage_sources = [{**k, "roles": k["roles"] + (["join_key"] if k["column"] in jk else [])} for k in key_lineage] + [
+                {"source": fact_sid, "column": w.event_column, "roles": ["event_time"] + (["ordering"] if w.event_column in ocols else []), "description": "Event time bounding the window."},
                 {"source": fact_sid, "column": fact_avail, "roles": ["availability_time"], "description": "Availability cutoff."},
-            ] + [{"source": fact_sid, "column": c, "roles": ["value"], "description": f"Aggregated value {c}."} for c in sorted(vcols)] + [
-                {"source": fact_sid, "column": c, "roles": ["filter"], "description": f"Filter column {c}."} for c in sorted(fcols | _cols_of(shared_filter, set()))
-            ] + pop_lineage
-            inputs = [{"alias": alias, "source": fact_sid, "columns": sorted(set(keys) | {w.event_column, fact_avail} | vcols | fcols | _cols_of(shared_filter, set()) | set(fact_pk))}]
+            ] + [{"source": fact_sid, "column": c, "roles": ["value"], "description": f"{'Looked-up' if o.kind == 'lookup' else 'Aggregated'} value {c}."} for c in sorted(vcols)] + [
+                {"source": fact_sid, "column": c, "roles": ["ordering"], "description": f"Lookup ordering {c}."} for c in sorted(ordering)
+            ] + [
+                {"source": fact_sid, "column": c, "roles": ["filter"], "description": f"Filter column {c}."} for c in sorted(fcols | _cols_at(shared_filter, alias))
+            ] + [
+                {"source": fact_sid, "column": c, "roles": ["join_key"], "description": f"Join key to {x['sid']}."} for x in used_dims for c in x["from"] if c not in keys
+            ]
+            inputs = [{"alias": alias, "source": fact_sid, "columns": sorted(set(keys) | {w.event_column, fact_avail} | vcols | fcols | ocols | _cols_at(shared_filter, alias) | set(fact_pk) | {c for x in used_dims for c in x["from"]})}]
+            for x in used_dims:
+                dv = _cols_at(value, x["alias"]) | {o2["column"] for o2 in order_by if o2["input"] == x["alias"]}
+                df = _cols_at([filt, shared_filter], x["alias"])
+                vt_cols = {x["valid_time"]["valid_from"], x["valid_time"]["valid_to"]} if x["valid_time"] else set()
+                cols = set(x["to"]) | {x["event"], x["avail"]} | set(x["pk"]) | dv | df | vt_cols
+                x.setdefault("used", set()).update(cols)
+                inputs.append({"alias": x["alias"], "source": x["sid"], "columns": sorted(cols)})
+                roles: dict[str, list] = {}
+                for c in x["to"]:
+                    roles.setdefault(c, []).append("join_key")
+                for c in sorted(dv):
+                    roles.setdefault(c, []).append("value")
+                for c in sorted(df):
+                    roles.setdefault(c, []).append("filter")
+                roles.setdefault(x["event"], []).append("valid_time" if x["valid_time"] else "event_time")
+                if x["valid_time"]:
+                    roles.setdefault(x["valid_time"]["valid_to"], []).append("valid_time")
+                roles.setdefault(x["avail"], []).append("availability_time")
+                lineage_sources += [{"source": x["sid"], "column": c, "roles": sorted(set(rs)), "description": f"{x['table']}.{c} via relationship {x['relationship']['id']}."} for c, rs in roles.items()]
+            lineage_sources += pop_lineage
             deps: list = []
-            missing_null_input = "ignore"
         else:
             transform = {"kind": "expression", "expression": _rename_feature_refs(o.expression, fid)}
             out_ty = out_ty or "number"
@@ -258,6 +422,9 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
             inputs = []
             deps = [{"feature": fid(d), "version": "1.0.0", "alignment": "same_entity_as_of"} for d in o.depends_on]
             missing_null_input = "propagate"
+            # A derived feature spans the widest window of its inputs.
+            window_of[o.name] = max((window_of[d] for d in o.depends_on if d in window_of), key=lambda x: x["lookback_seconds"], default={"lookback_seconds": w.lookback_seconds, "lower": w.lower, "upper": w.upper or "exclusive"})
+        lookback_of[o.name] = window_of[o.name]["lookback_seconds"]
         desc = (col or {}).get("comment") or f"Reverse-engineered from `{o.sql}` in the legacy feature code."
         feature = {
             "id": fid(o.name), "version": "1.0.0", "name": o.name.replace("_", " ").capitalize(),
@@ -265,16 +432,16 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
             "inputs": inputs, "dependencies": deps,
             "time": {
                 "timezone": "UTC", "knowledge_mode": "source_as_known",
-                "window": {"lookback_seconds": w.lookback_seconds, "lower": w.lower, "upper": w.upper},
+                "window": window_of[o.name],
                 "availability": {"cutoff": "as_of", "upper": "inclusive"},
                 "publication": {"delay_seconds": 0},
             },
             "transform": transform,
-            "output": {"type": out_ty, "nullable": True, "unit": (col or {}).get("tags", {}).get("unit"), "description": desc, "constraints": {}, "numeric_tolerance": {"absolute": 0, "relative": 1e-9 if out_ty == "number" else 0}},
+            "output": {"type": out_ty, "nullable": True, "unit": (col or {}).get("tags", {}).get("unit") or ("second" if o.kind == "recency" else None), "description": desc, "constraints": {"minimum": 0} if o.kind == "recency" else {}, **({"numeric_tolerance": {"absolute": 0, "relative": 1e-9 if out_ty == "number" else 0}} if out_ty in ("integer", "number") else {})},
             "lineage": {"sources": lineage_sources, "dependencies": [{"feature": d["feature"], "version": "1.0.0", "description": "Input of the derived expression."} for d in deps], "code": None},
             "missingness": {"empty": empty, "null_input": missing_null_input, "insufficient_history": "null", "source_unavailable": "null", "execution_failure": "error"},
             "quality": {"checks": [{"kind": "finite", "severity": "error"}] if out_ty in ("integer", "number") else [], "on_violation": "error"},
-            "history": {"required_seconds": w.lookback_seconds, "coverage": "contiguous", "earliest_as_of": earliest},
+            "history": {"required_seconds": lookback_of[o.name], "coverage": "contiguous", "earliest_as_of": earliest},
             "acceptance": {"suites": [f"{fs_id}_characterization"], "description": "Structural and characterization cases drafted by featlas_reverse; goldens of characterization cases are the legacy table's outputs."},
         }
         features.append(feature)
@@ -284,7 +451,7 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
             r.mapping[o.name] = {"entity_key": o.columns[0][1]}
         elif o.kind == "as_of":
             r.mapping[o.name] = {"as_of": True}
-    for u in analysis.unsupported:
+    for u in r.unsupported:
         if u.get("name"):
             r.mapping[u["name"]] = {"unsupported": u.get("reason", "")}
     if not features:
@@ -296,20 +463,28 @@ def draft_spec(target: dict, analysis: Analysis, sources: dict[str, dict], decis
         "keys": [{"name": k, "type": describe.logical_type(describe.column(pop, k)["type"]), "source_column": k, "is_tenant": k == tenant, "description": f"{k} (from {pop_table})."} for k in keys],
         "population": {"source": pop_sid, "mode": "as_of_keys", "event_time_upper": "inclusive", "availability_upper": "inclusive", "deletion_policy": "exclude_deleted"},
     }
+    pop_used = set(keys) | next((x.get("used", set()) for x in dims if x["table"] == pop_table), set())
     srcs = [
-        _source(pop_sid, pop, set(keys), pop_event, pop_avail, pop.get("primary_key") or keys, earliest, owner),
-        _source(fact_sid, fact, used_cols | set(fact_pk), w.event_column, fact_avail, fact_pk, earliest, owner),
+        _source(pop_sid, pop, pop_used, pop_event, pop_avail, pop.get("primary_key") or keys, earliest, owner),
+        _source(fact_sid, fact, used_cols | set(fact_pk) | {c for x in dims for c in x["from"]}, w.event_column, fact_avail, fact_pk, earliest, owner),
+    ] + [
+        _source(x["sid"], sources[x["table"]], x.get("used", set()), x["event"], x["avail"], x["pk"], earliest, owner)
+        for x in dims if x["table"] != pop_table and x.get("used")
     ]
+    if any(x["table"] == pop_table and x.get("used") and set(x["pk"]) != set(pop.get("primary_key") or keys) for x in dims):
+        r.ask("population.table", f"{pop_table} is both the population and a joined dimension with a different key; split it into two source bindings by hand.")
+    rels = [x["relationship"] for x in dims if x.get("used")]
+    caps_extra = sorted({"core.as_of_join" if x["valid_time"] else "core.relationship_join" for x in dims if x.get("used")} - set(CORE_CAPS))
     feature_set = {"id": fs_id, "version": "1.0.0", "name": fs_id.replace("_", " ").capitalize(), "description": f"Reverse-engineered from {target['table']}.", "owner": owner, "entity": entity_id, "features": [{"id": f["id"], "version": "1.0.0"} for f in features], "publication": "atomic"}
     project = {
         "spec_version": "0.2.0", "kind": "FeatureEngineeringProject",
         "metadata": {"id": _ident(_decide(decisions, "project.id", f"{fs_id}_reverse", "Project id", r)), "name": f"{target['table']} (reverse-engineered)", "version": "0.1.0", "description": f"Specification drafted by featlas_reverse from {target['table']} and its code; review every assumption in the drafting report before marking it reviewed.", "owners": [owner], "status": "draft", "tags": ["reverse-engineered"]},
-        "entities": [entity], "sources": srcs, "relationships": [], "features": features, "feature_sets": [feature_set],
+        "entities": [entity], "sources": srcs, "relationships": rels, "features": features, "feature_sets": [feature_set],
         "consumers": [_consumer(fs_id, entity_id, keys, owner)],
         "deployments": [],
-        "acceptance_suites": [_suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r)],
+        "acceptance_suites": [_suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r, {x["id"]: [c["name"] for c in x["columns"]] for x in srcs}, caps_extra)],
     }
-    project["deployments"] = [_deployment(decisions, fs_id, entity, srcs, {pop_sid: pop_table, fact_sid: fact_table}, features, target, owner, r)]
+    project["deployments"] = [_deployment(decisions, fs_id, entity, srcs, {**{x["sid"]: x["table"] for x in dims}, pop_sid: pop_table, fact_sid: fact_table}, features, target, owner, r, caps_extra)]
     return {"project": project, "report": r.to_dict()}
 
 
@@ -340,18 +515,19 @@ def _status(sid: str, start: str, end: str) -> dict:
     return {"source": sid, "state": "available", "coverage_start": start, "coverage_end": end}
 
 
-def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: Report) -> dict:
+def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: Report, source_columns: dict[str, list[str]], caps_extra: list[str] | None = None) -> dict:
     """Structural case (empty population) for every feature, plus characterization samples."""
     as_of = decisions.get("structural_as_of") or "2026-06-01T00:00:00Z"
-    caps = CORE_CAPS
+    caps = CORE_CAPS + list(caps_extra or [])
+    sids = list(source_columns)
     cases = []
     for f in features:
         cases.append({
             "id": f"{f['id'].split('.', 1)[1]}_empty_population", "name": f"{f['name']}: empty population",
             "description": "Structural case: no registered entity yields no rows (not a zero).",
             "feature": {"id": f["id"], "version": "1.0.0"}, "as_of": as_of, "population_rows": [],
-            "source_rows": {pop_sid: [], fact_sid: []},
-            "context": {"mode": "source_as_known", "capabilities": caps, "source_status": [_status(pop_sid, earliest, "2026-12-31T00:00:00Z"), _status(fact_sid, earliest, "2026-12-31T00:00:00Z")]},
+            "source_rows": {sid: [] for sid in sids},
+            "context": {"mode": "source_as_known", "capabilities": caps, "source_status": [_status(sid, earliest, "2026-12-31T00:00:00Z") for sid in sids]},
             "expected": {"rows": []},
         })
     samples = decisions.get("samples") or []
@@ -381,19 +557,20 @@ def _suite(fs_id, features, keys, pop_sid, fact_sid, earliest, w, decisions, r: 
                 "description": "Characterization: the expected values are the legacy feature table's outputs for these entities at this as_of (SEM-TEST-002: independent implementation). Review states (ok/empty) by hand.",
                 "feature": {"id": f["id"], "version": "1.0.0"}, "as_of": s["as_of"],
                 "population_rows": [{k: row[k] for k in keys} for row in s["legacy_rows"]],
-                "source_rows": {pop_sid: s["source_rows"][pop_sid], fact_sid: s["source_rows"][fact_sid]},
-                "context": {"mode": "source_as_known", "capabilities": caps, "source_status": [_status(pop_sid, earliest, s.get("coverage_end", s["as_of"])), _status(fact_sid, earliest, s.get("coverage_end", s["as_of"]))]},
+                # Sample rows are projected onto the drafted source contract (only the columns the code reads).
+                "source_rows": {sid: [{c: row.get(c) for c in source_columns[sid]} for row in s["source_rows"][sid]] for sid in sids},
+                "context": {"mode": "source_as_known", "capabilities": caps, "source_status": [_status(sid, earliest, s.get("coverage_end", s["as_of"])) for sid in sids]},
                 "expected": {"rows": rows},
             })
     return {"id": f"{fs_id}_characterization", "version": "1.0.0", "name": f"{fs_id} characterization", "description": "Drafted by featlas_reverse: structural cases plus characterization cases from the legacy table.", "runner": "reference", "cases": cases}
 
 
-def _deployment(decisions, fs_id, entity, srcs, physical, features, target, owner, r: Report) -> dict:
+def _deployment(decisions, fs_id, entity, srcs, physical, features, target, owner, r: Report, caps_extra: list[str] | None = None) -> dict:
     default_target = target["table"] + "_featlas"
     out_table = _decide(decisions, "target.table", default_target, "Regenerated table written next to the legacy one (the legacy table is kept for parity checks)", r)
     ns, name = _table_parts(out_table)
     keys = [k["name"] for k in entity["keys"]]
-    caps = CORE_CAPS + ["core.source_read", "core.atomic_publication"]
+    caps = CORE_CAPS + list(caps_extra or []) + ["core.source_read", "core.atomic_publication"]
     roles = {"core.source_read": "catalog", "core.atomic_publication": "offline_store"}
     return {
         "id": _ident(_decide(decisions, "deployment.id", f"{fs_id}_databricks", "Deployment id", r)), "version": "1.0.0", "name": f"{fs_id} on Databricks",

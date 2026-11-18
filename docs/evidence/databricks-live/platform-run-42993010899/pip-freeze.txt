@@ -1,0 +1,6 @@
+databricks-agents==1.13.0
+databricks-connect==17.3.15
+databricks-feature-engineering==0.18.3
+databricks-sdk==0.165.0
+featlas @ file:///home/runner/work/featlas/featlas/wheels/featlas-0.1.0-cp312-abi3-manylinux_2_34_x86_64.whl#sha256=374bfb94f9edb35c57027433cc6be11e20751463f08348ace30fd610e823dba7
+mlflow-skinny==3.18.0

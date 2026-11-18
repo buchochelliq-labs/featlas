@@ -2,7 +2,8 @@
 
 ``legacy_sample`` runs the legacy SQL (unchanged) in a Spark session over small source samples
 registered as temp views, plus one companion query from the same FROM/WHERE/GROUP BY that counts,
-per aggregate output, the rows its filter keeps. That count decides the expected state
+per aggregate, recency and lookup output, the rows its filter keeps (CTEs inlined as in the
+analysis). That count decides the expected state
 (``empty`` when no row qualifies, else ``ok``) from the legacy code itself, independently of the
 featlas core. The result is ``decisions["samples"]`` for ``draft.draft_spec``.
 
@@ -18,7 +19,10 @@ from typing import Any
 import sqlglot
 from sqlglot import exp
 
-from .analyze import Analysis
+from .analyze import Analysis, _inline_ctes
+
+# Outputs whose state (empty vs ok) is decided by whether any row passes their filter.
+ROW_KINDS = ("aggregate", "recency", "lookup")
 
 
 def _bind(sql: str, analysis: Analysis, views: dict[str, str]) -> str:
@@ -33,12 +37,12 @@ def _bind(sql: str, analysis: Analysis, views: dict[str, str]) -> str:
 
 
 def eligibility_sql(analysis: Analysis) -> str:
-    tree = sqlglot.parse_one(analysis.sql, read=analysis.dialect)
+    tree = _inline_ctes(sqlglot.parse_one(analysis.sql, read=analysis.dialect), analysis.dialect, [])
     select = tree if isinstance(tree, exp.Select) else tree.find(exp.Select)
     keys = [exp.column(c, table=a) for a, c in analysis.group_by]
     counts = []
     for o in analysis.outputs:
-        if o.kind != "aggregate":
+        if o.kind not in ROW_KINDS:
             continue
         cond = o.filter_sql or "TRUE"
         counts.append(f"COUNT(CASE WHEN {cond} THEN 1 END) AS `fl_eligible_{o.name}`")
@@ -69,7 +73,7 @@ def legacy_sample(spark, analysis: Analysis, views: dict[str, str], as_of: str, 
         e = elig.get(key, {})
         row = {k: _iso(v) for k, v in r.items()}
         for name, o in by.items():
-            if o.kind == "aggregate":
+            if o.kind in ROW_KINDS:
                 row[f"fl_state_{name}"] = "ok" if e.get(f"fl_eligible_{name}", 0) else "empty"
         out.append(row)
     return out

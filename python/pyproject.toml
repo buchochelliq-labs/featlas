@@ -18,6 +18,8 @@ local = ["pyspark==4.0.1", "delta-spark==4.0.0"]
 test = ["pytest", "PyYAML==6.0.3"]
 # Reverse engineering (featlas_reverse): SQL analysis and YAML output.
 reverse = ["sqlglot==30.30.0", "PyYAML==6.0.3"]
+# Feast as a local offline/online store (featlas_feast).
+feast = ["feast==0.67.0"]
 
 [project.scripts]
 featlas-databricks = "featlas_databricks.cli:main"
@@ -27,5 +29,5 @@ featlas-reverse = "featlas_reverse.cli:main"
 manifest-path = "../crates/featlas-py/Cargo.toml"
 module-name = "featlas._native"
 python-source = "."
-python-packages = ["featlas_databricks", "featlas_reverse"]
+python-packages = ["featlas_databricks", "featlas_reverse", "featlas_feast"]
 features = []

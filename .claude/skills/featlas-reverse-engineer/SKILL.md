@@ -17,7 +17,9 @@ against the warehouse only through your own authorized connection, and only read
 
 1. **The code.** The SQL (or notebook cell) that builds the table. If it is PySpark, translate the
    DataFrame pipeline into one equivalent Spark SQL `SELECT` first and keep the original next to it;
-   say in the report that you translated it. If it uses CTEs or subqueries, inline them into one
+   say in the report that you translated it. Simple CTEs (`SELECT columns/expressions/* FROM
+   table [WHERE ...]`, chained or not) are inlined by the analyzer. Other CTEs and subqueries
+   (with GROUP BY, joins, window functions) you must inline into one
    `SELECT ... FROM fact [JOIN dim] WHERE window AND filters GROUP BY keys` where that is
    semantics-preserving; otherwise split the table into the parts that are.
 2. **Table descriptions** (`featlas.table-description/v1`, see `python/featlas_reverse/describe.py`)
@@ -46,10 +48,20 @@ what the analyzer understood without drafting).
     confirm that "no rows" really means 0 for the business.
   - `entity.tenant_key`, owners, `target.table` (default: `<legacy>_featlas`; never the legacy
     table itself).
-* `report.unsupported` lists SQL the analyzer did not translate (non-equi joins, HAVING, window
-  functions, UDFs...). For each: translate it by hand into the spec (relationships for joins,
-  `recency`/`lookup` transforms for latest-value logic, a learned/custom contract for UDFs), or drop
-  the column and record why. Never leave a legacy column silently unmapped: every column appears in
+* The analyzer already translates per-column windows (`FILTER (WHERE ts >= :as_of - INTERVAL 7
+  DAYS)` inside a 30-day `WHERE`), recency (`TIMESTAMPDIFF(SECOND, MAX(ts), :as_of)`,
+  `unix_timestamp` differences) and lookups (`MAX_BY`/`MIN_BY`). Their legacy-semantics notes are
+  assumptions in the report: legacy `MAX_BY` ignores null ordering values and picks arbitrarily on
+  ties, the spec rejects both; check the ordering column is non-null and unique per entity.
+* Joins to dimensions are drafted as relationships (equi-keys, optional valid-time probe). Check
+  the `relationships.*` assumptions: a `temporal: none` join reads the dimension as available at
+  `as_of`, which differs from a legacy job that read today's dimension; a dimension without the
+  tenant key cannot be joined under a tenant-scoped entity (scope it or set
+  `decisions.entity.tenant_key = null` if the business is single-tenant).
+* `report.unsupported` lists SQL the analyzer did not translate (other non-equi joins, HAVING, window
+  functions, UDFs, `DATEDIFF` / non-second `TIMESTAMPDIFF`, windows that end before `as_of`...).
+  For each: translate it by hand into the spec (relationships for join chains, a learned/custom
+  contract for UDFs), or drop the column and record why. Never leave a legacy column silently unmapped: every column appears in
   `report.mapping`.
 
 ## 3. Characterization tests (the legacy table as an independent implementation)
