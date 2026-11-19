@@ -289,11 +289,34 @@ def test_online_publication(env):
         assert all(r["published_at"] is not None for r in stored.values()), "published_at records the observed online instant"
         step.ok(published_at=ev["published_at"], staged_commit_timestamp=ev["staged_commit_timestamp"])
     except BaseException as exc:
+        if pub is not None:
+            endpoint_diagnostics(env["w"], pub.o.get("serving_endpoint"), step)
         step.fail(exc)
         raise
     finally:
         if pub is not None:
             step("teardown", done=pub.teardown(delete_store=True))
+
+
+def endpoint_diagnostics(w, name, step) -> None:
+    """Why a serving endpoint failed: its state, pending config and served-entity build logs."""
+    if not name:
+        return
+    try:
+        ep = w.serving_endpoints.get(name).as_dict()
+    except Exception as exc:  # noqa: BLE001
+        step("endpoint_state", name=name, error=f"{type(exc).__name__}: {str(exc)[:300]}")
+        return
+    step("endpoint_state", name=name, state=ep.get("state"), pending_config=ep.get("pending_config"), config=ep.get("config"))
+    cfg = ep.get("pending_config") or ep.get("config") or {}
+    for se in cfg.get("served_entities") or []:
+        served = se.get("name")
+        for kind, fn in (("build_logs", w.serving_endpoints.build_logs), ("logs", w.serving_endpoints.logs)):
+            try:
+                text = getattr(fn(name, served), "logs", "") or ""
+                step(f"served_entity_{kind}", served=served, tail=text[-4000:])
+            except Exception as exc:  # noqa: BLE001
+                step(f"served_entity_{kind}", served=served, error=f"{type(exc).__name__}: {str(exc)[:300]}")
 
 
 def test_feature_views_parity(env):
