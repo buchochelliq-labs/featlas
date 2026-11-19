@@ -22,7 +22,7 @@ def test_generated_job_is_paused_bounded_and_idempotent():
     [task] = spec["tasks"]
     params = task["python_wheel_task"]["parameters"]
     assert task["max_retries"] == 2 and "--publish" in params
-    assert params[params.index("--as-of-from-trigger") + 1] == "{{job.trigger.time.iso_datetime}}"
+    assert params[params.index("--as-of-from-trigger") + 1] == "{{job.trigger.time.timestamp_ms}}"
     assert "--publication-id" not in params, "the identity is derived from the slot, so retries are idempotent"
     assert spec["tags"]["featlas_plan_digest"] == g["manifest"]["plan_digest"]
 
@@ -41,6 +41,9 @@ def test_manual_deployments_get_no_job():
         ("2026-06-01T10:00:00Z", 3600, 0, "2026-06-01T10:00:00Z"),
         ("2026-06-01T01:59:59Z", 86400, 7200, "2026-05-31T02:00:00Z"),
         ("2026-06-01T02:00:00Z", 86400, 7200, "2026-06-01T02:00:00Z"),
+        # {{job.trigger.time.timestamp_ms}}: epoch milliseconds of 2026-06-01T10:37:12.347Z.
+        ("1780310232347", 3600, 0, "2026-06-01T10:00:00Z"),
+        ("1780310232347", 300, 0, "2026-06-01T10:35:00Z"),
     ],
 )
 def test_as_of_is_the_trigger_floored_to_the_schedule_grid(trigger, grid, offset, want):
@@ -48,6 +51,14 @@ def test_as_of_is_the_trigger_floored_to_the_schedule_grid(trigger, grid, offset
     from featlas_databricks.cli import as_of_from_trigger
 
     assert as_of_from_trigger(trigger, grid, offset) == want
+
+
+def test_trigger_time_without_a_zone_designator_is_refused():
+    pytest.importorskip("pyspark")
+    from featlas_databricks.cli import as_of_from_trigger
+
+    with pytest.raises(ValueError, match="ending in Z"):
+        as_of_from_trigger("2026-11-19T07:50:39.347", 300, 0)  # as Databricks renders iso_datetime
 
 
 def test_job_bundle_becomes_a_jobs_api_payload_unchanged_but_for_variables():

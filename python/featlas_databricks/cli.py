@@ -22,9 +22,15 @@ from .runner import PublicationAuthorization, SnapshotRun, format_instant, parse
 
 def as_of_from_trigger(trigger: str, grid_seconds: int, offset_seconds: int) -> str:
     """The scheduled as_of for a job trigger time: the trigger floored to the deployment's
-    interval grid (epoch + offset + k * grid). Retries of the same run get the same as_of."""
-    t = parse_instant(trigger)
-    secs = int(t.timestamp())
+    interval grid (epoch + offset + k * grid). Retries of the same run get the same as_of.
+
+    ``trigger`` is the job's ``{{job.trigger.time.timestamp_ms}}`` (epoch milliseconds) or a UTC
+    instant ending in ``Z``. ``{{job.trigger.time.iso_datetime}}`` is not accepted: Databricks
+    renders it without a zone designator (observed ``2026-11-19T07:50:39.347``)."""
+    if trigger.isdigit():
+        secs = int(trigger) // 1000
+    else:
+        secs = int(parse_instant(trigger).timestamp())
     k = (secs - offset_seconds) // grid_seconds
     from datetime import datetime, timezone
 

@@ -2129,7 +2129,7 @@ pub fn job_bundle(plan: &Plan, d: &Deployment, project_id: &str) -> Result<Value
                     "entry_point": "featlas-databricks",
                     "parameters": [
                         "${var.project_path}", "--deployment", d.id, "--feature-set", fs.id,
-                        "--as-of-from-trigger", "{{job.trigger.time.iso_datetime}}",
+                        "--as-of-from-trigger", "{{job.trigger.time.timestamp_ms}}",
                         "--grid-seconds", e.to_string(), "--offset-seconds", o.to_string(),
                         "--status-table", "${var.source_status_table}",
                         "--publish", "--environment", d.environment,

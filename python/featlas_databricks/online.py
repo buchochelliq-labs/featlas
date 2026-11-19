@@ -149,7 +149,7 @@ class OnlinePublisher:
         self._step("create_serving_endpoint", name=name, entity=spec)
         self.w.serving_endpoints.create_and_wait(
             name=name,
-            config=EndpointCoreConfigInput(served_entities=[ServedEntityInput(entity_name=spec, scale_to_zero_enabled=True, workload_size="Small")]),
+            config=EndpointCoreConfigInput(name=name, served_entities=[ServedEntityInput(entity_name=spec, scale_to_zero_enabled=True, workload_size="Small")]),
             timeout=__import__("datetime").timedelta(seconds=timeout_s),
         )
         return name
