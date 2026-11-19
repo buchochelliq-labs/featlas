@@ -1,0 +1,510 @@
+{
+  "run": "44501535773p",
+  "project": "projects/live/platform.yaml",
+  "scopes": [
+    "databricks-connect",
+    "jobs",
+    "files",
+    "unity-catalog",
+    "pipelines",
+    "model-serving",
+    "model-serving-inference",
+    "mlflow"
+  ],
+  "tests": {
+    "scheduled_job": {
+      "steps": [
+        {
+          "step": "probe",
+          "at": "2026-11-19T10:04:04.309554Z",
+          "dbr_version": "19.15.x-aarch64-photon-scala2.13",
+          "arch": "aarch64",
+          "wheel": "featlas-0.1.0-cp312-abi3-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "step": "uploaded",
+          "at": "2026-11-19T10:04:05.970026Z",
+          "base": "/Volumes/featlas/synthetic_raw/featlas_artifacts/44501535773p"
+        },
+        {
+          "step": "job_created",
+          "at": "2026-11-19T10:04:06.526188Z",
+          "job_id": 358982423943113,
+          "schedule": {
+            "quartz_cron_expression": "0 0/5 * * * ?",
+            "timezone_id": "UTC",
+            "pause_status": "PAUSED"
+          },
+          "environments": [
+            {
+              "environment_key": "featlas",
+              "spec": {
+                "client": "3",
+                "dependencies": [
+                  "/Volumes/featlas/synthetic_raw/featlas_artifacts/44501535773p/featlas-0.1.0-cp312-abi3-manylinux_2_28_aarch64.whl"
+                ]
+              }
+            }
+          ],
+          "timeout_seconds": 900
+        },
+        {
+          "step": "run_now",
+          "at": "2026-11-19T10:05:37.958051Z",
+          "run_id": 106902754717725,
+          "trigger": "ONE_TIME",
+          "state": {
+            "life_cycle_state": "TERMINATED",
+            "result_state": "SUCCESS",
+            "state_message": "",
+            "user_cancelled_or_timedout": false
+          },
+          "start_time": 1795082646746,
+          "end_time": 1795082733514,
+          "tasks": [
+            {
+              "task_key": "device_reliability",
+              "state": {
+                "life_cycle_state": "TERMINATED",
+                "result_state": "SUCCESS",
+                "state_message": "",
+                "user_cancelled_or_timedout": false
+              },
+              "attempt": 0,
+              "logs_tail": "  \"parameters\": []\n    },\n    {\n      \"statement\": \"version_device_registry\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_device_registry\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"version_fault_events\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_fault_events\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_available\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_deduped\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_selected\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_population_device_reliability\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_available\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_deduped\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_selected\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_device_registry_invalid_rows\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_fault_events_invalid_rows\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_primary_key_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_logical_conflicts\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_population_device_reliability_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_primary_key_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_logical_conflicts\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d_quality_1_minimum\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d_quality_4_finite\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_snapshot_device_reliability\",\n      \"parameters\": [\n        \"as_of\",\n        \"materialization_id\",\n        \"publication_id\",\n        \"publication_sequence\"\n      ]\n    },\n    {\n      \"statement\": \"commit_candidates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"publish_snapshot\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"commit_candidates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"commit_history\",\n      \"parameters\": [\n        \"from_version\",\n        \"publication_id\",\n        \"to_version\"\n      ]\n    },\n    {\n      \"statement\": \"record_published_at\",\n      \"parameters\": [\n        \"observed_commit_timestamp\",\n        \"publication_id\"\n      ]\n    }\n  ],\n  \"plan_digest\": \"4e369f06258920dc7ae08280ba8963871161315eff199ea2e71c0ee3a36fa684\",\n  \"project_file_sha256\": \"36951c3d486b15b97cb6c72db19a8a633081d0c7d2e7274d5d56d6c4595a65c1\",\n  \"generator\": \"dev.featlas:databricks@0.1.0\"\n}\n",
+              "error": null,
+              "error_trace": ""
+            }
+          ]
+        },
+        {
+          "step": "unpaused",
+          "at": "2026-11-19T10:05:38.322355Z"
+        },
+        {
+          "step": "paused",
+          "at": "2026-11-19T10:10:20.174277Z",
+          "saw_periodic": true
+        },
+        {
+          "step": "scheduled_run",
+          "at": "2026-11-19T10:11:21.002576Z",
+          "run_id": 176156815026310,
+          "trigger": "PERIODIC",
+          "state": {
+            "life_cycle_state": "TERMINATED",
+            "result_state": "SUCCESS",
+            "state_message": "",
+            "user_cancelled_or_timedout": false
+          },
+          "start_time": 1795083004465,
+          "end_time": 1795083066416,
+          "tasks": [
+            {
+              "task_key": "device_reliability",
+              "state": {
+                "life_cycle_state": "TERMINATED",
+                "result_state": "SUCCESS",
+                "state_message": "",
+                "user_cancelled_or_timedout": false
+              },
+              "attempt": 0,
+              "logs_tail": "  \"parameters\": []\n    },\n    {\n      \"statement\": \"version_device_registry\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_device_registry\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"version_fault_events\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_fault_events\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_available\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_deduped\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_selected\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_population_device_reliability\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_available\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_deduped\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_selected\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_device_registry_invalid_rows\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_raw_fault_events_invalid_rows\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_primary_key_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_device_registry_ai_logical_conflicts\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_population_device_reliability_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_primary_key_duplicates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_fault_events_ai_logical_conflicts\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d\",\n      \"parameters\": [\n        \"as_of\"\n      ]\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d_quality_1_minimum\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_feature_device_fault_count_7d_quality_4_finite\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"fl_snapshot_device_reliability\",\n      \"parameters\": [\n        \"as_of\",\n        \"materialization_id\",\n        \"publication_id\",\n        \"publication_sequence\"\n      ]\n    },\n    {\n      \"statement\": \"commit_candidates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"publish_snapshot\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"commit_candidates\",\n      \"parameters\": []\n    },\n    {\n      \"statement\": \"commit_history\",\n      \"parameters\": [\n        \"from_version\",\n        \"publication_id\",\n        \"to_version\"\n      ]\n    },\n    {\n      \"statement\": \"record_published_at\",\n      \"parameters\": [\n        \"observed_commit_timestamp\",\n        \"publication_id\"\n      ]\n    }\n  ],\n  \"plan_digest\": \"4e369f06258920dc7ae08280ba8963871161315eff199ea2e71c0ee3a36fa684\",\n  \"project_file_sha256\": \"36951c3d486b15b97cb6c72db19a8a633081d0c7d2e7274d5d56d6c4595a65c1\",\n  \"generator\": \"dev.featlas:databricks@0.1.0\"\n}\n",
+              "error": null,
+              "error_trace": ""
+            }
+          ]
+        },
+        {
+          "step": "publications",
+          "at": "2026-11-19T10:11:22.633079Z",
+          "rows": [
+            {
+              "publication_id": "fault_job/device_reliability/2026-11-19T10:00:00Z",
+              "feature_as_of": "2026-11-19 10:00:00",
+              "n": 2,
+              "evidenced": 2
+            },
+            {
+              "publication_id": "fault_job/device_reliability/2026-11-19T10:10:00Z",
+              "feature_as_of": "2026-11-19 10:10:00",
+              "n": 2,
+              "evidenced": 2
+            }
+          ]
+        },
+        {
+          "step": "job_equals_interactive",
+          "at": "2026-11-19T10:11:37.421782Z",
+          "slot": "2026-11-19T10:10:00Z",
+          "rows": 2,
+          "diffs": []
+        },
+        {
+          "step": "job_deleted",
+          "at": "2026-11-19T10:11:37.613906Z",
+          "job_id": 358982423943113
+        }
+      ],
+      "result": "passed",
+      "job_id": 358982423943113,
+      "slots": [
+        "2026-11-19T10:00:00Z",
+        "2026-11-19T10:10:00Z"
+      ]
+    },
+    "online_publication": {
+      "steps": [
+        {
+          "step": "staged",
+          "at": "2026-11-19T10:12:11.355994Z",
+          "table": "`featlas`.`synthetic_features`.`device_reliability_online_src_44501535773p`",
+          "rows": 2,
+          "visibility": "staged_for_online_store"
+        },
+        {
+          "step": "online_visible",
+          "at": "2026-11-19T10:19:36.826723Z",
+          "surface": "online_store",
+          "online_store": {
+            "name": "featlas-free",
+            "state": "State.AVAILABLE",
+            "capacity": "CU_1"
+          },
+          "online_table": "featlas.synthetic_features.device_reliability_online_src_44501535773p_online",
+          "serving_endpoint": "featlas-dr-44501535773p",
+          "publication_id": "online-44501535773p",
+          "staged_commit_timestamp": "2026-11-19T10:12:08Z",
+          "published_at": "2026-11-19T10:19:33.557561Z",
+          "observation": {
+            "keys": 2,
+            "polls": 1
+          },
+          "sync": {
+            "online_table": "featlas.synthetic_features.device_reliability_online_src_44501535773p_online",
+            "result": "<PublishedTable: online_table_name='featlas.synthetic_features.device_reliability_online_src_44501535773p_online', pipeline_id='c8f26638-0548-4c5a-8fcb-f9c2a998bd37'>"
+          },
+          "publisher_steps": [
+            {
+              "step": "create_online_store",
+              "at": "2026-11-19T10:12:13.010926Z",
+              "name": "featlas-free",
+              "capacity": "CU_1"
+            },
+            {
+              "step": "online_store_available",
+              "at": "2026-11-19T10:12:17.109035Z",
+              "name": "featlas-free",
+              "state": "State.AVAILABLE"
+            },
+            {
+              "step": "publish_table",
+              "at": "2026-11-19T10:12:17.357437Z",
+              "source": "featlas.synthetic_features.device_reliability_online_src_44501535773p",
+              "online_table": "featlas.synthetic_features.device_reliability_online_src_44501535773p_online"
+            },
+            {
+              "step": "create_feature_spec",
+              "at": "2026-11-19T10:12:29.140634Z",
+              "name": "featlas.synthetic_features.device_reliability_online_spec"
+            },
+            {
+              "step": "create_serving_endpoint",
+              "at": "2026-11-19T10:12:29.140673Z",
+              "name": "featlas-dr-44501535773p",
+              "entity": "featlas.synthetic_features.device_reliability_online_spec"
+            },
+            {
+              "step": "online_visible",
+              "at": "2026-11-19T10:19:33.737789Z",
+              "publication_id": "online-44501535773p",
+              "polls": 1
+            }
+          ]
+        },
+        {
+          "step": "served_equals_staged",
+          "at": "2026-11-19T10:19:37.481011Z",
+          "keys": 2,
+          "diffs": []
+        },
+        {
+          "step": "teardown",
+          "at": "2026-11-19T10:19:41.425336Z",
+          "done": [
+            "serving_endpoint",
+            "feature_spec",
+            "online_table",
+            "online_store"
+          ]
+        }
+      ],
+      "result": "passed",
+      "published_at": "2026-11-19T10:19:33.557561Z",
+      "staged_commit_timestamp": "2026-11-19T10:12:08Z"
+    },
+    "feature_views": {
+      "steps": [
+        {
+          "step": "feature_store_api",
+          "at": "2026-11-19T10:19:41.478822Z",
+          "path": "/api/2.0/feature-store/feature-tables/search",
+          "accepted": false,
+          "error": "NotFound: Workspace Feature Store has been deprecated in the current workspace. Databricks recommends using Feature Engineering in Unity Catalog. Please reach out to system admin if you have any more questions."
+        },
+        {
+          "step": "feature_store_api",
+          "at": "2026-11-19T10:19:41.528318Z",
+          "path": "/api/2.0/feature-engineering/features",
+          "accepted": false,
+          "error": "InvalidParameterValue: Field 'catalog_name' is required, expected non-default value (not \"\")!"
+        },
+        {
+          "step": "mapping",
+          "at": "2026-11-19T10:19:41.653736Z",
+          "features": [
+            {
+              "column": "events_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "fault_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "max_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "mean_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "last_severity_1h",
+              "api": "feature_views",
+              "reasons": []
+            },
+            {
+              "column": "distinct_codes_1h",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "count_distinct: Feature Views offer only ApproxCountDistinct"
+              ]
+            },
+            {
+              "column": "seconds_since_event",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "recency has no Feature View function"
+              ]
+            },
+            {
+              "column": "fault_severity_per_event_1h",
+              "api": "uc_feature_tables",
+              "reasons": [
+                "derived expression features are computed from other features, not from a source"
+              ]
+            }
+          ]
+        },
+        {
+          "step": "compare",
+          "at": "2026-11-19T10:20:21.635229Z",
+          "result": {
+            "device.events_1h": {
+              "column": "events_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "value",
+                "value": 0
+              }
+            },
+            "device.fault_severity_1h": {
+              "column": "fault_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.max_severity_1h": {
+              "column": "max_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.mean_severity_1h": {
+              "column": "mean_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            },
+            "device.last_severity_1h": {
+              "column": "last_severity_1h",
+              "rows_compared": 3,
+              "mismatches": [],
+              "empty_window_served_as_null": 0,
+              "empty_window_spec": {
+                "spec": "null"
+              }
+            }
+          },
+          "featlas": [
+            {
+              "tenant_id": "t1",
+              "device_id": "d1",
+              "events_1h": 3,
+              "events_1h_state": "ok",
+              "fault_severity_1h": 2.0,
+              "fault_severity_1h_state": "ok",
+              "max_severity_1h": 2.0,
+              "max_severity_1h_state": "ok",
+              "mean_severity_1h": 1.5,
+              "mean_severity_1h_state": "ok",
+              "last_severity_1h": null,
+              "last_severity_1h_state": "ok",
+              "distinct_codes_1h": 2,
+              "distinct_codes_1h_state": "ok",
+              "seconds_since_event": 600,
+              "seconds_since_event_state": "ok",
+              "fault_severity_per_event_1h": 0.6666666666666666,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            },
+            {
+              "tenant_id": "t2",
+              "device_id": "d1",
+              "events_1h": 2,
+              "events_1h_state": "ok",
+              "fault_severity_1h": 5.0,
+              "fault_severity_1h_state": "ok",
+              "max_severity_1h": 4.5,
+              "max_severity_1h_state": "ok",
+              "mean_severity_1h": 2.5,
+              "mean_severity_1h_state": "ok",
+              "last_severity_1h": 0.5,
+              "last_severity_1h_state": "ok",
+              "distinct_codes_1h": 2,
+              "distinct_codes_1h_state": "ok",
+              "seconds_since_event": 60,
+              "seconds_since_event_state": "ok",
+              "fault_severity_per_event_1h": 2.5,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            },
+            {
+              "tenant_id": "t1",
+              "device_id": "d2",
+              "events_1h": 0,
+              "events_1h_state": "empty",
+              "fault_severity_1h": null,
+              "fault_severity_1h_state": "empty",
+              "max_severity_1h": null,
+              "max_severity_1h_state": "empty",
+              "mean_severity_1h": null,
+              "mean_severity_1h_state": "empty",
+              "last_severity_1h": null,
+              "last_severity_1h_state": "empty",
+              "distinct_codes_1h": 0,
+              "distinct_codes_1h_state": "empty",
+              "seconds_since_event": null,
+              "seconds_since_event_state": "empty",
+              "fault_severity_per_event_1h": null,
+              "fault_severity_per_event_1h_state": "ok",
+              "feature_as_of": "2026-06-01 12:00:00",
+              "published_at": null,
+              "publication_sequence": 0,
+              "publication_id": "x",
+              "materialization_id": "x"
+            }
+          ],
+          "feature_views": [
+            {
+              "device_id": "d1",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t1",
+              "events_1h": 3,
+              "fault_severity_1h": 2.0,
+              "max_severity_1h": 2.0,
+              "mean_severity_1h": 1.5,
+              "last_severity_1h": null
+            },
+            {
+              "device_id": "d1",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t2",
+              "events_1h": 2,
+              "fault_severity_1h": 5.0,
+              "max_severity_1h": 4.5,
+              "mean_severity_1h": 2.5,
+              "last_severity_1h": 0.5
+            },
+            {
+              "device_id": "d2",
+              "occurred_at": "2026-06-01 12:00:00",
+              "tenant_id": "t1",
+              "events_1h": 0,
+              "fault_severity_1h": null,
+              "max_severity_1h": null,
+              "mean_severity_1h": null,
+              "last_severity_1h": null
+            }
+          ]
+        }
+      ],
+      "result": "passed",
+      "compared": {
+        "device.events_1h": 3,
+        "device.fault_severity_1h": 3,
+        "device.max_severity_1h": 3,
+        "device.mean_severity_1h": 3,
+        "device.last_severity_1h": 3
+      },
+      "empty_window_served_as_null": {
+        "device.events_1h": 0,
+        "device.fault_severity_1h": 0,
+        "device.max_severity_1h": 0,
+        "device.mean_severity_1h": 0,
+        "device.last_severity_1h": 0
+      }
+    }
+  },
+  "mlflow_creds_patched": [
+    "mlflow.data.delta_dataset_source",
+    "mlflow.genai.judges.typesafe",
+    "mlflow.genai.scorers.registry",
+    "mlflow.store._unity_catalog.registry.rest_store",
+    "mlflow.store.artifact.databricks_artifact_repo",
+    "mlflow.store.artifact.databricks_models_artifact_repo",
+    "mlflow.store.artifact.dbfs_artifact_repo",
+    "mlflow.store.artifact.unity_catalog_models_artifact_repo",
+    "mlflow.store.model_registry.databricks_workspace_model_registry_rest_store",
+    "mlflow.tracking._tracking_service.utils",
+    "mlflow.utils.databricks_utils",
+    "mlflow.utils.oss_registry_utils"
+  ],
+  "runtime": {
+    "spark_version": "4.2.0"
+  }
+}

@@ -26,7 +26,7 @@
         "client.databricks-connect": "17.3.16",
         "client.databricks-sdk": "0.169.0",
         "client.python": "3.12.16",
-        "lock.run_id": "44488112120"
+        "lock.run_id": "44501535773"
       }
     }
   ],
@@ -39,9 +39,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
@@ -56,9 +56,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
@@ -73,9 +73,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
@@ -90,9 +90,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
@@ -107,9 +107,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
           "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
         }
       ],
       "limitations": [
@@ -124,9 +124,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-live.json",
-          "sha256": "f7e91a6b227452b9596193b37f7a527fa7dcf036cc6ec5f99e6935442206447f",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-live.json",
+          "sha256": "cbde130fbe137e554d1f587dea4d1800b7d2ef6c20e6ee108a7d6fe64545b0a8",
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
@@ -141,9 +141,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-live.json",
-          "sha256": "f7e91a6b227452b9596193b37f7a527fa7dcf036cc6ec5f99e6935442206447f",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-live.json",
+          "sha256": "cbde130fbe137e554d1f587dea4d1800b7d2ef6c20e6ee108a7d6fe64545b0a8",
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
@@ -158,9 +158,9 @@
       "evidence_scope": "live_target",
       "evidence": [
         {
-          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-live.json",
-          "sha256": "f7e91a6b227452b9596193b37f7a527fa7dcf036cc6ec5f99e6935442206447f",
-          "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-live.json",
+          "sha256": "cbde130fbe137e554d1f587dea4d1800b7d2ef6c20e6ee108a7d6fe64545b0a8",
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 8 passed on Unity Catalog tables (projects/live/01_fault_count.yaml, fault_prod): preflight, DDL with PRIMARY KEY TIMESERIES, one MERGE with VERSION AS OF sources, scan-budget check, CDF commit evidence over retained commits, retention preflight, consumer and replay reads, idempotent retry, identity conflict, crash recovery, table identity"
         }
       ],
       "limitations": [
@@ -171,18 +171,23 @@
       "adapter": "databricks_platform",
       "role": "orchestrator",
       "capability": "core.scheduling",
-      "status": "unverified",
-      "evidence_scope": "static",
-      "evidence": [],
+      "status": "supported_native",
+      "evidence_scope": "live_target",
+      "evidence": [
+        {
+          "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/platform-run-44501535773/databricks-platform.json",
+          "sha256": "7aed6c239bbe1f2a85bda57b52874fee49b60f99ea8394268a92b177e27da458",
+          "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): Platform job of the same run (same sources): the generated job (bundle job.yml, serverless environment, wheel and project in a Unity Catalog volume) was created through the Jobs API; an on-demand run (ONE_TIME) and a run fired by the job's own 5-minute schedule (PERIODIC) succeeded and published the slots 10:00Z and 10:10Z (2 rows each, every row with observed published_at); the job's published slot equals an interactive recomputation (0 diffs); job deleted"
+        }
+      ],
       "limitations": [
-        "A paused Databricks Asset Bundle job (databricks/job.yml: UTC Quartz schedule on the deployment grid, slot-derived idempotent publication identity, retries, max_concurrent_runs and timeout from budget/SLO) is generated; deploying and running it has not been observed. No live Databricks run in databricks_lock.json covers this capability for the compiled adapter."
+        "Observed only on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0; Azure Databricks and classic clusters were not observed. Evidence is pinned to adapter source sha256 a0d642506440f6fa7fd81a22c3fea8417f7be2bec71da8aab99b8d8615724eb7 and host runner sha256 a024c552e832f2fdbedddcd679300069372dd3d1c03b318875da069773eec61f."
       ]
     }
   ],
-  "execution_ready": false,
+  "execution_ready": true,
   "limitations": [
     "Requirements include planner-derived operations as well as declared ones; declared support strings are never treated as evidence.",
-    "Evidence references are recorded, not fetched or authenticated by this report generator.",
-    "Execution is not ready: at least one requirement is unsupported, unverified, or lacks evidence adequate for the execution scope."
+    "Evidence references are recorded, not fetched or authenticated by this report generator."
   ]
 }

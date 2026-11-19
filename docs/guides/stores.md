@@ -63,7 +63,7 @@ Views; they stay with featlas. `featlas_databricks.feature_views` builds the map
 compares them with featlas' snapshot (`compare`); registering them in Unity Catalog
 (`register`) is resource creation and needs authorization. The live platform suite runs this
 comparison (`tests/test_databricks_platform.py::test_feature_views_parity`); it passed in platform
-run 42993010899 on Databricks Free Edition with 0 mismatches.
+runs 42993010899, 44488112120 and 44501535773 on Databricks Free Edition with 0 mismatches.
 
 ## Online Feature Store and Feature Serving (role `online_store`)
 
@@ -107,7 +107,7 @@ Publication, step by step:
 `featlas-databricks <project> --deployment fault_online --feature-set device_reliability
 --publish ...` runs all five steps (`--online-sample` keys are observed). The job, the endpoint
 and the store cost compute: delete test resources with `OnlinePublisher.teardown`. Verified on
-Databricks Free Edition in platform run 44488112120.
+Databricks Free Edition in platform runs 44488112120 and 44501535773.
 
 ## Feast (`dev.featlas:feast`)
 

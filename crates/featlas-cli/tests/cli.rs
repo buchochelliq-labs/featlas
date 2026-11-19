@@ -128,8 +128,8 @@ fn capability_reports_positive_and_rejecting() {
         .all(|c| c["evidence_scope"] == "local_reference"
             && !c["evidence"].as_array().unwrap().is_empty()));
     // Databricks deployment: live-pinned capabilities are supported_native with live_target
-    // evidence (adapter lock), everything else unverified; scheduling is never observed, so the
-    // deployment is not execution-ready.
+    // evidence (adapter lock), everything else unverified; the deployment is execution-ready
+    // exactly when every check (scheduling included) is live-verified.
     let (code, out) = run(&[
         "capabilities",
         &project("01_fault_count.yaml"),
@@ -141,16 +141,17 @@ fn capability_reports_positive_and_rejecting() {
     assert_eq!(code, 0);
     let v = json_of(&out);
     assert_eq!(v["execution_scope"], json!("external_target"));
-    assert_eq!(v["execution_ready"], json!(false));
-    for c in v["checks"].as_array().unwrap() {
-        let live = c["status"] == "supported_native"
+    let checks = v["checks"].as_array().unwrap();
+    let is_live = |c: &Value| {
+        c["status"] == "supported_native"
             && c["evidence_scope"] == "live_target"
-            && !c["evidence"].as_array().unwrap().is_empty();
-        assert!(live || c["status"] == "unverified", "{c}");
-        if c["capability"] == "core.scheduling" {
-            assert_eq!(c["status"], "unverified");
-        }
+            && !c["evidence"].as_array().unwrap().is_empty()
+    };
+    for c in checks {
+        assert!(is_live(c) || c["status"] == "unverified", "{c}");
     }
+    assert!(checks.iter().any(|c| c["capability"] == "core.scheduling"));
+    assert_eq!(v["execution_ready"], json!(checks.iter().all(is_live)));
     // Custom contract on Databricks: rejected as unsupported.
     let (_, out) = run(&[
         "capabilities",
@@ -210,7 +211,11 @@ fn generate_writes_manifest_and_refuses_unsupported() {
     assert_eq!(code, 0);
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(out.join("manifest.json")).unwrap()).unwrap();
-    assert_eq!(manifest["execution_ready"], json!(false));
+    let report: Value = serde_json::from_str(
+        &std::fs::read_to_string(out.join("capability-report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(manifest["execution_ready"], report["execution_ready"]);
     assert!(manifest["files"]
         .as_array()
         .unwrap()
@@ -348,9 +353,16 @@ fn text_output_is_plain_when_piped() {
         "text",
     ]);
     assert_eq!(code, 0, "{out}");
+    let (_, report) = run(&[
+        "capabilities",
+        &project("01_fault_count.yaml"),
+        "--deployment",
+        "fault_prod",
+    ]);
+    let ready = json_of(&report)["execution_ready"].as_bool().unwrap();
     assert!(
         out.contains("Capability checks: fault_prod")
-            && out.ends_with("plannable=true execution_ready=false\n"),
+            && out.ends_with(&format!("plannable=true execution_ready={ready}\n")),
         "{out}"
     );
 }

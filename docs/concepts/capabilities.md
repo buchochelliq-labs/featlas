@@ -60,7 +60,8 @@ still required. This is why the kit's sample report for example 06 is flagged
 
 Example: the positive local report `docs/evidence/capability-report-positive-local.json` is
 `execution_ready: true` with scope `local_reference`; the Databricks report
-`docs/evidence/capability-report-databricks.json` is `execution_ready: false`.
+`docs/evidence/capability-report-databricks.json` is `execution_ready: true` with scope `live_target`
+(pinned run 44501535773; it reverts to `false` as soon as a vouched source changes).
 
 ## The Databricks adapter lock
 
@@ -101,15 +102,15 @@ logic does not invalidate the lowering pin.
 
 ### What this commit reports
 
-The lock pins seven runs; each vouches only while the compiled files equal the ones it tested.
-Run 44488112120 (`databricks.rs` `a0d64250…`, `runner.py` `a024c552…`, `cli.py` `51ffb65a…`,
+The lock pins eight runs; each vouches only while the compiled files equal the ones it tested.
+Run 44501535773 (`databricks.rs` `a0d64250…`, `runner.py` `a024c552…`, `cli.py` `51ffb65a…`,
 `online.py` `4b922774…`, `feature_views.py` `c83cc6fa…`) tested the compiled sources of this
 commit, so step 2 applies with it: the eight core checks of `projects/01_fault_count.yaml`
 (`fault_prod`), `core.label_construction` (project 03), and — from the platform job of the same
-run — `online_store` `core.atomic_publication` and `core.online_publication` are
-`supported_native` with `live_target` evidence. `core.scheduling` stays `unverified`/`static`
-until a run whose scheduled-job test passes is pinned, so `fault_prod` is not execution-ready
-while the online deployment `fault_online` is (`docs/evidence/capability-report-databricks-online.json`). Real output of
+run — `orchestrator` `core.scheduling` and `online_store` `core.atomic_publication` and
+`core.online_publication` are `supported_native` with `live_target` evidence, so both `fault_prod`
+and the online deployment `fault_online` (`docs/evidence/capability-report-databricks-online.json`)
+are execution-ready. Real output of
 `fe-spec capabilities projects/01_fault_count.yaml --deployment fault_prod`, first check:
 
 ```json
@@ -121,9 +122,9 @@ while the online deployment `fault_online` is (`docs/evidence/capability-report-
   "evidence_scope": "live_target",
   "evidence": [
     {
-      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44488112120#docs/evidence/databricks-live/run-44488112120/databricks-differential.json",
+      "uri": "https://github.com/buchochelliq-labs/featlas/actions/runs/44501535773#docs/evidence/databricks-live/run-44501535773/databricks-differential.json",
       "sha256": "e4c1c109d12a338654c5e53e95f53395063d0f9f61998dd945ed5a7b57f5d437",
-      "description": "Live run 44488112120 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 87bbfa4f8529, artifact sha256 4f1badec0304f430a9beb268f39f63a4daf8b96edfdfef09333623431cbb31fa): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
+      "description": "Live run 44501535773 on Databricks Free Edition (aws, serverless compute), Databricks Runtime 19.15.x-aarch64-photon-scala2.13, Spark 4.2.0 (tested commit 394bb06031ad, artifact sha256 264864375729347362bf48f0501ff15917cc4be041f42848073a9b79bd2d3704): 49 differential cases (46 reference cases of projects 01, 02, 03, 05, 06 and the 3 quality-policy projects) vs goldens and core; fixture sources as session temp views"
     }
   ],
   "limitations": [
@@ -132,7 +133,7 @@ while the online deployment `fault_online` is (`docs/evidence/capability-report-
 }
 ```
 
-and the report ends with `"execution_ready": false` because of `core.scheduling`. The compiled
+and the report ends with `"execution_ready": true`. The compiled
 digests depend on the exact source bytes, so any edit to those files sends the checks back to
 step 3 until a new run is pinned. How to re-pin is in the
 [Databricks guide](../guides/databricks.md#re-pinning-the-adapter-lock).

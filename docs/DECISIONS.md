@@ -186,7 +186,7 @@ Each task floors the trigger time to the grid for its `as_of` and derives its pu
 from it (`<deployment>/<feature set>/<as_of>`, sequence = epoch seconds), so a retried or
 duplicated run of the same slot takes the host's retry path and writes nothing new. The job is
 created **paused**: deploying the bundle authorizes nothing; unpausing it is the publication
-approval. Observed live in platform run 44488112120 (on-demand and `PERIODIC` runs, both slots published with evidence); the capability is pinned only from a run whose scheduled-job test passes in full. The job passes `{{job.trigger.time.timestamp_ms}}`: Databricks renders `{{job.trigger.time.iso_datetime}}` without a zone designator.
+approval. Verified live in platform run 44501535773 (pinned) and 44494933029: on-demand and `PERIODIC` runs published both slots with evidence, and the job's last slot equals an interactive recomputation; run 44488112120 observed the same runs but its cross-check shared tables with the main suite. The job passes `{{job.trigger.time.timestamp_ms}}`: Databricks renders `{{job.trigger.time.iso_datetime}}` without a zone designator.
 
 
 ## D15. Online store targets on Databricks (SEM-PORT-005, SEM-PORT-009, core.online_publication)

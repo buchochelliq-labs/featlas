@@ -334,7 +334,7 @@ recorded `logical_plan_digest` (`667733be…`) is the same as the one generated 
 `projects/01_fault_count.yaml`, because the live variant changes deployment bindings only.
 
 Not exercised: Azure Databricks, classic clusters, retention/VACUUM, grants beyond the test
-principal's, scheduling, online serving.
+principal's. Scheduling, online serving and Feature Views are the `platform` job's scope.
 
 ## Re-pinning the adapter lock
 
@@ -355,7 +355,8 @@ changing either file:
    the vouched-for sources and names existing evidence, and `evidence_files_match_the_lock`
    re-hashes the committed evidence files.
 5. `fe-spec capabilities … --deployment fault_prod` should then report `supported_native` /
-   `live_target` for the verified pairs. `core.scheduling` stays unverified (never vouched for).
+   `live_target` for the verified pairs. `orchestrator`/`core.scheduling` and the `online_store` pairs come
+   from the `platform` job of the same run (evidence `scheduling` and `online`).
 
 The newest matching run wins (`current_run` searches `verified_runs` from the end). These steps are
 derived from the lock format and its tests; there is no script that automates them.

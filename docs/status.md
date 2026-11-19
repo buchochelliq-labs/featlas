@@ -17,13 +17,13 @@ otherwise; building this site does not re-measure them.
 | Quality policies `error` / `warn` / `quarantine` | Done in the core and in generated Spark SQL ([Quality policies](concepts/quality.md), DECISIONS D12). | `projects/quality/*.yaml`; local Spark differential (quality projects + `test_quarantine_reports_the_violating_rows_and_warn_keeps_values`) |
 | Label datasets | Done in the core (`fe-spec label`) and lowered to Spark (`core.label_construction`, `featlas_databricks.labels.LabelRun`) ([Labels](concepts/labels.md)). | `projects/labels/spend_training_dataset.json` goldens; `crates/featlas-core/tests/labels.rs`; `test_generated_label_sql_matches_goldens_and_core` |
 | Databricks code generation | Done; differential-tested on local Apache Spark 4.0.1 (46 reference cases recorded in `docs/evidence/local-spark-differential.json`; the suite now also covers the quality projects and label cases). | `python/tests/test_local_spark_differential.py` |
-| Live Databricks acceptance | **Passed on Databricks Free Edition (AWS, serverless).** Run 44488112120 on the current adapter sources: differential 60/60 and Unity Catalog publication 8/8 (Runtime 19.15). Earlier runs 42984352013, 42907049080, 42890653921, 42847828392, 42816483568 and 42771706619 on earlier sources. **Azure Databricks: not run.** | [run 44488112120](evidence/databricks-live/run-44488112120/RUN.md), [platform run 44488112120](evidence/databricks-live/platform-run-44488112120/RUN.md), [run 42771706619](evidence/databricks-live/RUN.md) |
-| Databricks capability reports | Lock-driven ([Capabilities](concepts/capabilities.md#the-databricks-adapter-lock)). Run 44488112120 tested the compiled sources: compute, source-read, offline publication, replay and label construction are `supported_native`, and so are `online_store` atomic and online publication (platform job of the same run). The online deployment `fault_online` is the first with `execution_ready: true`; `fault_prod` stays `false` because `core.scheduling` is `unverified`. | `crates/featlas-adapters/src/databricks_lock.json`, `docs/evidence/capability-report-databricks.json`, `docs/evidence/capability-report-databricks-online.json` |
+| Live Databricks acceptance | **Passed on Databricks Free Edition (AWS, serverless).** Run 44501535773 on the current adapter sources: differential 60/60 and Unity Catalog publication 8/8 (Runtime 19.15), and its platform job 3/3 (scheduled job, online publication, Feature Views). Earlier runs 44488112120, 42984352013, 42907049080, 42890653921, 42847828392, 42816483568 and 42771706619 on earlier sources. **Azure Databricks: not run.** | [run 44501535773](evidence/databricks-live/run-44501535773/RUN.md), [platform run 44501535773](evidence/databricks-live/platform-run-44501535773/RUN.md), [run 42771706619](evidence/databricks-live/RUN.md) |
+| Databricks capability reports | Lock-driven ([Capabilities](concepts/capabilities.md#the-databricks-adapter-lock)). Run 44501535773 tested the compiled sources: compute, source-read, offline publication, replay and label construction are `supported_native`, and so are `orchestrator` `core.scheduling` and `online_store` atomic and online publication (platform job of the same run). Both `fault_prod` and `fault_online` report `execution_ready: true`. | `crates/featlas-adapters/src/databricks_lock.json`, `docs/evidence/capability-report-databricks.json`, `docs/evidence/capability-report-databricks-online.json` |
 | Publication protocol on local Delta Lake | Exercised (one MERGE per publication, commit-instant evidence, idempotent retry, identity conflict, crash recovery, table identity). Unity Catalog constraints, three-part names and in-commit timestamps are not exercised locally. | [EVIDENCE.md](EVIDENCE.md) |
 | Reverse engineering (`featlas_reverse`) | Done: SQL analysis (simple CTEs, per-column windows, recency, lookups), drafting with an assumptions report, characterization goldens, wide-table split, parity SQL, MCP server, three agent skills ([Reverse engineering](reverse/index.md)). | `python/tests/test_reverse.py` (local Spark), `python/tests/test_reverse_mcp.py` |
 | Storage rebinding | Boundary proof with an in-memory test double (example 06); not a second production store and not a migration. | `crates/featlas-adapters/tests/rebinding.rs` |
-| Online serving on Databricks | **Verified live** on Free Edition (platform run 44488112120): staging MERGE, `publish_table` to the Online Feature Store, FeatureSpec and Feature Serving endpoint, `published_at` recorded only when the endpoint served the publication; served values equal the staged ones ([Stores](guides/stores.md), D15). | [platform run 44488112120](evidence/databricks-live/platform-run-44488112120/RUN.md), `tests/test_local_online_staging.py` |
-| Feature Views | Per-feature exact mapping or reasons (`feature_api: feature_views`, D16). **Verified live** in platform run 42993010899: the mapped features equal featlas' values on Databricks Free Edition (0 mismatches, empty window and null latest value included). | [platform run 42993010899](evidence/databricks-live/platform-run-42993010899/RUN.md), `tests/test_scheduling.py::test_feature_views_mapping_is_exact_or_falls_back_with_reasons` |
+| Online serving on Databricks | **Verified live** on Free Edition (platform runs 44488112120 and 44501535773): staging MERGE, `publish_table` to the Online Feature Store, FeatureSpec and Feature Serving endpoint, `published_at` recorded only when the endpoint served the publication; served values equal the staged ones ([Stores](guides/stores.md), D15). | [platform run 44501535773](evidence/databricks-live/platform-run-44501535773/RUN.md), `tests/test_local_online_staging.py` |
+| Feature Views | Per-feature exact mapping or reasons (`feature_api: feature_views`, D16). **Verified live** in platform runs 42993010899, 44488112120 and 44501535773: the mapped features equal featlas' values on Databricks Free Edition (0 mismatches, empty window and null latest value included). | [platform run 42993010899](evidence/databricks-live/platform-run-42993010899/RUN.md), `tests/test_scheduling.py::test_feature_views_mapping_is_exact_or_falls_back_with_reasons` |
 | Feast store | `dev.featlas:feast`: offline and online publication with observed visibility; point-in-time reads equal the core consumer API; replay unsupported, online atomicity unverified (D17). | `tests/test_local_feast.py` (Feast 0.67.0, local) |
 | Migration | Plan only (`fe-spec migration-plan`); no transfer, backfill or cutover. | `crates/featlas-core/src/migration.rs` |
 | CLI / MCP / Python bindings | Done locally; transports share `featlas-api`. | `python/tests/test_native.py::test_transport_parity_with_cli` |
@@ -40,7 +40,7 @@ is silently emulated.
 
 | Item | How it shows up today | Source |
 | --- | --- | --- |
-| Databricks job scheduling (`core.scheduling`) | **Observed live, not yet pinned.** In platform run 44488112120 the generated job ran on demand and by its own 5-minute schedule (`PERIODIC`) and published both slots with observed evidence; the test's final cross-check failed because the platform test and the main suite shared table names (fixed). The check stays `unverified` until a fully passing run is pinned. | `databricks.rs` `job_bundle`, `featlas_databricks/jobs.py`, [platform run 44488112120](evidence/databricks-live/platform-run-44488112120/RUN.md) |
+| Databricks job scheduling (`core.scheduling`) | **Verified live** on Free Edition (platform run 44501535773, pinned): the generated job was created through the Jobs API, ran on demand and by its own 5-minute schedule (`PERIODIC`), published both slots with observed evidence, and its last slot equals an interactive recomputation (0 diffs). Also passed in platform run 44494933029 on the same sources. | `databricks.rs` `job_bundle`, `featlas_databricks/jobs.py`, [platform run 44501535773](evidence/databricks-live/platform-run-44501535773/RUN.md) |
 | Budget and retention on the target | **Done where measurable** (DECISIONS D13): `max_scan_bytes` and `max_output_rows` enforced by the host with explicit override; cost, memory and concurrency reported as not enforced by the host; retention preflight observed on Unity Catalog in runs 42816483568 and 42847828392 (unproven history reported as a warning). | `runner.py`, `test_local_delta_publication.py`, live suite |
 | Online store / Feature Serving, online publication | `unsupported` ("This adapter version provides no online_store role"; "Online publication is not implemented") | `databricks_caps.rs` |
 | Databricks Feature Views | Not used; `feature_api` must be `uc_feature_tables` | `databricks.rs` configuration schema |
@@ -51,8 +51,8 @@ is silently emulated.
 ## Not observed on a live target
 
 From [RUN.md](evidence/databricks-live/RUN.md): Azure Databricks, classic (non-serverless)
-clusters, VACUUM/log-retention behaviour, grants beyond the test principal's, scheduling, online
-serving.
+clusters, VACUUM/log-retention behaviour, grants beyond the test principal's. Scheduling, online
+serving and Feature Views were observed by the platform job (see above).
 
 ## Open review items
 
@@ -70,11 +70,6 @@ No release has been made. `rab.yml` declares the packages; see [Releases](releas
 
 The records name these as the next gates; they are not commitments with dates:
 
-1. Deploy and run the generated scheduling job (needs a Jobs-capable scope for the service
-   principal) and pin that evidence so `core.scheduling`, and with it `execution_ready`, can
-   become live-verified.
-2. Run the Azure Databricks gate of the [runbook](DATABRICKS_RUNBOOK.md).
-3. Online store / Feature Serving and Feature Views, each with live visibility evidence before a
-   capability is reported as supported.
-4. After any change to `databricks.rs` or `runner.py`: re-run the live workflow and pin the run
+1. Run the Azure Databricks gate of the [runbook](DATABRICKS_RUNBOOK.md).
+2. After any change to `databricks.rs` or `runner.py`: re-run the live workflow and pin the run
    ([Databricks guide](guides/databricks.md#re-pinning-the-adapter-lock)).

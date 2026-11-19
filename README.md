@@ -27,9 +27,9 @@ An implementation of the **Feature Engineering Specification 0.2.0** (vendored u
 | --- | --- |
 | Canonical core, fixtures (50/50 reference cases; 3 adapter-only cases not executed), negatives | Done, local evidence |
 | Databricks code generation | Done; differential-tested on **local Apache Spark 4.0.1** (46 cases) |
-| **Live Databricks acceptance** | **Passed on Databricks Free Edition (AWS, serverless)**, run 42771706619: differential 49/49 and Unity Catalog publication 7/7 (`docs/evidence/databricks-live/`). **Azure Databricks: not run.** Run 44488112120 on the current adapter (60/60 differential incl. quality and labels, 8/8 publication, plus online publication to a Databricks Online Feature Store verified by its platform job) is pinned in the adapter lock: those capabilities report `supported_native` with live evidence; scheduling is generated but unobserved, so `execution_ready: false`. |
+| **Live Databricks acceptance** | **Passed on Databricks Free Edition (AWS, serverless)**, run 42771706619: differential 49/49 and Unity Catalog publication 7/7 (`docs/evidence/databricks-live/`). **Azure Databricks: not run.** The current adapter (60/60 differential incl. quality and labels, 8/8 publication, plus the scheduled job, online publication to a Databricks Online Feature Store and Feature Views parity verified by its platform job) is pinned in the adapter lock as run 44501535773: those capabilities report `supported_native` with live evidence and `fault_prod` and `fault_online` are `execution_ready: true`. |
 | Online store/serving, Feature Views | Not implemented (reported unsupported) |
-| Job scheduling | Paused Databricks job generated (DECISIONS D14); not deployed or run (`unverified`) |
+| Job scheduling | Paused Databricks job generated (DECISIONS D14); deployed and run on demand and on its own schedule on Free Edition (`supported_native`, platform run 44501535773) |
 | Learned/custom execution | Unsupported by design (contracts validated, never executed) |
 | Storage rebinding | Boundary proof with an in-memory test double (example 06); not a second production store or a migration |
 

@@ -74,17 +74,19 @@ def test_generate_is_in_memory_and_rejects_synthetic_pins(tmp_path):
     assert any(d["code"] == "UNRESOLVED_ADAPTER" for d in e.value.detail)
     gen = Project.from_path(ROOT / "projects/01_fault_count.yaml").generate("fault_prod", "2026-11-09T00:00:00Z")
     assert "databricks/device_reliability/script.sql" in gen["files"]
-    assert gen["manifest"]["execution_ready"] is False
+    assert gen["manifest"]["execution_ready"] == gen["capability_report"]["execution_ready"]
     assert list(tmp_path.iterdir()) == []
 
 
 def test_capabilities_and_labels():
     report = Project.from_path(ROOT / "projects/01_fault_count.yaml").capabilities("fault_prod", "2026-11-09T00:00:00Z")
-    # Supported only with live evidence from the adapter lock; scheduling is never observed, so not ready.
-    assert report["execution_ready"] is False
+    # Supported only with live evidence from the adapter lock; ready exactly when every check
+    # (scheduling included) is live-verified for the compiled sources.
+    live = lambda c: c["status"] == "supported_native" and c["evidence_scope"] == "live_target" and bool(c["evidence"])  # noqa: E731
     for c in report["checks"]:
-        assert c["status"] == "unverified" or (c["status"] == "supported_native" and c["evidence_scope"] == "live_target" and c["evidence"]), c
-    assert next(c for c in report["checks"] if c["capability"] == "core.scheduling")["status"] == "unverified"
+        assert c["status"] == "unverified" or live(c), c
+    assert any(c["capability"] == "core.scheduling" for c in report["checks"])
+    assert report["execution_ready"] == all(live(c) for c in report["checks"])
     p = Project.from_path(EXAMPLES / "03_commerce_ratio.yaml")
     row = {"tenant_id": "tenant_a", "customer_id": "customer_1", "as_of": "2026-07-01T00:00:00Z", "requested_at": "2026-07-09T00:00:00Z", "dataset_cutoff": "2026-07-09T00:00:00Z"}
     ds = p.labels("spend_training_dataset", {"rows": [row], "source_rows": [], "source_status": {"source": "purchase_events", "state": "available", "coverage_start": "2026-01-01T00:00:00Z", "coverage_end": "2026-07-09T00:00:00Z"}})
