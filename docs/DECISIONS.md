@@ -186,7 +186,7 @@ Each task floors the trigger time to the grid for its `as_of` and derives its pu
 from it (`<deployment>/<feature set>/<as_of>`, sequence = epoch seconds), so a retried or
 duplicated run of the same slot takes the host's retry path and writes nothing new. The job is
 created **paused**: deploying the bundle authorizes nothing; unpausing it is the publication
-approval. Deployment and runs have not been observed live (the capability stays `unverified`).
+approval. Observed live in platform run 44488112120 (on-demand and `PERIODIC` runs, both slots published with evidence); the capability is pinned only from a run whose scheduled-job test passes in full. The job passes `{{job.trigger.time.timestamp_ms}}`: Databricks renders `{{job.trigger.time.iso_datetime}}` without a zone designator.
 
 
 ## D15. Online store targets on Databricks (SEM-PORT-005, SEM-PORT-009, core.online_publication)
@@ -211,7 +211,9 @@ stopped before syncing (a quoting bug, fixed), and calls of the Feature Engineer
 to the feature-store REST API were refused with HTTP 401 for the scoped OAuth token. That 401 was
 the client sending no credential (the scoped token is accepted by the API directly); with the
 scoped credentials handed to it, run 42993010899 reached `create_feature_spec`, which needs
-`CREATE FUNCTION` on the staging table's schema.
+`CREATE FUNCTION` on the staging table's schema. With the grants in place, platform run 44488112120 published
+to the Online Feature Store and observed the publication at a Feature Serving endpoint on Free
+Edition; `online_store` atomic and online publication are pinned from that run.
 
 ## D16. Feature Views or Unity Catalog feature tables (adapter configuration `feature_api`)
 

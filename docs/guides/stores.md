@@ -106,7 +106,8 @@ Publication, step by step:
 
 `featlas-databricks <project> --deployment fault_online --feature-set device_reliability
 --publish ...` runs all five steps (`--online-sample` keys are observed). The job, the endpoint
-and the store cost compute: delete test resources with `OnlinePublisher.teardown`.
+and the store cost compute: delete test resources with `OnlinePublisher.teardown`. Verified on
+Databricks Free Edition in platform run 44488112120.
 
 ## Feast (`dev.featlas:feast`)
 

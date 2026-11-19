@@ -48,7 +48,9 @@ pytestmark = pytest.mark.skipif(not (LIVE and os.environ.get("FEATLAS_PLATFORM")
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "projects/live/platform.yaml"
-RUN = re.sub(r"[^a-z0-9]", "", (os.environ.get("GITHUB_RUN_ID") or uuid.uuid4().hex[:10]).lower())
+# The main live suite runs in the same workflow run with the same GITHUB_RUN_ID and its own
+# run-suffixed tables; the "p" keeps the platform tables distinct (run 44488112120 collided).
+RUN = re.sub(r"[^a-z0-9]", "", (os.environ.get("GITHUB_RUN_ID") or uuid.uuid4().hex[:10]).lower()) + "p"
 VOLUME = "featlas.synthetic_raw.featlas_artifacts"
 REPORT: dict = {"run": RUN, "project": "projects/live/platform.yaml", "scopes": scopes(), "tests": {}}
 
